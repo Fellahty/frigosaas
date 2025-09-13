@@ -737,7 +737,7 @@ export const ReceptionPage: React.FC = () => {
     const currentDate = new Date();
     const ticketNumber = reception.serial || `REC-${reception.id.slice(-8).toUpperCase()}`;
     const baseUrl = settings.baseUrl || window.location.origin;
-    const qrUrl = `${baseUrl}/reception/view?serial=${reception.serial}`;
+    const qrUrl = `${baseUrl}/reception/${reception.serial}`;
     
     // Try to open print window
     const printWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');

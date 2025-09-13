@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { useParams } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
@@ -10,44 +11,65 @@ import { Spinner } from '../../components/Spinner';
 interface Reception {
   id: string;
   serial: string;
+  clientId: string;
   clientName: string;
-  clientPhone: string;
-  clientCompany: string;
+  clientPhone?: string;
+  clientCompany?: string;
+  truckId: string;
+  truckNumber: string;
+  driverId: string;
   driverName: string;
   driverPhone: string;
-  truckNumber: string;
+  productId: string;
   productName: string;
-  productVariety?: string;
+  productVariety: string;
   totalCrates: number;
   arrivalTime: Date;
+  status: 'pending' | 'in_progress' | 'completed';
   notes?: string;
-  status: 'pending' | 'completed' | 'cancelled';
+  createdAt: Date;
 }
 
 export const ReceptionViewPage: React.FC = () => {
   const { t } = useTranslation();
   const tenantId = useTenantId();
+  const { serial: serialFromPath } = useParams<{ serial: string }>();
   const [serial, setSerial] = React.useState<string>('');
 
-  // Extract serial from URL parameters
+  // Extract serial from URL parameters or path
   React.useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const serialParam = urlParams.get('serial');
-    if (serialParam) {
-      setSerial(serialParam);
+    console.log('URL params:', window.location.search);
+    console.log('Serial param from query:', serialParam);
+    console.log('Serial param from path:', serialFromPath);
+    
+    const finalSerial = serialParam || serialFromPath;
+    if (finalSerial) {
+      setSerial(finalSerial);
     }
-  }, []);
+  }, [serialFromPath]);
 
   // Query to find reception by serial
   const { data: reception, isLoading, error } = useQuery({
     queryKey: ['reception-by-serial', tenantId, serial],
     queryFn: async (): Promise<Reception | null> => {
-      if (!tenantId || !serial) return null;
+      if (!tenantId || !serial) {
+        console.log('Missing tenantId or serial:', { tenantId, serial });
+        return null;
+      }
       
       try {
-        const receptionsRef = collection(db, 'tenants', tenantId, 'receptions');
-        const q = query(receptionsRef, where('serial', '==', serial));
+        console.log('Querying receptions with:', { tenantId, serial });
+        const receptionsRef = collection(db, 'receptions');
+        const q = query(receptionsRef, where('tenantId', '==', tenantId), where('serial', '==', serial));
         const querySnapshot = await getDocs(q);
+        
+        console.log('Query result:', { 
+          empty: querySnapshot.empty, 
+          size: querySnapshot.size,
+          docs: querySnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }))
+        });
         
         if (querySnapshot.empty) {
           return null;
@@ -58,19 +80,24 @@ export const ReceptionViewPage: React.FC = () => {
         
         return {
           id: doc.id,
-          serial: data.serial,
-          clientName: data.clientName,
-          clientPhone: data.clientPhone,
-          clientCompany: data.clientCompany,
-          driverName: data.driverName,
-          driverPhone: data.driverPhone,
-          truckNumber: data.truckNumber,
-          productName: data.productName,
-          productVariety: data.productVariety,
-          totalCrates: data.totalCrates,
-          arrivalTime: data.arrivalTime?.toDate() || new Date(),
-          notes: data.notes,
+          serial: data.serial || '',
+          clientId: data.clientId || '',
+          clientName: data.clientName || '',
+          clientPhone: data.clientPhone || '',
+          clientCompany: data.clientCompany || '',
+          truckId: data.truckId || '',
+          truckNumber: data.truckNumber || '',
+          driverId: data.driverId || '',
+          driverName: data.driverName || '',
+          driverPhone: data.driverPhone || '',
+          productId: data.productId || '',
+          productName: data.productName || '',
+          productVariety: data.productVariety || '',
+          totalCrates: data.totalCrates || 0,
+          arrivalTime: data.arrivalTime?.toDate?.() || new Date(),
           status: data.status || 'pending',
+          notes: data.notes || '',
+          createdAt: data.createdAt?.toDate?.() || new Date(),
         };
       } catch (error) {
         console.error('Error fetching reception:', error);
@@ -179,18 +206,22 @@ export const ReceptionViewPage: React.FC = () => {
                 </label>
                 <p className="mt-1 text-sm text-gray-900">{reception.clientName}</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  {t('reception.client.phone', 'Téléphone')}
-                </label>
-                <p className="mt-1 text-sm text-gray-900">{reception.clientPhone}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  {t('reception.client.company', 'Entreprise')}
-                </label>
-                <p className="mt-1 text-sm text-gray-900">{reception.clientCompany}</p>
-              </div>
+              {reception.clientPhone && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('reception.client.phone', 'Téléphone')}
+                  </label>
+                  <p className="mt-1 text-sm text-gray-900">{reception.clientPhone}</p>
+                </div>
+              )}
+              {reception.clientCompany && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('reception.client.company', 'Entreprise')}
+                  </label>
+                  <p className="mt-1 text-sm text-gray-900">{reception.clientCompany}</p>
+                </div>
+              )}
             </div>
           </Card>
 

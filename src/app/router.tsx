@@ -222,6 +222,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'reception/:serial',
+        element: (
+          <Layout>
+            <ReceptionViewPage />
+          </Layout>
+        ),
+      },
+      {
         path: 'reception',
         element: (
           <Layout>
