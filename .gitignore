@@ -1,0 +1,8 @@
+leanode_modules/
+dist/
+.vite/
+.turbo/
+coverage/
+.env
+*.log
+.DS_Store
