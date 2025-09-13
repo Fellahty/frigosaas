@@ -549,6 +549,8 @@ export const ReceptionPage: React.FC = () => {
         tenantId,
         clientId: payload.clientId,
         clientName: selectedClient?.name || '',
+        clientPhone: selectedClient?.phone || '',
+        clientCompany: selectedClient?.company || '',
         truckId: payload.truckId,
         truckNumber: selectedTruck?.number || '',
         driverId: payload.driverId,

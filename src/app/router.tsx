@@ -16,6 +16,7 @@ import { AlertsPage } from '../features/alerts/AlertsPage';
 import { EmptyCrateLoansPage } from '../features/loans/EmptyCrateLoansPage';
 import { ReceptionPage } from '../features/operations/ReceptionPage';
 import { ReceptionViewPage } from '../features/operations/ReceptionViewPage';
+import { ReceptionDebugPage } from '../features/operations/ReceptionDebugPage';
 import { ClientOperationsPage } from '../features/operations/ClientOperationsPage';
 import { ReservationsPage } from '../features/reservations/ReservationsPage';
 import { ClientReservationsPage } from '../features/reservations/ClientReservationsPage';
@@ -226,6 +227,14 @@ export const router = createBrowserRouter([
         element: (
           <Layout>
             <ReceptionViewPage />
+          </Layout>
+        ),
+      },
+      {
+        path: 'reception-debug',
+        element: (
+          <Layout>
+            <ReceptionDebugPage />
           </Layout>
         ),
       },
