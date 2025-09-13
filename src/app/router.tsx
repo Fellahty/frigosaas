@@ -1,8 +1,10 @@
 import React from 'react';
 import { createBrowserRouter, Navigate, Outlet, useRouteError } from 'react-router-dom';
 import { Layout } from './Layout';
+import { ClientLayout } from './ClientLayout';
 import { LoginPage } from '../features/auth/LoginPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
+import { ClientDashboardPage } from '../features/dashboard/ClientDashboardPage';
 import { ClientsPage } from '../features/clients/ClientsPage';
 import { StockAndLocations } from '../features/dashboard/StockAndLocations';
 import { BillingPage } from '../features/billing/BillingPage';
@@ -13,8 +15,54 @@ import AppSettingsPage from '../features/settings/AppSettingsPage';
 import { AlertsPage } from '../features/alerts/AlertsPage';
 import { EmptyCrateLoansPage } from '../features/loans/EmptyCrateLoansPage';
 import { ReceptionPage } from '../features/operations/ReceptionPage';
+import { ReceptionViewPage } from '../features/operations/ReceptionViewPage';
+import { ClientOperationsPage } from '../features/operations/ClientOperationsPage';
 import { ReservationsPage } from '../features/reservations/ReservationsPage';
+import { ClientReservationsPage } from '../features/reservations/ClientReservationsPage';
 import { ProtectedRoute } from './ProtectedRoute';
+import { useAuth } from '../lib/hooks/useAuth';
+
+// Layout Wrapper Component
+const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  
+  // Check if user is a client
+  const isClient = user?.userType === 'client' || user?.role === 'client';
+  
+  if (isClient) {
+    return <ClientLayout>{children}</ClientLayout>;
+  }
+  
+  return <Layout>{children}</Layout>;
+};
+
+// Page Wrapper Component for Dashboard
+const DashboardWrapper: React.FC = () => {
+  const { user } = useAuth();
+  
+  // Check if user is a client
+  const isClient = user?.userType === 'client' || user?.role === 'client';
+  
+  if (isClient) {
+    return <ClientDashboardPage />;
+  }
+  
+  return <DashboardPage />;
+};
+
+// Page Wrapper Component for Reservations
+const ReservationsWrapper: React.FC = () => {
+  const { user } = useAuth();
+  
+  // Check if user is a client
+  const isClient = user?.userType === 'client' || user?.role === 'client';
+  
+  if (isClient) {
+    return <ClientReservationsPage />;
+  }
+  
+  return <ReservationsPage />;
+};
 
 // Error Boundary Component
 const ErrorBoundary = () => {
@@ -80,9 +128,9 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: (
-          <Layout>
-            <DashboardPage />
-          </Layout>
+          <LayoutWrapper>
+            <DashboardWrapper />
+          </LayoutWrapper>
         ),
       },
       {
@@ -96,9 +144,9 @@ export const router = createBrowserRouter([
       {
         path: 'reservations',
         element: (
-          <Layout>
-            <ReservationsPage />
-          </Layout>
+          <LayoutWrapper>
+            <ReservationsWrapper />
+          </LayoutWrapper>
         ),
       },
       {
@@ -166,11 +214,27 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'reception/view',
+        element: (
+          <Layout>
+            <ReceptionViewPage />
+          </Layout>
+        ),
+      },
+      {
         path: 'reception',
         element: (
           <Layout>
             <ReceptionPage />
           </Layout>
+        ),
+      },
+      {
+        path: 'operations',
+        element: (
+          <LayoutWrapper>
+            <ClientOperationsPage />
+          </LayoutWrapper>
         ),
       },
     ],

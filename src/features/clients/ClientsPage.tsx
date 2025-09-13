@@ -133,7 +133,7 @@ Entreprise: ${client.company || 'Non renseigné'}
     Compte de Connexion
 ========================================
 
-Plateforme: YAZAMI.FrigoSmart.com
+Plateforme: LYAZAMI.FrigoSmart.com
 Email: ${client.email}
 Mot de passe: ${client.password || 'Non généré'}
 
@@ -212,7 +212,7 @@ Dernière modification: ${client.lastModifiedAt ? client.lastModifiedAt.toDate()
             <div class="separator"></div>
             <div class="section-title">Compte de Connexion</div>
             <div class="separator"></div>
-            <div class="info-line"><strong>Plateforme:</strong> YAZAMI.FrigoSmart.com</div>
+            <div class="info-line"><strong>Plateforme:</strong> LYAZAMI.FrigoSmart.com</div>
             <div class="info-line"><strong>Email:</strong> ${client.email}</div>
             <div class="info-line"><strong>Mot de passe:</strong> ${client.password || 'Non généré'}</div>
             <div class="separator"></div>
@@ -259,7 +259,7 @@ Votre compte client a été créé avec succès sur notre plateforme de gestion 
 • Entreprise: ${client.company || 'Non renseigné'}
 
 🔐 *Compte de Connexion:*
-• Plateforme: YAZAMI.FrigoSmart.com
+• Plateforme: LYAZAMI.FrigoSmart.com
 • Email: ${client.email}
 • Mot de passe: ${client.password || 'Non généré'}
 

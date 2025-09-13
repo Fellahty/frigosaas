@@ -7,6 +7,7 @@ export const generalSettingsSchema = z.object({
   locale: z.enum(['fr', 'ar']).default('fr'),
   capacity_unit: z.enum(['caisses', 'palettes']).default('caisses'),
   ratio_caisses_par_palette: z.number().positive().optional(),
+  baseUrl: z.string().url().optional(),
   season: z.object({
     from: z.string().min(1, 'Date de début requise'),
     to: z.string().min(1, 'Date de fin requise'),
@@ -64,6 +65,7 @@ export interface SiteSettingsDoc {
   };
   capacity_unit: 'caisses' | 'palettes';
   ratio_caisses_par_palette?: number;
+  baseUrl?: string;
 }
 
 export interface RoomDoc {

@@ -4,9 +4,11 @@ interface CustomUser {
   id: string;
   name: string;
   phone: string;
-  username: string;
+  username?: string;
+  email?: string;
   role: string;
   tenantId: string;
+  userType?: 'manager' | 'client';
 }
 
 export const useAuth = () => {

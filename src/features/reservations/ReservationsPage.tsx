@@ -61,6 +61,7 @@ export const ReservationsPage: React.FC = () => {
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'requests' | 'approved' | 'closed' | 'refused'>('requests');
@@ -87,6 +88,19 @@ export const ReservationsPage: React.FC = () => {
         id: doc.id,
         ...doc.data()
       } as Client));
+    },
+  });
+
+  // Fetch rooms
+  const { data: rooms = [] } = useQuery({
+    queryKey: ['rooms', tenantId],
+    queryFn: async () => {
+      const q = query(collection(db, 'rooms'), where('tenantId', '==', tenantId));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
     },
   });
 
@@ -122,14 +136,16 @@ export const ReservationsPage: React.FC = () => {
     if (activeTab === 'refused' && reservation.status !== 'REFUSED') return false;
 
     // Search filter
-    if (searchTerm && !reservation.reference.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !reservation.clientName.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const referenceMatch = reservation.reference?.toLowerCase().includes(searchLower) || false;
+      const clientMatch = reservation.clientName?.toLowerCase().includes(searchLower) || false;
+      const clientIdMatch = reservation.clientId?.toLowerCase().includes(searchLower) || false;
+      
+      if (!referenceMatch && !clientMatch && !clientIdMatch) return false;
+    }
 
-    // Status filter
-    if (statusFilter !== 'all' && reservation.status !== statusFilter) return false;
-
-    // Client filter
-    if (clientFilter !== 'all' && reservation.clientId !== clientFilter) return false;
+    // Status and client filters removed - only using tab filtering and search
 
     return true;
   });
@@ -141,7 +157,14 @@ export const ReservationsPage: React.FC = () => {
     totalReserved: reservations.reduce((sum, r) => sum + r.reservedCrates, 0),
     totalLoaned: reservations.reduce((sum, r) => sum + (r.loanedEmpty || 0), 0),
     totalInStock: reservations.reduce((sum, r) => sum + (r.inStock || 0), 0),
+    totalRoomsCrates: rooms.reduce((sum, room: any) => sum + (room.capacity || room.capacityCrates || 0), 0),
+    numberOfRooms: rooms.length,
   };
+
+  // Debug logging (can be removed in production)
+  // console.log('Rooms data:', rooms);
+  // console.log('Total rooms crates:', kpis.totalRoomsCrates);
+  // console.log('Number of rooms:', kpis.numberOfRooms);
 
   // Create reservation mutation
   const createReservation = useMutation({
@@ -149,7 +172,13 @@ export const ReservationsPage: React.FC = () => {
       const client = clients?.find(c => c.id === data.clientId);
       if (!client) throw new Error('Client not found');
 
+      // Generate reference based on timestamp and client initials
+      const timestamp = Date.now();
+      const clientInitials = client.name.substring(0, 3).toUpperCase();
+      const reference = `RES-${clientInitials}-${timestamp.toString().slice(-6)}`;
+
       const reservationData = {
+        reference,
         clientId: data.clientId,
         clientName: client.name,
         reservedCrates: data.reservedCrates,
@@ -183,15 +212,29 @@ export const ReservationsPage: React.FC = () => {
   const updateReservationStatus = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
       const reservationRef = doc(db, 'tenants', tenantId, 'reservations', id);
-      await updateDoc(reservationRef, {
+      
+      // Prepare update data - only include reason if it's provided
+      const updateData: any = {
         status,
-        reason,
         updatedAt: Timestamp.fromDate(new Date()),
-      });
-      await logUpdate('reservation', id, `Statut changé: ${status}`, 'admin', 'Administrateur');
+      };
+      
+      // Only add reason if it's provided and not empty
+      if (reason && reason.trim()) {
+        updateData.reason = reason;
+      }
+      
+      await updateDoc(reservationRef, updateData);
+      await logUpdate('reservation', id, `Statut changé: ${status}${reason ? ` - ${reason}` : ''}`, 'admin', 'Administrateur');
     },
-    onSuccess: () => {
+    onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ['reservations', tenantId] });
+      // You could add a toast notification here if you have one
+      console.log(`Reservation ${status.toLowerCase()} avec succès`);
+    },
+    onError: (error) => {
+      console.error('Erreur lors du changement de statut:', error);
+      // You could add error toast notification here
     },
   });
 
@@ -254,51 +297,72 @@ export const ReservationsPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Search and Filters */}
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Recherche</label>
-            <input
-              type="text"
-              placeholder="Client, réf, ticket..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border rounded-md px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full border rounded-md px-3 py-2"
-            >
-              <option value="all">Tous les statuts</option>
-              <option value="REQUESTED">En attente</option>
-              <option value="APPROVED">Approuvée</option>
-              <option value="CLOSED">Clôturée</option>
-              <option value="REFUSED">Refusée</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
-            <select
-              value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
-              className="w-full border rounded-md px-3 py-2"
-            >
-              <option value="all">Tous les clients</option>
-              {clients?.map(client => (
-                <option key={client.id} value={client.id}>{client.name}</option>
-              ))}
-            </select>
+      {/* Modern Search */}
+      <div className="flex justify-center">
+        <div className="relative">
+          {/* Search Icon Button */}
+          <button
+            onClick={() => {
+              if (isSearchOpen && searchTerm) {
+                setSearchTerm('');
+                setIsSearchOpen(false);
+              } else {
+                setIsSearchOpen(true);
+              }
+            }}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-full transition-all duration-300 ${
+              isSearchOpen || searchTerm
+                ? 'bg-blue-600 text-white shadow-lg transform scale-105' 
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 hover:shadow-md'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {!isSearchOpen && !searchTerm && (
+              <span className="text-sm font-medium">Rechercher</span>
+            )}
+            {searchTerm && (
+              <span className="text-sm font-medium">Recherche active</span>
+            )}
+          </button>
+
+          {/* Search Input - Animated */}
+          <div className={`absolute top-0 left-0 transition-all duration-300 ease-in-out ${
+            isSearchOpen || searchTerm ? 'opacity-100 scale-100 translate-x-0' : 'opacity-0 scale-95 -translate-x-4 pointer-events-none'
+          }`}>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Rechercher par client, référence..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onBlur={() => {
+                  if (!searchTerm) {
+                    setTimeout(() => setIsSearchOpen(false), 200);
+                  }
+                }}
+                className="w-80 px-4 py-3 pr-12 bg-white border-2 border-blue-600 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                autoFocus={isSearchOpen}
+              />
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setIsSearchOpen(false);
+                }}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{kpis.pending}</div>
@@ -317,16 +381,11 @@ export const ReservationsPage: React.FC = () => {
             <div className="text-sm text-gray-600">Caisses réservées</div>
           </div>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
           <div className="text-center">
-            <div className="text-2xl font-bold text-orange-600">{kpis.totalLoaned}</div>
-            <div className="text-sm text-gray-600">Restant à prêter</div>
-          </div>
-        </Card>
-        <Card>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-600">{kpis.totalInStock}</div>
-            <div className="text-sm text-gray-600">En stock</div>
+            <div className="text-2xl font-bold text-teal-600">{kpis.totalRoomsCrates.toLocaleString()}</div>
+            <div className="text-sm text-teal-700 font-medium">Capacité totale salles</div>
+            <div className="text-xs text-teal-600 mt-1">{kpis.numberOfRooms} salle{kpis.numberOfRooms > 1 ? 's' : ''}</div>
           </div>
         </Card>
         <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
@@ -367,24 +426,20 @@ export const ReservationsPage: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
+              <TableHeader>Actions</TableHeader>
               <TableHeader>Réf</TableHeader>
               <TableHeader>Client</TableHeader>
               <TableHeader>Réservé</TableHeader>
-              <TableHeader>Prêté vides</TableHeader>
-              <TableHeader>Reçu pleines</TableHeader>
-              <TableHeader>En stock</TableHeader>
-              <TableHeader>Sorti</TableHeader>
               <TableHeader>Restant</TableHeader>
               <TableHeader>Statut</TableHeader>
               <TableHeader>Montant avancé</TableHeader>
               <TableHeader>Capacité</TableHeader>
-              <TableHeader>Actions</TableHeader>
             </TableRow>
           </TableHead>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                   </div>
@@ -392,63 +447,83 @@ export const ReservationsPage: React.FC = () => {
               </TableRow>
             ) : filteredReservations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                   Aucune réservation trouvée
                 </TableCell>
               </TableRow>
             ) : (
               filteredReservations.map((reservation) => (
                 <TableRow key={reservation.id}>
-                  <TableCell className="font-mono text-sm">{reservation.reference}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col space-y-1">
+                      <button
+                        onClick={() => {
+                          setSelectedReservation(reservation);
+                          setIsDetailOpen(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                      >
+                        👁️ Voir
+                      </button>
+                      {reservation.status === 'REQUESTED' && (
+                        <div className="flex flex-col space-y-1">
+                          <button
+                            onClick={() => handleStatusChange(reservation.id, 'APPROVED')}
+                            disabled={updateReservationStatus.isPending}
+                            className="flex items-center justify-center space-x-1 text-green-600 hover:text-green-800 disabled:text-green-400 text-xs font-medium px-3 py-1.5 rounded-md hover:bg-green-50 disabled:bg-green-25 border border-green-200 hover:border-green-300 transition-all duration-200 disabled:cursor-not-allowed"
+                          >
+                            {updateReservationStatus.isPending ? (
+                              <>
+                                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Approuver</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleStatusChange(reservation.id, 'REFUSED', 'Refusé par l\'admin')}
+                            disabled={updateReservationStatus.isPending}
+                            className="flex items-center justify-center space-x-1 text-red-600 hover:text-red-800 disabled:text-red-400 text-xs font-medium px-3 py-1.5 rounded-md hover:bg-red-50 disabled:bg-red-25 border border-red-200 hover:border-red-300 transition-all duration-200 disabled:cursor-not-allowed"
+                          >
+                            {updateReservationStatus.isPending ? (
+                              <>
+                                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                <span>Refuser</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">{reservation.reference || 'N/A'}</TableCell>
                   <TableCell>{reservation.clientName}</TableCell>
                   <TableCell className="text-center">{reservation.reservedCrates}</TableCell>
-                  <TableCell className="text-center">{reservation.loanedEmpty || 0}</TableCell>
-                  <TableCell className="text-center">{reservation.receivedFull || 0}</TableCell>
-                  <TableCell className="text-center">{reservation.inStock || 0}</TableCell>
-                  <TableCell className="text-center">{reservation.exited || 0}</TableCell>
                   <TableCell className="text-center font-medium">{reservation.remaining || 0}</TableCell>
                   <TableCell>{getStatusBadge(reservation.status)}</TableCell>
                   <TableCell className="text-sm">
                     {reservation.depositPaid}/{reservation.depositRequired} MAD
                   </TableCell>
                   <TableCell className="text-center">{getCapacityIcon(reservation.capacityOk)}</TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedReservation(reservation);
-                          setIsDetailOpen(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Voir
-                      </button>
-                      {reservation.status === 'REQUESTED' && (
-                        <>
-                          <button
-                            onClick={() => handleStatusChange(reservation.id, 'APPROVED')}
-                            className="text-green-600 hover:text-green-800 text-sm"
-                          >
-                            Approuver
-                          </button>
-                          <button
-                            onClick={() => handleStatusChange(reservation.id, 'REFUSED', 'Refusé par l\'admin')}
-                            className="text-red-600 hover:text-red-800 text-sm"
-                          >
-                            Refuser
-                          </button>
-                        </>
-                      )}
-                      {reservation.status === 'REQUESTED' && (
-                        <button
-                          onClick={() => handleStatusChange(reservation.id, 'APPROVED')}
-                          className="text-green-600 hover:text-green-800 text-sm"
-                        >
-                          Approuver
-                        </button>
-                      )}
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -657,7 +732,7 @@ export const ReservationsPage: React.FC = () => {
               <div>
                 <h4 className="font-medium mb-2">Informations</h4>
                 <div className="space-y-2 text-sm">
-                  <div><strong>Référence:</strong> {selectedReservation.reference}</div>
+                  <div><strong>Référence:</strong> {selectedReservation.reference || 'N/A'}</div>
                   <div><strong>Client:</strong> {selectedReservation.clientName}</div>
                   <div><strong>Statut:</strong> {getStatusBadge(selectedReservation.status)}</div>
                 </div>

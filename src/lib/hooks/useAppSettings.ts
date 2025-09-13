@@ -14,6 +14,9 @@ export interface AppSettings {
   currency: string;
   currencySymbol: string;
   
+  // Platform settings
+  baseUrl?: string; // Base URL for QR codes and external links
+  
   // Notification settings
   emailNotifications: boolean;
   smsNotifications: boolean;
@@ -39,6 +42,7 @@ const defaultSettings: AppSettings = {
   companyName: 'Frigo SaaS',
   currency: 'MAD',
   currencySymbol: 'د.م',
+  baseUrl: 'https://lyazami.frigosmart.com',
   emailNotifications: true,
   smsNotifications: false,
   theme: 'light',

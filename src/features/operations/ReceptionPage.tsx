@@ -8,6 +8,7 @@ import { collection, getDocs, addDoc, Timestamp, query, where, updateDoc, delete
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
+import { useAppSettings } from '../../lib/hooks/useAppSettings';
 import { logCreate, logUpdate, logDelete } from '../../lib/logging';
 import QRCode from 'qrcode';
 
@@ -269,6 +270,7 @@ const printTicketInCurrentWindow = (reception: Reception, ticketNumber: string, 
 export const ReceptionPage: React.FC = () => {
   const { t } = useTranslation();
   const tenantId = useTenantId();
+  const { settings } = useAppSettings();
   const queryClient = useQueryClient();
   const [isAdding, setIsAdding] = React.useState(false);
   const [isAddingTruck, setIsAddingTruck] = React.useState(false);
@@ -734,7 +736,8 @@ export const ReceptionPage: React.FC = () => {
   const handlePrintTicket = (reception: Reception) => {
     const currentDate = new Date();
     const ticketNumber = reception.serial || `REC-${reception.id.slice(-8).toUpperCase()}`;
-    const qrUrl = `${window.location.origin}/reception?serial=${reception.serial}`;
+    const baseUrl = settings.baseUrl || window.location.origin;
+    const qrUrl = `${baseUrl}/reception/view?serial=${reception.serial}`;
     
     // Try to open print window
     const printWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');

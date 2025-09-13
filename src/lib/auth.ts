@@ -5,9 +5,10 @@ export interface UserCredentials {
   id: string;
   name: string;
   phone: string;
-  username: string;
+  username?: string;
+  email?: string;
   password: string;
-  role: 'admin' | 'manager' | 'viewer';
+  role: 'admin' | 'manager' | 'viewer' | 'client';
   isActive: boolean;
   tenantId: string;
 }
@@ -15,57 +16,86 @@ export interface UserCredentials {
 export const authenticateUser = async (
   loginField: string, 
   password: string, 
-  tenantId: string
+  tenantId: string,
+  userType: 'manager' | 'client' = 'manager'
 ): Promise<UserCredentials | null> => {
   try {
-    console.log('🔍 Authenticating user:', { loginField, password: '***', tenantId });
+    console.log('🔍 Authenticating user:', { loginField, password: '***', tenantId, userType });
     
-    // First, let's check all users in this tenant to debug
-    let debugQuery = query(
-      collection(db, 'users'),
-      where('tenantId', '==', tenantId)
-    );
-    let debugSnapshot = await getDocs(debugQuery);
-    console.log('🔍 All users in tenant:', debugSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })));
+    let querySnapshot = null;
+    let userData = null;
+    let userDoc = null;
     
-    // First try to find by username (without isActive filter first)
-    let q = query(
-      collection(db, 'users'),
-      where('username', '==', loginField),
-      where('tenantId', '==', tenantId)
-    );
-    
-    let querySnapshot = await getDocs(q);
-    console.log('📋 Username query results:', querySnapshot.docs.length);
-    
-    // If not found by username, try by phone
-    if (querySnapshot.empty) {
-      q = query(
+    if (userType === 'manager') {
+      // For managers, check in the 'users' collection
+      console.log('👨‍💼 Checking managers in users collection...');
+      
+      // Try to find by email first
+      let q = query(
         collection(db, 'users'),
-        where('phone', '==', loginField),
+        where('email', '==', loginField),
         where('tenantId', '==', tenantId)
       );
-      
       querySnapshot = await getDocs(q);
-      console.log('📱 Phone query results:', querySnapshot.docs.length);
+      console.log('📧 Email query results for managers:', querySnapshot.docs.length);
+      
+      // If not found by email, try by phone
+      if (querySnapshot.empty) {
+        q = query(
+          collection(db, 'users'),
+          where('phone', '==', loginField),
+          where('tenantId', '==', tenantId)
+        );
+        querySnapshot = await getDocs(q);
+        console.log('📱 Phone query results for managers:', querySnapshot.docs.length);
+      }
+      
+      if (!querySnapshot.empty) {
+        userDoc = querySnapshot.docs[0];
+        userData = userDoc.data() as any;
+      }
+      
+    } else {
+      // For clients, check in the 'tenants/YAZAMI/clients' collection
+      console.log('👥 Checking clients in tenants/YAZAMI/clients collection...');
+      
+      // Try to find by email first
+      let q = query(
+        collection(db, 'tenants', tenantId, 'clients'),
+        where('email', '==', loginField)
+      );
+      querySnapshot = await getDocs(q);
+      console.log('📧 Email query results for clients:', querySnapshot.docs.length);
+      
+      // If not found by email, try by phone
+      if (querySnapshot.empty) {
+        q = query(
+          collection(db, 'tenants', tenantId, 'clients'),
+          where('phone', '==', loginField)
+        );
+        querySnapshot = await getDocs(q);
+        console.log('📱 Phone query results for clients:', querySnapshot.docs.length);
+      }
+      
+      if (!querySnapshot.empty) {
+        userDoc = querySnapshot.docs[0];
+        userData = userDoc.data() as any;
+      }
     }
     
-    if (querySnapshot.empty) {
+    if (querySnapshot.empty || !userData) {
       console.log('❌ No user found');
       return null;
     }
     
-    const userDoc = querySnapshot.docs[0];
-    const userData = userDoc.data() as any;
     console.log('👤 User found:', { 
       id: userDoc.id, 
       username: userData.username, 
-      phone: userData.phone, 
+      email: userData.email,
+      phone: userData.phone,
       isActive: userData.isActive,
-      tenantId: userData.tenantId,
+      tenantId: userType === 'client' ? tenantId : userData.tenantId,
+      userType,
       passwordMatch: userData.password === password 
     });
     
@@ -80,7 +110,9 @@ export const authenticateUser = async (
       console.log('✅ Password match!');
       return {
         ...userData,
-        id: userDoc.id
+        id: userDoc.id,
+        tenantId: userType === 'client' ? tenantId : userData.tenantId,
+        role: userType === 'client' ? 'client' : userData.role
       };
     }
     

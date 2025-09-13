@@ -18,7 +18,7 @@ interface TenantUser {
   phone: string;
   username: string;
   role: UserRole;
-  createdAt: Timestamp;
+  createdAt: Date;
   isActive: boolean;
   firebaseUid?: string;
 }
@@ -467,7 +467,7 @@ export const UsersRolesPage: React.FC = () => {
                       </span>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-center text-gray-500 text-xs">
-                      {u.createdAt.toDate().toLocaleDateString('fr-FR', { 
+                      {u.createdAt.toLocaleDateString('fr-FR', { 
                         day: '2-digit', 
                         month: '2-digit', 
                         year: '2-digit' 
