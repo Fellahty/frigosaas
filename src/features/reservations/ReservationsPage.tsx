@@ -68,6 +68,12 @@ export const ReservationsPage: React.FC = () => {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    reservedCrates: 0,
+    depositRequired: 0,
+    depositPaid: 0,
+  });
 
   // Form state for creating reservation
   const [form, setForm] = useState({
@@ -238,8 +244,58 @@ export const ReservationsPage: React.FC = () => {
     },
   });
 
+  // Update reservation details
+  const updateReservation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: typeof editForm }) => {
+      const reservationRef = doc(db, 'tenants', tenantId, 'reservations', id);
+      await updateDoc(reservationRef, {
+        reservedCrates: updates.reservedCrates,
+        depositRequired: updates.depositRequired,
+        depositPaid: updates.depositPaid,
+        updatedAt: Timestamp.fromDate(new Date()),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reservations', tenantId] });
+      setIsEditing(false);
+      setIsDetailOpen(false);
+    },
+    onError: (error) => {
+      console.error('Erreur lors de la modification:', error);
+    },
+  });
+
   const handleCreateReservation = () => {
     createReservation.mutate(form);
+  };
+
+  const handleEditReservation = () => {
+    if (selectedReservation) {
+      setEditForm({
+        reservedCrates: selectedReservation.reservedCrates,
+        depositRequired: selectedReservation.depositRequired,
+        depositPaid: selectedReservation.depositPaid,
+      });
+      setIsEditing(true);
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (selectedReservation) {
+      updateReservation.mutate({
+        id: selectedReservation.id,
+        updates: editForm,
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditForm({
+      reservedCrates: 0,
+      depositRequired: 0,
+      depositPaid: 0,
+    });
   };
 
   const handleStatusChange = (id: string, status: string, reason?: string) => {
@@ -430,7 +486,6 @@ export const ReservationsPage: React.FC = () => {
               <TableHeader>Réf</TableHeader>
               <TableHeader>Client</TableHeader>
               <TableHeader>Réservé</TableHeader>
-              <TableHeader>Restant</TableHeader>
               <TableHeader>Statut</TableHeader>
               <TableHeader>Montant avancé</TableHeader>
               <TableHeader>Capacité</TableHeader>
@@ -439,7 +494,7 @@ export const ReservationsPage: React.FC = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8">
+                <TableCell colSpan={7} className="text-center py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                   </div>
@@ -447,7 +502,7 @@ export const ReservationsPage: React.FC = () => {
               </TableRow>
             ) : filteredReservations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   Aucune réservation trouvée
                 </TableCell>
               </TableRow>
@@ -518,10 +573,9 @@ export const ReservationsPage: React.FC = () => {
                   <TableCell className="font-mono text-sm">{reservation.reference || 'N/A'}</TableCell>
                   <TableCell>{reservation.clientName}</TableCell>
                   <TableCell className="text-center">{reservation.reservedCrates}</TableCell>
-                  <TableCell className="text-center font-medium">{reservation.remaining || 0}</TableCell>
                   <TableCell>{getStatusBadge(reservation.status)}</TableCell>
                   <TableCell className="text-sm">
-                    {reservation.depositPaid}/{reservation.depositRequired} MAD
+                    {reservation.depositPaid > 0 ? `${reservation.depositPaid.toFixed(2)} MAD` : '-'}
                   </TableCell>
                   <TableCell className="text-center">{getCapacityIcon(reservation.capacityOk)}</TableCell>
                 </TableRow>
@@ -738,39 +792,118 @@ export const ReservationsPage: React.FC = () => {
                 </div>
               </div>
               <div>
-                <h4 className="font-medium mb-2">Compteurs</h4>
+                <h4 className="font-medium mb-2">Caisse</h4>
                 <div className="grid grid-cols-2 gap-4 text-center">
-                  <div className="bg-blue-50 p-3 rounded">
-                    <div className="text-2xl font-bold text-blue-600">{selectedReservation.reservedCrates}</div>
-                    <div className="text-xs text-gray-600">Réservé</div>
+                  <div className="bg-red-50 p-3 rounded">
+                    <div className="text-2xl font-bold text-red-600">{selectedReservation.reservedCrates}</div>
+                    <div className="text-xs text-gray-600">Nombre de caisses à rentrer</div>
                   </div>
                   <div className="bg-green-50 p-3 rounded">
-                    <div className="text-2xl font-bold text-green-600">{selectedReservation.loanedEmpty || 0}</div>
-                    <div className="text-xs text-gray-600">Prêté</div>
+                    <div className="text-2xl font-bold text-green-600">{selectedReservation.reservedCrates}</div>
+                    <div className="text-xs text-gray-600">Caisses vides nécessaires</div>
                   </div>
-                  <div className="bg-purple-50 p-3 rounded">
-                    <div className="text-2xl font-bold text-purple-600">{selectedReservation.receivedFull || 0}</div>
-                    <div className="text-xs text-gray-600">Reçu</div>
+                </div>
+                <div className="mt-3 flex items-center justify-center">
+                  <div className="bg-gray-100 rounded-full h-2 w-24 mr-2">
+                    <div 
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: '100%' }}
+                    ></div>
                   </div>
-                  <div className="bg-orange-50 p-3 rounded">
-                    <div className="text-2xl font-bold text-orange-600">{selectedReservation.remaining || 0}</div>
-                    <div className="text-xs text-gray-600">Restant</div>
-                  </div>
+                  <span className="text-xs font-medium text-gray-600">100%</span>
                 </div>
               </div>
             </div>
             <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={handleEditReservation}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Modifier
+              </button>
               <button
                 onClick={() => setIsDetailOpen(false)}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 Fermer
               </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                Prêt caisses vides
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Form Modal */}
+      {isEditing && selectedReservation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Modifier la réservation</h3>
+              <button
+                onClick={handleCancelEdit}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
-              <button className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
-                Réception pleines
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre de caisses réservées
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editForm.reservedCrates}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, reservedCrates: Number(e.target.value) }))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Montant de la caution requis (MAD)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editForm.depositRequired}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, depositRequired: Number(e.target.value) }))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Montant de la caution payé (MAD)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editForm.depositPaid}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, depositPaid: Number(e.target.value) }))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={handleSaveEdit}
+                disabled={updateReservation.isPending}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+              >
+                {updateReservation.isPending ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Annuler
               </button>
             </div>
           </div>
