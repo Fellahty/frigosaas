@@ -1,83 +1,255 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
-import { MetricsToday } from '../../types/metrics';
+import { MetricsToday, Kpis, RoomSummary, AlertItem, TopClient, MoveItem } from '../../types/metrics';
 import { KpiCards } from './KpiCards';
-import { AlertList } from './AlertList';
-import { RoomCapacity } from './RoomCapacity';
-import { TopClientsTable } from './TopClientsTable';
-import { RecentMovesTable } from './RecentMovesTable';
 import { FacilityMap } from './FacilityMap';
-import { OccupancyChart } from './OccupancyChart';
 import { Spinner } from '../../components/Spinner';
-import { StockAndLocations } from './StockAndLocations';
 
 export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const tenantId = useTenantId();
 
   const { data: metrics, isLoading, error } = useQuery({
-    queryKey: ['metrics', tenantId],
+    queryKey: ['dashboard-metrics', tenantId],
     queryFn: async (): Promise<MetricsToday> => {
-      const docRef = doc(db, 'metrics_today', tenantId);
-      const docSnap = await getDoc(docRef);
+      if (!tenantId) {
+        throw new Error('No tenant ID available');
+      }
 
-      // Use Firestore data if present, otherwise fallback to demo data so UI can render
-      const raw = (docSnap.exists()
-        ? (docSnap.data() as any)
-        : {
-            tenantId,
-            date: new Date().toISOString().split('T')[0],
-            kpis: {
-              totalRooms: 5,
-              totalClients: 12,
-              averageTemperature: 22.5,
-              averageHumidity: 45.2,
-              alertsCount: 3,
-            },
-            rooms: [
-              { id: 'room-1', name: 'Salle A', capacity: 20, currentOccupancy: 15, temperature: 22.0, humidity: 45.0 },
-              { id: 'room-2', name: 'Salle B', capacity: 15, currentOccupancy: 12, temperature: 23.5, humidity: 47.0 },
-              { id: 'room-3', name: 'Salle C', capacity: 25, currentOccupancy: 18, temperature: 21.8, humidity: 43.5 },
-              { id: 'room-4', name: 'Salle D', capacity: 18, currentOccupancy: 10, temperature: 24.2, humidity: 48.0 },
-              { id: 'room-5', name: 'Salle E', capacity: 30, currentOccupancy: 25, temperature: 22.8, humidity: 46.5 },
-            ],
-            alerts: [
-              { id: 'alert-1', type: 'warning', message: 'Temperature slightly high in Salle B', timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), roomId: 'room-2' },
-              { id: 'alert-2', type: 'info', message: 'Maintenance scheduled for Salle C tomorrow', timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), roomId: 'room-3' },
-              { id: 'alert-3', type: 'error', message: 'Humidity sensor malfunction in Salle D', timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000), roomId: 'room-4' },
-            ],
-            topClients: [
-              { id: 'client-1', name: 'Tech Solutions Inc', usage: 45, lastVisit: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-              { id: 'client-2', name: 'Design Studio Pro', usage: 38, lastVisit: new Date(Date.now() - 4 * 60 * 60 * 1000) },
-              { id: 'client-3', name: 'Marketing Experts', usage: 32, lastVisit: new Date(Date.now() - 6 * 60 * 60 * 1000) },
-              { id: 'client-4', name: 'Consulting Group', usage: 28, lastVisit: new Date(Date.now() - 8 * 60 * 60 * 1000) },
-              { id: 'client-5', name: 'Innovation Labs', usage: 25, lastVisit: new Date(Date.now() - 10 * 60 * 60 * 1000) },
-            ],
-            recentMoves: [
-              { id: 'move-1', clientId: 'client-1', clientName: 'Tech Solutions Inc', fromRoom: 'Salle A', toRoom: 'Salle B', timestamp: new Date(Date.now() - 30 * 60 * 1000), reason: 'Better equipment availability' },
-              { id: 'move-2', clientId: 'client-2', clientName: 'Design Studio Pro', fromRoom: 'Salle C', toRoom: 'Salle A', timestamp: new Date(Date.now() - 45 * 60 * 1000), reason: 'Room temperature adjustment' },
-              { id: 'move-3', clientId: 'client-3', clientName: 'Marketing Experts', fromRoom: 'Salle D', toRoom: 'Salle E', timestamp: new Date(Date.now() - 60 * 60 * 1000), reason: 'Larger capacity needed' },
-            ],
-            lastUpdated: new Date(),
-          });
+      console.log('Fetching real dashboard data for tenant:', tenantId);
 
-      // Normalize possible Firestore Timestamps to JS Date
-      const toDate = (v: any) => (v && typeof v.toDate === 'function' ? v.toDate() : v ?? new Date());
-      const normalized: MetricsToday = {
-        ...(raw as MetricsToday),
-        lastUpdated: toDate((raw as any).lastUpdated),
-        alerts: (raw as any).alerts?.map((a: any) => ({ ...a, timestamp: toDate(a.timestamp) })) ?? [],
-        topClients: (raw as any).topClients?.map((c: any) => ({ ...c, lastVisit: toDate(c.lastVisit) })) ?? [],
-        recentMoves: (raw as any).recentMoves?.map((m: any) => ({ ...m, timestamp: toDate(m.timestamp) })) ?? [],
-      };
+      try {
+        // Fetch all data in parallel with error handling for each query
+        const [
+          clientsSnapshot,
+          roomsSnapshot,
+          receptionsSnapshot,
+          emptyCrateLoansSnapshot,
+          reservationsSnapshot
+        ] = await Promise.allSettled([
+          // Clients
+          getDocs(query(collection(db, 'tenants', tenantId, 'clients'))),
+          // Rooms
+          getDocs(query(collection(db, 'rooms'), where('tenantId', '==', tenantId), where('active', '==', true))),
+          // Receptions - without ordering to avoid index requirement
+          getDocs(query(
+            collection(db, 'receptions'), 
+            where('tenantId', '==', tenantId)
+          )),
+          // Empty crate loans
+          getDocs(query(collection(db, 'empty_crate_loans'), where('tenantId', '==', tenantId))),
+          // Reservations
+          getDocs(query(collection(db, 'tenants', tenantId, 'reservations')))
+        ]);
 
-      return normalized;
+        // Extract successful results and handle failures
+        const clientsResult = clientsSnapshot.status === 'fulfilled' ? clientsSnapshot.value : { docs: [] };
+        const roomsResult = roomsSnapshot.status === 'fulfilled' ? roomsSnapshot.value : { docs: [] };
+        const receptionsResult = receptionsSnapshot.status === 'fulfilled' ? receptionsSnapshot.value : { docs: [] };
+        const emptyCrateLoansResult = emptyCrateLoansSnapshot.status === 'fulfilled' ? emptyCrateLoansSnapshot.value : { docs: [] };
+        const reservationsResult = reservationsSnapshot.status === 'fulfilled' ? reservationsSnapshot.value : { docs: [] };
+
+        // Log any failed queries
+        if (clientsSnapshot.status === 'rejected') console.warn('Failed to fetch clients:', clientsSnapshot.reason);
+        if (roomsSnapshot.status === 'rejected') console.warn('Failed to fetch rooms:', roomsSnapshot.reason);
+        if (receptionsSnapshot.status === 'rejected') console.warn('Failed to fetch receptions:', receptionsSnapshot.reason);
+        if (emptyCrateLoansSnapshot.status === 'rejected') console.warn('Failed to fetch empty crate loans:', emptyCrateLoansSnapshot.reason);
+        if (reservationsSnapshot.status === 'rejected') console.warn('Failed to fetch reservations:', reservationsSnapshot.reason);
+
+        // Process clients data
+        const clients = clientsResult.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Process rooms data
+        const rooms = roomsResult.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Process receptions data and sort by creation date
+        const receptions = receptionsResult.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+            arrivalTime: doc.data().arrivalTime?.toDate?.() || new Date()
+          }))
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(0, 100); // Limit to last 100 receptions
+
+        // Process empty crate loans
+        const emptyCrateLoans = emptyCrateLoansResult.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Process reservations
+        const reservations = reservationsResult.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate?.() || new Date()
+        }));
+
+        console.log('Data loaded:', {
+          clients: clients.length,
+          rooms: rooms.length,
+          receptions: receptions.length,
+          emptyCrateLoans: emptyCrateLoans.length,
+          reservations: reservations.length
+        });
+
+        // Calculate KPIs
+        const kpis: Kpis = {
+          totalRooms: rooms.length,
+          totalClients: clients.length,
+          averageTemperature: rooms.length > 0 
+            ? rooms.reduce((sum, room) => sum + (room.temperature || 22), 0) / rooms.length 
+            : 22,
+          averageHumidity: rooms.length > 0 
+            ? rooms.reduce((sum, room) => sum + (room.humidity || 45), 0) / rooms.length 
+            : 45,
+          alertsCount: 0 // Will be calculated below
+        };
+
+        // Create room summaries with real occupancy data
+        const roomSummaries: RoomSummary[] = rooms.map(room => {
+          // Calculate current occupancy based on receptions
+          const roomReceptions = receptions.filter(r => r.roomId === room.id);
+          const currentOccupancy = roomReceptions.reduce((sum, r) => sum + (r.totalCrates || 0), 0);
+          
+          return {
+            id: room.id,
+            name: room.room || `Room ${room.id}`,
+            capacity: room.capacityCrates || room.capacity || 0,
+            currentOccupancy: Math.min(currentOccupancy, room.capacityCrates || room.capacity || 0),
+            temperature: room.temperature || 22 + Math.random() * 4, // Simulate sensor data
+            humidity: room.humidity || 45 + Math.random() * 10 // Simulate sensor data
+          };
+        });
+
+        // Generate alerts based on room conditions
+        const alerts: AlertItem[] = [];
+        roomSummaries.forEach(room => {
+          // Temperature alerts
+          if (room.temperature > 25) {
+            alerts.push({
+              id: `temp-${room.id}`,
+              type: 'warning',
+              message: `Temperature high in ${room.name} (${room.temperature.toFixed(1)}°C)`,
+              timestamp: new Date(),
+              roomId: room.id
+            });
+          }
+          
+          // Humidity alerts
+          if (room.humidity > 60) {
+            alerts.push({
+              id: `humidity-${room.id}`,
+              type: 'warning',
+              message: `Humidity high in ${room.name} (${room.humidity.toFixed(1)}%)`,
+              timestamp: new Date(),
+              roomId: room.id
+            });
+          }
+          
+          // Capacity alerts
+          const occupancyRate = room.capacity > 0 ? (room.currentOccupancy / room.capacity) * 100 : 0;
+          if (occupancyRate > 90) {
+            alerts.push({
+              id: `capacity-${room.id}`,
+              type: 'warning',
+              message: `${room.name} is ${occupancyRate.toFixed(0)}% full`,
+              timestamp: new Date(),
+              roomId: room.id
+            });
+          }
+        });
+
+        // Update alerts count
+        kpis.alertsCount = alerts.length;
+
+        // Calculate top clients based on reception history
+        const clientUsage = new Map<string, { name: string; totalCrates: number; lastVisit: Date }>();
+        
+        receptions.forEach(reception => {
+          const clientId = reception.clientId;
+          const clientName = reception.clientName;
+          const crates = reception.totalCrates || 0;
+          const visitDate = reception.arrivalTime || reception.createdAt;
+          
+          if (clientUsage.has(clientId)) {
+            const existing = clientUsage.get(clientId)!;
+            existing.totalCrates += crates;
+            if (visitDate > existing.lastVisit) {
+              existing.lastVisit = visitDate;
+            }
+          } else {
+            clientUsage.set(clientId, {
+              name: clientName,
+              totalCrates: crates,
+              lastVisit: visitDate
+            });
+          }
+        });
+
+        const topClients: TopClient[] = Array.from(clientUsage.entries())
+          .map(([id, data]) => ({
+            id,
+            name: data.name,
+            usage: data.totalCrates,
+            lastVisit: data.lastVisit
+          }))
+          .sort((a, b) => b.usage - a.usage)
+          .slice(0, 5);
+
+        // Create recent moves from reception data
+        const recentMoves: MoveItem[] = receptions
+          .filter(r => r.roomName) // Only receptions with room assignments
+          .slice(0, 10) // Last 10 moves
+          .map((reception, index) => ({
+            id: `move-${reception.id}`,
+            clientId: reception.clientId,
+            clientName: reception.clientName,
+            fromRoom: 'Entrance', // All receptions come from entrance
+            toRoom: reception.roomName || 'Unassigned',
+            timestamp: reception.arrivalTime || reception.createdAt,
+            reason: 'New reception'
+          }));
+
+        const metrics: MetricsToday = {
+          tenantId,
+          date: new Date().toISOString().split('T')[0],
+          kpis,
+          rooms: roomSummaries,
+          alerts,
+          topClients,
+          recentMoves,
+          lastUpdated: new Date()
+        };
+
+        console.log('Dashboard metrics calculated:', {
+          totalRooms: metrics.kpis.totalRooms,
+          totalClients: metrics.kpis.totalClients,
+          alertsCount: metrics.kpis.alertsCount,
+          topClientsCount: metrics.topClients.length,
+          recentMovesCount: metrics.recentMoves.length
+        });
+
+        return metrics;
+
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        throw error;
+      }
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 60000, // Refetch every minute
+    enabled: !!tenantId
   });
 
   if (isLoading) {
@@ -128,20 +300,20 @@ export const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8">
-   
+    <div className="min-h-screen bg-gray-50/50">
+      <div className="space-y-6 p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('dashboard.title')}</h1>
+          <p className="text-gray-600">{t('dashboard.subtitle')}</p>
+        </div>
 
-      {/* KPI Cards */}
-      <KpiCards kpis={metrics.kpis} />
-      
-      {/* Facility Map - Full Width */}
-      <FacilityMap rooms={metrics.rooms} />
-      
- 
-      
- 
- 
- 
+        {/* KPI Cards */}
+        <KpiCards kpis={metrics.kpis} />
+        
+        {/* Facility Map - Full Width */}
+        <FacilityMap rooms={metrics.rooms} />
+      </div>
     </div>
   );
 };

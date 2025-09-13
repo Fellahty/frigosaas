@@ -24,78 +24,103 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 
 interface FacilityMapProps {
-  rooms: RoomSummary[];
+  rooms?: RoomSummary[];
 }
 
 // Custom Room Node Component
 const RoomNode: React.FC<{ data: any }> = ({ data }) => {
+  const { t } = useTranslation();
   const { room, layout, batteryConfig, occupancyPercentage } = data;
 
   return (
-    <div className="bg-white rounded-lg border-2 border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300 min-w-[400px] min-h-[80px] relative">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300 min-w-[420px] min-h-[100px] relative overflow-hidden">
       {/* React Flow handles for connecting edges */}
       <Handle type="target" position={Position.Left} id="target" />
       <Handle type="source" position={Position.Right} id="source" />
+      
       {/* Room Header */}
-      <div className={`h-12 ${batteryConfig.color} rounded-t-lg flex items-center justify-center relative`}>
+      <div className={`h-14 ${batteryConfig.color} flex items-center justify-center relative`}>
         <div className="text-center text-white">
-          <div className="font-bold text-base">{layout.name}</div>
-          <div className="text-sm opacity-90">
+          <div className="font-bold text-lg">{layout.name}</div>
+          <div className="text-sm opacity-90 font-medium">
             {room.currentOccupancy}/{room.capacity}
           </div>
         </div>
         
         {/* Status Badge */}
-        <div className="absolute top-1 right-2">
+        <div className="absolute top-2 right-3">
           <div className={`px-3 py-1 rounded-full text-xs font-bold bg-white ${batteryConfig.statusColor} shadow-sm`}>
-            {batteryConfig.status}
+            {batteryConfig.status === 'Empty' ? t('dashboard.status.empty') :
+             batteryConfig.status === 'Normal' ? t('dashboard.status.normal') :
+             batteryConfig.status === 'Warning' ? t('dashboard.status.warning') :
+             batteryConfig.status === 'Critical' ? t('dashboard.status.critical') :
+             batteryConfig.status}
           </div>
         </div>
       </div>
       
       {/* Room Content */}
-      <div className="p-3">
-        {/* Horizontal Layout: All info in one row */}
-        <div className="flex items-center justify-between">
-          {/* Left: Percentage */}
-          <div className="text-center min-w-[80px]">
-            <div className="text-2xl font-bold text-gray-800 mb-1">
+      <div className="p-4">
+        {/* Main Metrics Row */}
+        <div className="flex items-center justify-between mb-3">
+          {/* Occupancy Percentage */}
+          <div className="text-center min-w-[90px]">
+            <div className="text-3xl font-bold text-gray-800 mb-1">
               {occupancyPercentage}%
             </div>
-            <div className="text-xs text-gray-600">Occupation</div>
+            <div className="text-xs text-gray-600 font-medium">{t('dashboard.chamber')}</div>
           </div>
           
-          {/* Center: Progress Bar */}
+          {/* Progress Bar */}
           <div className="flex-1 mx-6">
-            <div className="text-xs text-gray-600 mb-1">Progression</div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="text-xs text-gray-600 mb-2 font-medium">{t('dashboard.coldStorage')}</div>
+            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
               <div 
-                className={`h-2 ${batteryConfig.color} rounded-full transition-all duration-1000 ease-out`}
+                className={`h-3 ${batteryConfig.color} rounded-full transition-all duration-1000 ease-out relative`}
                 style={{ width: `${occupancyPercentage}%` }}
-              ></div>
+              >
+                <div className="absolute inset-0 bg-white opacity-20 rounded-full animate-pulse"></div>
+              </div>
             </div>
           </div>
           
-          {/* Right: Metrics */}
-          <div className="flex items-center space-x-6 min-w-[200px]">
-            <div className="text-center">
-              <div className="font-semibold text-gray-700 text-sm">{room.temperature.toFixed(1)}°C</div>
-              <div className="text-gray-500 text-xs">Temp</div>
+          {/* Available Capacity */}
+          <div className="text-center min-w-[80px]">
+            <div className="text-2xl font-bold text-gray-800 mb-1">
+              {room.capacity - room.currentOccupancy}
             </div>
-            <div className="text-center">
-              <div className="font-semibold text-gray-700 text-sm">{room.humidity.toFixed(1)}%</div>
-              <div className="text-gray-500 text-xs">Hum</div>
+            <div className="text-xs text-gray-600 font-medium">{t('dashboard.available')}</div>
+          </div>
+        </div>
+
+        {/* Temperature & Humidity Row */}
+        <div className="flex items-center justify-center space-x-8 py-2 border-t border-gray-100">
+          {/* Temperature with Demo Tag */}
+          <div className="text-center">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="font-bold text-gray-800 text-lg">{room.temperature.toFixed(1)}°C</div>
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">
+                Demo
+              </span>
             </div>
-            <div className="text-center">
-              <div className="font-semibold text-gray-700 text-sm">{room.capacity - room.currentOccupancy}</div>
-              <div className="text-gray-500 text-xs">Libre</div>
+            <div className="text-xs text-gray-500 font-medium">{t('dashboard.temp')}</div>
+          </div>
+          
+          {/* Humidity with Demo Tag */}
+          <div className="text-center">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="font-bold text-gray-800 text-lg">{room.humidity.toFixed(1)}%</div>
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">
+                Demo
+              </span>
             </div>
+            <div className="text-xs text-gray-500 font-medium">{t('dashboard.hum')}</div>
           </div>
         </div>
 
         {/* Storage Visualization - Horizontal */}
         <div className="mt-3 pt-2 border-t border-gray-200">
-          <div className="text-xs text-gray-500 mb-1">Stockage:</div>
+          <div className="text-xs text-gray-500 mb-1">{t('dashboard.warehouse')}:</div>
           <div className="flex items-center justify-center space-x-1">
             {/* Represent storage containers horizontally */}
             {[...Array(Math.min(12, Math.ceil(occupancyPercentage / 8)))].map((_, i) => (
@@ -272,6 +297,7 @@ const FacilityMapInner: React.FC<FacilityMapProps> = ({ rooms }) => {
 
   // Create ReactFlow nodes with saved or calculated positioning
   const createNodes = useCallback(() => {
+    if (!rooms || rooms.length === 0) return [];
     return rooms.map((roomData, index) => {
       const layout = { id: roomData.id, name: roomData.name };
 
@@ -373,16 +399,16 @@ const FacilityMapInner: React.FC<FacilityMapProps> = ({ rooms }) => {
   }, [nodes, fitView]);
 
   return (
-    <Card title="Carte des Installations Frigorifiques" className="h-full">
+    <Card title={t('dashboard.facilityMap')} className="h-full">
       <div className="space-y-6">
         {/* Enhanced Legend */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl">
           {[
-            { label: 'Vide (0-19%)', color: 'bg-green-500', bg: 'bg-green-100', text: 'text-green-700' },
-            { label: 'Faible (20-39%)', color: 'bg-blue-500', bg: 'bg-blue-100', text: 'text-blue-700' },
-            { label: 'Modéré (40-59%)', color: 'bg-yellow-500', bg: 'bg-yellow-100', text: 'text-yellow-700' },
-            { label: 'Attention (60-79%)', color: 'bg-orange-500', bg: 'bg-orange-100', text: 'text-orange-700' },
-            { label: 'Critique (80-100%)', color: 'bg-red-500', bg: 'bg-red-100', text: 'text-red-700' },
+            { label: t('dashboard.legend.empty'), color: 'bg-green-500', bg: 'bg-green-100', text: 'text-green-700' },
+            { label: t('dashboard.legend.low'), color: 'bg-blue-500', bg: 'bg-blue-100', text: 'text-blue-700' },
+            { label: t('dashboard.legend.moderate'), color: 'bg-yellow-500', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+            { label: t('dashboard.legend.attention'), color: 'bg-orange-500', bg: 'bg-orange-100', text: 'text-orange-700' },
+            { label: t('dashboard.legend.critical'), color: 'bg-red-500', bg: 'bg-red-100', text: 'text-red-700' },
           ].map((item, index) => (
             <div key={index} className={`${item.bg} rounded-lg p-3 border border-gray-200`}>
               <div className="flex items-center gap-3">
@@ -403,7 +429,7 @@ const FacilityMapInner: React.FC<FacilityMapProps> = ({ rooms }) => {
                     {/* Compact Professional Entrance Port */}
           <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 z-10">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-lg text-center shadow-lg border border-white/30">
-              <div className="text-sm font-semibold">ENTRÉE</div>
+              <div className="text-sm font-semibold">{t('dashboard.entrance')}</div>
             </div>
           </div>
 
@@ -507,7 +533,7 @@ const FacilityMapInner: React.FC<FacilityMapProps> = ({ rooms }) => {
 };
 
 // Main component with ReactFlowProvider
-export const FacilityMap: React.FC<FacilityMapProps> = ({ rooms }) => {
+export const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [] }) => {
   return (
     <ReactFlowProvider>
       <FacilityMapInner rooms={rooms} />

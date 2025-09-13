@@ -5,10 +5,10 @@ import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '.
 import { TopClient } from '../../types/metrics';
 
 interface TopClientsTableProps {
-  topClients: TopClient[];
+  topClients?: TopClient[];
 }
 
-export const TopClientsTable: React.FC<TopClientsTableProps> = ({ topClients }) => {
+export const TopClientsTable: React.FC<TopClientsTableProps> = ({ topClients = [] }) => {
   const { t } = useTranslation();
 
   return (
@@ -16,19 +16,27 @@ export const TopClientsTable: React.FC<TopClientsTableProps> = ({ topClients }) 
       <Table>
         <TableHead>
           <TableRow>
-            <TableHeader>{t('clients.name')}</TableHeader>
-            <TableHeader>{t('clients.usage')}</TableHeader>
-            <TableHeader>{t('clients.lastVisit')}</TableHeader>
+            <TableHeader>{t('dashboard.clientName')}</TableHeader>
+            <TableHeader>{t('dashboard.usage')}</TableHeader>
+            <TableHeader>{t('dashboard.lastVisit')}</TableHeader>
           </TableRow>
         </TableHead>
         <TableBody>
-          {topClients.map((client) => (
-            <TableRow key={client.id}>
-              <TableCell className="font-medium">{client.name}</TableCell>
-              <TableCell>{client.usage}</TableCell>
-              <TableCell>{new Date(client.lastVisit).toLocaleDateString()}</TableCell>
+          {topClients.length > 0 ? (
+            topClients.map((client) => (
+              <TableRow key={client.id}>
+                <TableCell className="font-medium">{client.name}</TableCell>
+                <TableCell>{client.usage}</TableCell>
+                <TableCell>{new Date(client.lastVisit).toLocaleDateString()}</TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={3} className="text-center text-gray-500 py-8">
+                {t('dashboard.noTopClients')}
+              </TableCell>
             </TableRow>
-          ))}
+          )}
         </TableBody>
       </Table>
     </Card>

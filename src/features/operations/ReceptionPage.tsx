@@ -54,6 +54,16 @@ interface Product {
   isActive: boolean;
 }
 
+interface Room {
+  id: string;
+  room: string;
+  capacity: number;
+  capacityCrates?: number;
+  capacityPallets?: number;
+  sensorId: string;
+  active: boolean;
+}
+
 interface Reception {
   id: string;
   serial: string; // Serial unique pour le ticket
@@ -67,6 +77,8 @@ interface Reception {
   productId: string;
   productName: string;
   productVariety: string;
+  roomId?: string;
+  roomName?: string;
   totalCrates: number;
   arrivalTime: Date;
   status: 'pending' | 'in_progress' | 'completed';
@@ -145,6 +157,16 @@ const printTicketInCurrentWindow = (reception: Reception, ticketNumber: string, 
         </div>
         ` : ''}
       </div>
+      
+      ${reception.roomName ? `
+      <div style="margin: 2mm 0; border: 1px solid #000; padding: 2mm;">
+        <div style="font-weight: bold; font-size: 10px; margin-bottom: 1mm; text-decoration: underline; text-transform: uppercase;">CHAMBRE</div>
+        <div style="display: flex; justify-content: space-between; margin: 1mm 0; padding: 0.5mm 0; font-size: 9px;">
+          <span style="font-weight: bold; flex: 1;">Chambre:</span>
+          <span style="text-align: right; flex: 1; font-weight: normal;">${reception.roomName}</span>
+        </div>
+      </div>
+      ` : ''}
       
       <div style="background-color: #000; color: white; padding: 1mm 2mm; font-weight: bold; text-align: center; margin: 1mm 0;">
         <div style="text-align: center;">CAISSES: ${reception.totalCrates}</div>
@@ -272,6 +294,11 @@ export const ReceptionPage: React.FC = () => {
   const tenantId = useTenantId();
   const { settings } = useAppSettings();
   const queryClient = useQueryClient();
+
+  // Debug: Log tenant ID
+  React.useEffect(() => {
+    console.log('ReceptionPage - Tenant ID:', tenantId);
+  }, [tenantId]);
   const [isAdding, setIsAdding] = React.useState(false);
   const [isAddingTruck, setIsAddingTruck] = React.useState(false);
   const [isAddingDriver, setIsAddingDriver] = React.useState(false);
@@ -284,6 +311,7 @@ export const ReceptionPage: React.FC = () => {
     truckId: '',
     driverId: '',
     productId: '',
+    roomId: '',
     totalCrates: 0,
     notes: '',
   });
@@ -376,17 +404,36 @@ export const ReceptionPage: React.FC = () => {
   const { data: clients } = useQuery({
     queryKey: ['clients', tenantId],
     queryFn: async (): Promise<Client[]> => {
-      const q = query(collection(db, 'clients'), where('tenantId', '==', tenantId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          name: data.name || '',
-          phone: data.phone || '',
-          company: data.company || '',
-        };
-      });
+      if (!tenantId) {
+        console.warn('No tenant ID available for clients query');
+        return [];
+      }
+      
+      try {
+        console.log('Fetching clients for tenant:', tenantId);
+        
+        // Use tenant-specific subcollection (recommended for SaaS)
+        const q = query(collection(db, 'tenants', tenantId, 'clients'));
+        const snap = await getDocs(q);
+        
+        const clientsData = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            name: data.name || '',
+            phone: data.phone || '',
+            company: data.company || '',
+            reservedCrates: data.reservedCrates || 0,
+            requiresEmptyCrates: data.requiresEmptyCrates || false,
+          };
+        });
+        
+        console.log('Clients loaded:', clientsData.length, 'clients');
+        return clientsData;
+      } catch (error) {
+        console.error('Error fetching clients:', error);
+        return [];
+      }
     },
   });
 
@@ -394,18 +441,31 @@ export const ReceptionPage: React.FC = () => {
   const { data: trucks } = useQuery({
     queryKey: ['trucks', tenantId],
     queryFn: async (): Promise<Truck[]> => {
-      const q = query(collection(db, 'trucks'), where('tenantId', '==', tenantId), where('isActive', '==', true));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          number: data.number || '',
-          color: data.color || '',
-          photoUrl: data.photoUrl || '',
-          isActive: data.isActive !== false,
-        };
-      });
+      if (!tenantId) {
+        console.warn('No tenant ID available for trucks query');
+        return [];
+      }
+      
+      try {
+        console.log('Fetching trucks for tenant:', tenantId);
+        const q = query(collection(db, 'trucks'), where('tenantId', '==', tenantId), where('isActive', '==', true));
+        const snap = await getDocs(q);
+        const trucksData = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            number: data.number || '',
+            color: data.color || '',
+            photoUrl: data.photoUrl || '',
+            isActive: data.isActive !== false,
+          };
+        });
+        console.log('Trucks loaded:', trucksData.length, 'trucks');
+        return trucksData;
+      } catch (error) {
+        console.error('Error fetching trucks:', error);
+        return [];
+      }
     },
   });
 
@@ -413,18 +473,31 @@ export const ReceptionPage: React.FC = () => {
   const { data: drivers } = useQuery({
     queryKey: ['drivers', tenantId],
     queryFn: async (): Promise<Driver[]> => {
-      const q = query(collection(db, 'drivers'), where('tenantId', '==', tenantId), where('isActive', '==', true));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          name: data.name || '',
-          phone: data.phone || '',
-          licenseNumber: data.licenseNumber || '',
-          isActive: data.isActive !== false,
-        };
-      });
+      if (!tenantId) {
+        console.warn('No tenant ID available for drivers query');
+        return [];
+      }
+      
+      try {
+        console.log('Fetching drivers for tenant:', tenantId);
+        const q = query(collection(db, 'drivers'), where('tenantId', '==', tenantId), where('isActive', '==', true));
+        const snap = await getDocs(q);
+        const driversData = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            name: data.name || '',
+            phone: data.phone || '',
+            licenseNumber: data.licenseNumber || '',
+            isActive: data.isActive !== false,
+          };
+        });
+        console.log('Drivers loaded:', driversData.length, 'drivers');
+        return driversData;
+      } catch (error) {
+        console.error('Error fetching drivers:', error);
+        return [];
+      }
     },
   });
 
@@ -432,18 +505,65 @@ export const ReceptionPage: React.FC = () => {
   const { data: products } = useQuery({
     queryKey: ['products', tenantId],
     queryFn: async (): Promise<Product[]> => {
-      const q = query(collection(db, 'products'), where('tenantId', '==', tenantId), where('isActive', '==', true));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          name: data.name || '',
-          variety: data.variety || '',
-          imageUrl: data.imageUrl || '',
-          isActive: data.isActive !== false,
-        };
-      });
+      if (!tenantId) {
+        console.warn('No tenant ID available for products query');
+        return [];
+      }
+      
+      try {
+        console.log('Fetching products for tenant:', tenantId);
+        const q = query(collection(db, 'products'), where('tenantId', '==', tenantId), where('isActive', '==', true));
+        const snap = await getDocs(q);
+        const productsData = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            name: data.name || '',
+            variety: data.variety || '',
+            imageUrl: data.imageUrl || '',
+            isActive: data.isActive !== false,
+          };
+        });
+        console.log('Products loaded:', productsData.length, 'products');
+        return productsData;
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        return [];
+      }
+    },
+  });
+
+  // Fetch rooms
+  const { data: rooms } = useQuery({
+    queryKey: ['rooms', tenantId],
+    queryFn: async (): Promise<Room[]> => {
+      if (!tenantId) {
+        console.warn('No tenant ID available for rooms query');
+        return [];
+      }
+      
+      try {
+        console.log('Fetching rooms for tenant:', tenantId);
+        const q = query(collection(db, 'rooms'), where('tenantId', '==', tenantId), where('active', '==', true));
+        const snap = await getDocs(q);
+        const roomsData = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            room: data.room || '',
+            capacity: data.capacity || 0,
+            capacityCrates: data.capacityCrates || 0,
+            capacityPallets: data.capacityPallets || 0,
+            sensorId: data.sensorId || '',
+            active: data.active !== false,
+          };
+        });
+        console.log('Rooms loaded:', roomsData.length, 'rooms');
+        return roomsData;
+      } catch (error) {
+        console.error('Error fetching rooms:', error);
+        return [];
+      }
     },
   });
 
@@ -466,9 +586,11 @@ export const ReceptionPage: React.FC = () => {
           driverPhone: data.driverPhone || '',
           productId: data.productId || '',
           productName: data.productName || '',
-        productVariety: data.productVariety || '',
-        totalCrates: data.totalCrates || 0,
-        arrivalTime: data.arrivalTime?.toDate?.() || new Date(),
+          productVariety: data.productVariety || '',
+          roomId: data.roomId || '',
+          roomName: data.roomName || '',
+          totalCrates: data.totalCrates || 0,
+          arrivalTime: data.arrivalTime?.toDate?.() || new Date(),
           status: data.status || 'pending',
           notes: data.notes || '',
           createdAt: data.createdAt?.toDate?.() || new Date(),
@@ -539,11 +661,12 @@ export const ReceptionPage: React.FC = () => {
 
   const addReception = useMutation({
     mutationFn: async (payload: typeof form) => {
-      // Get selected client, truck, driver, and product details
+      // Get selected client, truck, driver, product, and room details
       const selectedClient = clients?.find(c => c.id === payload.clientId);
       const selectedTruck = trucks?.find(t => t.id === payload.truckId);
       const selectedDriver = drivers?.find(d => d.id === payload.driverId);
       const selectedProduct = products?.find(p => p.id === payload.productId);
+      const selectedRoom = rooms?.find(r => r.id === payload.roomId);
 
       const receptionData = {
         tenantId,
@@ -559,6 +682,8 @@ export const ReceptionPage: React.FC = () => {
         productId: payload.productId,
         productName: selectedProduct?.name || '',
         productVariety: selectedProduct?.variety || '',
+        roomId: payload.roomId,
+        roomName: selectedRoom?.room || '',
         totalCrates: payload.totalCrates,
         notes: payload.notes,
         status: 'pending',
@@ -589,6 +714,7 @@ export const ReceptionPage: React.FC = () => {
         truckId: '',
         driverId: '',
         productId: '',
+        roomId: '',
         totalCrates: 0,
         notes: '',
       });
@@ -601,6 +727,7 @@ export const ReceptionPage: React.FC = () => {
       const selectedTruck = trucks?.find(t => t.id === payload.truckId);
       const selectedDriver = drivers?.find(d => d.id === payload.driverId);
       const selectedProduct = products?.find(p => p.id === payload.productId);
+      const selectedRoom = rooms?.find(r => r.id === payload.roomId);
 
       await updateDoc(doc(db, 'receptions', id), {
         clientId: payload.clientId,
@@ -613,6 +740,8 @@ export const ReceptionPage: React.FC = () => {
         productId: payload.productId,
         productName: selectedProduct?.name || '',
         productVariety: selectedProduct?.variety || '',
+        roomId: payload.roomId,
+        roomName: selectedRoom?.room || '',
         totalCrates: payload.totalCrates,
         notes: payload.notes,
         updatedAt: Timestamp.fromDate(new Date()),
@@ -697,6 +826,7 @@ export const ReceptionPage: React.FC = () => {
       truckId: reception.truckId,
       driverId: reception.driverId,
       productId: reception.productId,
+      roomId: reception.roomId || '',
       totalCrates: reception.totalCrates,
       notes: reception.notes || '',
     });
@@ -945,6 +1075,16 @@ export const ReceptionPage: React.FC = () => {
               </div>
               ` : ''}
             </div>
+
+            ${reception.roomName ? `
+            <div class="section">
+              <div class="section-title">Chambre</div>
+              <div class="row">
+                <span class="label">Chambre:</span>
+                <span class="value">${reception.roomName}</span>
+              </div>
+            </div>
+            ` : ''}
 
             <div class="highlight">
               <div class="center">CAISSES: ${reception.totalCrates}</div>
@@ -1241,6 +1381,24 @@ export const ReceptionPage: React.FC = () => {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.room', 'Chambre')}</label>
+              <EnhancedSelect
+                value={form.roomId}
+                onChange={(value) => setForm((f) => ({ ...f, roomId: value }))}
+                placeholder={t('reception.selectRoom', 'Sélectionner une chambre')}
+                options={rooms?.map(room => ({
+                  id: room.id,
+                  value: room.id,
+                  label: `${room.room} (${room.capacityCrates || room.capacity} caisses)`,
+                  icon: '🏠'
+                })) || []}
+                addLabel={t('reception.addRoom', 'Ajouter une chambre')}
+                editLabel={t('reception.editRoom', 'Éditer')}
+                onAdd={() => {/* TODO: Add room modal - redirect to settings */}}
+                onEdit={() => {/* TODO: Edit room - redirect to settings */}}
+              />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.totalCrates', 'Nombre de caisses')}</label>
               <input
                 type="number"
@@ -1279,6 +1437,7 @@ export const ReceptionPage: React.FC = () => {
                   truckId: '',
                   driverId: '',
                   productId: '',
+                  roomId: '',
                   totalCrates: 0,
                   notes: '',
                 });
@@ -1608,6 +1767,7 @@ export const ReceptionPage: React.FC = () => {
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.truckNumber', 'Camion')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.driverName', 'Chauffeur')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.product', 'Produit')}</TableHeader>
+                <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.room', 'Chambre')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.actions', 'Actions')}</TableHeader>
               </TableRow>
             </TableHead>
@@ -1662,6 +1822,15 @@ export const ReceptionPage: React.FC = () => {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell className="px-3 py-2 text-gray-600">
+                      {r.roomName ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          🏠 {r.roomName}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">Non assignée</span>
+                      )}
+                    </TableCell>
                     <TableCell className="px-3 py-2 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button
@@ -1688,7 +1857,7 @@ export const ReceptionPage: React.FC = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-gray-500 text-sm">
+                  <TableCell colSpan={9} className="text-center py-8 text-gray-500 text-sm">
                     {t('reception.noReceptions', 'Aucune réception')}
                   </TableCell>
                 </TableRow>

@@ -872,120 +872,182 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
       {/* Formulaire d'ajout/édition */}
       {(isAdding || editingClient) && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4"
           onClick={cancelEdit}
         >
           <div 
-            className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto"
+            className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-md sm:max-w-lg mx-2 sm:mx-4 max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {editingClient ? 'Modifier le client' : 'Ajouter un client'}
-              </h3>
-              <button
-                onClick={cancelEdit}
-                className="text-gray-400 hover:text-gray-600 text-xl"
-                title="Fermer"
-              >
-                ×
-              </button>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="text-white text-sm sm:text-lg">👤</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg sm:text-xl font-bold text-white truncate">
+                      {editingClient ? 'Modifier le client' : 'Nouveau client'}
+                    </h3>
+                    <p className="text-blue-100 text-xs sm:text-sm truncate">
+                      {editingClient ? 'Modifiez les informations du client' : 'Ajoutez un nouveau client au système'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={cancelEdit}
+                  className="w-7 h-7 sm:w-8 sm:h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors flex-shrink-0 ml-2"
+                  title="Fermer"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full border rounded-md px-3 py-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full border rounded-md px-3 py-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-                <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => setForm(prev => ({ ...prev, phone: e.target.value }))}
-                  className="w-full border rounded-md px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Entreprise</label>
-                <input
-                  type="text"
-                  value={form.company}
-                  onChange={(e) => setForm(prev => ({ ...prev, company: e.target.value }))}
-                  className="w-full border rounded-md px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
-                <div className="flex items-center space-x-2">
-                  <div className="flex-1 relative">
-                    <input
-                      type={showFormPassword ? "text" : "password"}
-                      value={form.password}
-                      onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full border rounded-md px-3 py-2 font-mono pr-10"
-                      placeholder="Généré automatiquement"
-                    />
+
+            {/* Form Content */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+                {/* Nom */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Nom complet *
+                  </label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm sm:text-base"
+                    placeholder="Entrez le nom complet"
+                    required
+                  />
+                </div>
+
+                {/* Email */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Adresse email *
+                  </label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm sm:text-base"
+                    placeholder="client@exemple.com"
+                    required
+                  />
+                </div>
+
+                {/* Téléphone */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Téléphone
+                  </label>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm(prev => ({ ...prev, phone: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm sm:text-base"
+                    placeholder="06 12 34 56 78"
+                  />
+                </div>
+
+                {/* Entreprise */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Entreprise
+                  </label>
+                  <input
+                    type="text"
+                    value={form.company}
+                    onChange={(e) => setForm(prev => ({ ...prev, company: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm sm:text-base"
+                    placeholder="Nom de l'entreprise"
+                  />
+                </div>
+
+                {/* Mot de passe */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Mot de passe
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type={showFormPassword ? "text" : "password"}
+                        value={form.password}
+                        onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm sm:text-base"
+                        placeholder="Généré automatiquement"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowFormPassword(!showFormPassword)}
+                        className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                        title={showFormPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                      >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          {showFormPassword ? (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                          ) : (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          )}
+                        </svg>
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setShowFormPassword(!showFormPassword)}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      title={showFormPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                      onClick={() => setForm(prev => ({ ...prev, password: generateClientPassword() }))}
+                      className="px-2 sm:px-3 py-2.5 sm:py-3 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg sm:rounded-xl transition-colors flex-shrink-0"
+                      title="Régénérer le mot de passe"
                     >
-                      {showFormPassword ? "👁️" : "👁️‍🗨️"}
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setForm(prev => ({ ...prev, password: generateClientPassword() }))}
-                    className="px-2 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    title="Régénérer le mot de passe"
-                  >
-                    🔄
-                  </button>
+                  <p className="text-xs text-gray-500">
+                    {editingClient 
+                      ? "Modifiez le mot de passe ou cliquez sur l'icône pour le régénérer" 
+                      : "Un mot de passe sécurisé sera généré automatiquement si laissé vide"
+                    }
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {editingClient 
-                    ? "Modifiez le mot de passe ou cliquez sur 🔄 pour le régénérer" 
-                    : "Un mot de passe sera généré automatiquement si laissé vide"
-                  }
-                </p>
-              </div>
-              <div className="flex justify-end space-x-3 pt-4">
+              </form>
+            </div>
+
+            {/* Footer - Fixed at bottom */}
+            <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex-shrink-0">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
                 <button
                   type="button"
                   onClick={cancelEdit}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 text-gray-600 hover:text-gray-800 font-medium transition-colors rounded-lg sm:rounded-xl border border-gray-300 hover:border-gray-400 sm:border-0"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
+                  onClick={handleSubmit}
                   disabled={addClientMutation.isPending || updateClientMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg sm:rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
                 >
-                  {addClientMutation.isPending || updateClientMutation.isPending 
-                    ? 'Enregistrement...' 
-                    : editingClient ? 'Modifier' : 'Ajouter'
-                  }
+                  {addClientMutation.isPending || updateClientMutation.isPending ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Enregistrement...
+                    </div>
+                  ) : (
+                    editingClient ? 'Modifier le client' : 'Ajouter le client'
+                  )}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

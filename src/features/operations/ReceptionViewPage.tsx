@@ -40,9 +40,6 @@ export const ReceptionViewPage: React.FC = () => {
   React.useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const serialParam = urlParams.get('serial');
-    console.log('URL params:', window.location.search);
-    console.log('Serial param from query:', serialParam);
-    console.log('Serial param from path:', serialFromPath);
     
     const finalSerial = serialParam || serialFromPath;
     if (finalSerial) {
@@ -55,21 +52,13 @@ export const ReceptionViewPage: React.FC = () => {
     queryKey: ['reception-by-serial', tenantId, serial],
     queryFn: async (): Promise<Reception | null> => {
       if (!tenantId || !serial) {
-        console.log('Missing tenantId or serial:', { tenantId, serial });
         return null;
       }
       
       try {
-        console.log('Querying receptions with:', { tenantId, serial });
         const receptionsRef = collection(db, 'receptions');
         const q = query(receptionsRef, where('tenantId', '==', tenantId), where('serial', '==', serial));
         const querySnapshot = await getDocs(q);
-        
-        console.log('Query result:', { 
-          empty: querySnapshot.empty, 
-          size: querySnapshot.size,
-          docs: querySnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }))
-        });
         
         if (querySnapshot.empty) {
           return null;
