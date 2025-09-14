@@ -136,6 +136,28 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </Link>
               </li>
 
+              {/* Capteurs */}
+              <li>
+                <Link
+                  to="/sensors"
+                  className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm ${
+                    isActive('/sensors')
+                      ? 'bg-blue-50 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    {t('sidebar.sensors', 'Capteurs')}
+                  </div>
+                  <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r from-orange-100 to-amber-100 text-orange-600 border border-orange-200/50 shadow-sm">
+                    DEMO
+                  </span>
+                </Link>
+              </li>
+
               {/* Opérations */}
               <li>
                 <button

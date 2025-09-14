@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { collection, query, where, orderBy, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -6,6 +6,8 @@ import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
 import { Spinner } from '../../components/Spinner';
+import { useTranslation } from 'react-i18next';
+import { PartialPaymentModal } from './PartialPaymentModal';
 
 interface UpcomingPayment {
   id: string;
@@ -23,12 +25,15 @@ interface UpcomingPayment {
   priority: 'high' | 'medium' | 'low';
 }
 
-interface CautionConfig {
-  caution_par_caisse: number;
+interface PricingConfig {
+  tarif_caisse_saison: number;
 }
 
 export const UpcomingPayments: React.FC = () => {
+  const { t } = useTranslation();
   const tenantId = useTenantId();
+  const [selectedPayment, setSelectedPayment] = useState<UpcomingPayment | null>(null);
+  const [isPartialPaymentOpen, setIsPartialPaymentOpen] = useState(false);
 
   // Function to calculate end of season based on reservation date
   const calculateEndOfSeason = (reservationDate: Date): Date => {
@@ -63,22 +68,22 @@ export const UpcomingPayments: React.FC = () => {
     return endDate;
   };
 
-  // Fetch caution configuration
-  const { data: cautionConfig, isLoading: configLoading } = useQuery({
-    queryKey: ['caution-config', tenantId],
-    queryFn: async (): Promise<CautionConfig> => {
+  // Fetch pricing configuration
+  const { data: pricingConfig, isLoading: configLoading } = useQuery({
+    queryKey: ['pricing-config', tenantId],
+    queryFn: async (): Promise<PricingConfig> => {
       const docRef = doc(db, 'tenants', tenantId, 'settings', 'pricing');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        return docSnap.data() as CautionConfig;
+        return docSnap.data() as PricingConfig;
       }
-      return { caution_par_caisse: 0 };
+      return { tarif_caisse_saison: 0 };
     },
   });
 
   // Fetch active reservations
   const { data: upcomingPayments, isLoading, error } = useQuery({
-    queryKey: ['upcoming-payments', tenantId],
+    queryKey: ['upcoming-payments', tenantId, pricingConfig?.tarif_caisse_saison],
     queryFn: async (): Promise<UpcomingPayment[]> => {
       // First, get all reservations without complex queries
       const q = query(
@@ -92,12 +97,12 @@ export const UpcomingPayments: React.FC = () => {
         reservation.status === 'REQUESTED' || reservation.status === 'APPROVED'
       );
       
-      // Use a default caution amount if config is not available
-      const cautionPerCrate = cautionConfig?.caution_par_caisse || 100; // Default 100 MAD per crate
+      // Use the pricing configuration for crate price
+      const pricePerCrate = pricingConfig?.tarif_caisse_saison || 30; // Default 30 MAD per crate
       
       // Calculate upcoming payments based on reservations
       const payments: UpcomingPayment[] = reservations.map(reservation => {
-        const totalCautionRequired = reservation.reservedCrates * cautionPerCrate;
+        const totalCautionRequired = reservation.reservedCrates * pricePerCrate;
         const remainingAmount = totalCautionRequired - (reservation.depositPaid || 0);
         
         // Calculate due date (end of season)
@@ -181,9 +186,9 @@ export const UpcomingPayments: React.FC = () => {
     };
     
     const labels = {
-      pending: 'En attente',
-      partial: 'Partiel',
-      overdue: 'En retard',
+      pending: t('caisse.pending', 'En attente'),
+      partial: t('caisse.partial', 'Partiel'),
+      overdue: t('caisse.overdue', 'En retard'),
     };
     
     return (
@@ -245,7 +250,7 @@ export const UpcomingPayments: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total à encaisser</p>
+              <p className="text-sm font-medium text-gray-600">{t('caisse.totalToCollect', 'Total à encaisser')}</p>
               <p className="text-2xl font-bold text-blue-600">
                 {formatCurrency(totalUpcoming)}
               </p>
@@ -259,7 +264,7 @@ export const UpcomingPayments: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Cette semaine</p>
+              <p className="text-sm font-medium text-gray-600">{t('caisse.thisWeek', 'Cette semaine')}</p>
               <p className="text-2xl font-bold text-green-600">
                 {formatCurrency(thisWeekAmount)}
               </p>
@@ -273,7 +278,7 @@ export const UpcomingPayments: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">En retard</p>
+              <p className="text-sm font-medium text-gray-600">{t('caisse.overdue', 'En retard')}</p>
               <p className="text-2xl font-bold text-red-600">
                 {formatCurrency(overdueAmount)}
               </p>
@@ -289,16 +294,16 @@ export const UpcomingPayments: React.FC = () => {
         <Card>
           <div className="p-4 md:p-6 border-b border-gray-200">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
-              <h3 className="text-lg font-semibold">Prochains Paiements</h3>
+              <h3 className="text-lg font-semibold">{t('caisse.upcomingPayments', 'Prochains Paiements')}</h3>
               <div className="flex flex-wrap gap-2">
                 <button className="px-3 py-1 text-xs sm:text-sm bg-red-100 text-red-700 rounded-full">
-                  En retard
+                  {t('caisse.overdue', 'En retard')}
                 </button>
                 <button className="px-3 py-1 text-xs sm:text-sm bg-blue-100 text-blue-700 rounded-full">
-                  Cette semaine
+                  {t('caisse.thisWeek', 'Cette semaine')}
                 </button>
                 <button className="px-3 py-1 text-xs sm:text-sm bg-green-100 text-green-700 rounded-full">
-                  Tous
+                  {t('caisse.all', 'Tous')}
                 </button>
               </div>
             </div>
@@ -308,24 +313,25 @@ export const UpcomingPayments: React.FC = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableHeader className="min-w-[60px]">Priorité</TableHeader>
-                <TableHeader className="min-w-[120px]">Client</TableHeader>
-                <TableHeader className="min-w-[100px]">Réservation</TableHeader>
-                <TableHeader className="min-w-[80px]">Caisses</TableHeader>
-                <TableHeader className="min-w-[120px]">Montant requis</TableHeader>
-                <TableHeader className="min-w-[100px]">Payé</TableHeader>
-                <TableHeader className="min-w-[100px]">Restant</TableHeader>
-                <TableHeader className="min-w-[80px]">Saison</TableHeader>
-                <TableHeader className="min-w-[100px]">Échéance</TableHeader>
-                <TableHeader className="min-w-[100px]">Statut</TableHeader>
-                <TableHeader className="min-w-[100px]">Actions</TableHeader>
+                <TableHeader className="min-w-[60px]">{t('caisse.priority', 'Priorité')}</TableHeader>
+                <TableHeader className="min-w-[120px]">{t('caisse.client', 'Client')}</TableHeader>
+                <TableHeader className="min-w-[100px]">{t('caisse.reservation', 'Réservation')}</TableHeader>
+                <TableHeader className="min-w-[80px]">{t('caisse.crates', 'Caisses')}</TableHeader>
+                <TableHeader className="min-w-[100px]">{t('caisse.pricePerCrate', 'Prix/caisse')}</TableHeader>
+                <TableHeader className="min-w-[120px]">{t('caisse.requiredAmount', 'Montant requis')}</TableHeader>
+                <TableHeader className="min-w-[100px]">{t('caisse.paid', 'Payé')}</TableHeader>
+                <TableHeader className="min-w-[100px]">{t('caisse.remaining', 'Restant')}</TableHeader>
+                <TableHeader className="min-w-[80px]">{t('caisse.season', 'Saison')}</TableHeader>
+                <TableHeader className="min-w-[100px]">{t('caisse.dueDate', 'Échéance')}</TableHeader>
+                <TableHeader className="min-w-[100px]">{t('caisse.status', 'Statut')}</TableHeader>
+                <TableHeader className="min-w-[100px]">{t('caisse.actions', 'Actions')}</TableHeader>
               </TableRow>
             </TableHead>
           <TableBody>
             {upcomingPayments?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-gray-500">
-                  Aucun paiement en attente
+                <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                  {t('caisse.noPendingPayments', 'Aucun paiement en attente')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -333,6 +339,7 @@ export const UpcomingPayments: React.FC = () => {
                 const reservationMonth = payment.dueDate.toDate().getMonth();
                 const seasonName = getSeasonName(reservationMonth);
                 const seasonIcon = getSeasonIcon(reservationMonth);
+                const currentPricePerCrate = pricingConfig?.tarif_caisse_saison || 30;
                 
                 return (
                   <TableRow key={payment.id}>
@@ -342,6 +349,9 @@ export const UpcomingPayments: React.FC = () => {
                     <TableCell className="font-medium">{payment.clientName}</TableCell>
                     <TableCell className="font-mono text-sm">{payment.reservationReference}</TableCell>
                     <TableCell className="text-center">{payment.reservedCrates}</TableCell>
+                    <TableCell className="text-center font-medium text-blue-600">
+                      {formatCurrency(currentPricePerCrate)}
+                    </TableCell>
                     <TableCell className="font-semibold">{formatCurrency(payment.depositRequired)}</TableCell>
                     <TableCell className="text-green-600">{formatCurrency(payment.depositPaid)}</TableCell>
                     <TableCell className="font-bold text-blue-600">{formatCurrency(payment.remainingAmount)}</TableCell>
@@ -354,9 +364,22 @@ export const UpcomingPayments: React.FC = () => {
                     <TableCell className="text-sm">{formatDate(payment.dueDate)}</TableCell>
                     <TableCell>{getStatusBadge(payment.status)}</TableCell>
                     <TableCell>
-                      <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
-                        Encaisser
-                      </button>
+                      <div className="flex flex-col space-y-1">
+                        <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                          {t('caisse.collect', 'Encaisser')}
+                        </button>
+                        {payment.remainingAmount > 0 && (
+                          <button 
+                            onClick={() => {
+                              setSelectedPayment(payment);
+                              setIsPartialPaymentOpen(true);
+                            }}
+                            className="px-3 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600"
+                          >
+                            {t('caisse.partialPaymentButton', 'Paiement partiel')}
+                          </button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -366,6 +389,16 @@ export const UpcomingPayments: React.FC = () => {
           </Table>
         </div>
       </Card>
+
+      {/* Partial Payment Modal */}
+      <PartialPaymentModal
+        isOpen={isPartialPaymentOpen}
+        onClose={() => {
+          setIsPartialPaymentOpen(false);
+          setSelectedPayment(null);
+        }}
+        payment={selectedPayment}
+      />
     </div>
   );
 };

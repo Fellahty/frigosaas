@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
@@ -23,6 +23,49 @@ export const CashOutModal: React.FC<CashOutModalProps> = ({ isOpen, onClose }) =
     notes: '',
     image: null as File | null,
   });
+
+  // Generate automatic reference
+  const generateReference = async () => {
+    try {
+      // Get the last cash movement to generate next reference
+      const movementsQuery = query(
+        collection(db, 'tenants', tenantId, 'cashMovements'),
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
+      const snapshot = await getDocs(movementsQuery);
+      
+      let nextNumber = 1;
+      if (!snapshot.empty) {
+        const lastMovement = snapshot.docs[0].data();
+        const lastRef = lastMovement.reference;
+        // Extract number from reference like "SORT-2024-001" or "SORT-2024-123"
+        const match = lastRef.match(/SORT-\d{4}-(\d+)/);
+        if (match) {
+          nextNumber = parseInt(match[1]) + 1;
+        }
+      }
+      
+      const currentYear = new Date().getFullYear();
+      const paddedNumber = nextNumber.toString().padStart(3, '0');
+      return `SORT-${currentYear}-${paddedNumber}`;
+    } catch (error) {
+      console.error('Error generating reference:', error);
+      // Fallback to timestamp-based reference
+      const now = new Date();
+      const timestamp = now.getTime().toString().slice(-6);
+      return `SORT-${now.getFullYear()}-${timestamp}`;
+    }
+  };
+
+  // Auto-generate reference when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      generateReference().then(ref => {
+        setForm(prev => ({ ...prev, reference: ref }));
+      });
+    }
+  }, [isOpen, tenantId]);
 
   // Cash out mutation
   const cashOut = useMutation({
@@ -242,20 +285,43 @@ export const CashOutModal: React.FC<CashOutModalProps> = ({ isOpen, onClose }) =
 
           {/* Reference */}
           <div className="space-y-2">
-            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span>{t('caisse.cashOut.reference')}</span>
+            <label className="flex items-center justify-between text-sm font-medium text-gray-700">
+              <div className="flex items-center space-x-2">
+                <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>{t('caisse.cashOut.reference')}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => generateReference().then(ref => setForm(prev => ({ ...prev, reference: ref })))}
+                className="flex items-center space-x-1 text-xs text-purple-600 hover:text-purple-800 hover:bg-purple-50 px-2 py-1 rounded-lg transition-colors duration-200"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>{t('caisse.cashOut.regenerate')}</span>
+              </button>
             </label>
-            <input
-              type="text"
-              value={form.reference}
-              onChange={(e) => setForm(prev => ({ ...prev, reference: e.target.value }))}
-              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-gray-50 focus:bg-white"
-              placeholder={t('caisse.cashOut.referencePlaceholder')}
-              required
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={form.reference}
+                onChange={(e) => setForm(prev => ({ ...prev, reference: e.target.value }))}
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 pr-12 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-gray-50 focus:bg-white font-mono text-sm"
+                placeholder={t('caisse.cashOut.referencePlaceholder')}
+                required
+              />
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 flex items-center space-x-1">
+              <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{t('caisse.cashOut.autoGenerated')}</span>
+            </p>
           </div>
 
           {/* Additional Notes */}

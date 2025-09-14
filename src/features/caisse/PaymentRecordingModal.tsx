@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { logCreate } from '../../lib/logging';
+import { useTranslation } from 'react-i18next';
 
 interface PaymentRecordingModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ interface Invoice {
 }
 
 export const PaymentRecordingModal: React.FC<PaymentRecordingModalProps> = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
@@ -35,6 +37,49 @@ export const PaymentRecordingModal: React.FC<PaymentRecordingModalProps> = ({ is
     reference: '',
     notes: '',
   });
+
+  // Generate automatic reference for payments
+  const generatePaymentReference = async () => {
+    try {
+      // Get the last cash movement to generate next reference
+      const movementsQuery = query(
+        collection(db, 'tenants', tenantId, 'cashMovements'),
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
+      const snapshot = await getDocs(movementsQuery);
+      
+      let nextNumber = 1;
+      if (!snapshot.empty) {
+        const lastMovement = snapshot.docs[0].data();
+        const lastRef = lastMovement.reference;
+        // Extract number from reference like "PAY-2024-001" or "PAY-2024-123"
+        const match = lastRef.match(/PAY-\d{4}-(\d+)/);
+        if (match) {
+          nextNumber = parseInt(match[1]) + 1;
+        }
+      }
+      
+      const currentYear = new Date().getFullYear();
+      const paddedNumber = nextNumber.toString().padStart(3, '0');
+      return `PAY-${currentYear}-${paddedNumber}`;
+    } catch (error) {
+      console.error('Error generating payment reference:', error);
+      // Fallback to timestamp-based reference
+      const now = new Date();
+      const timestamp = now.getTime().toString().slice(-6);
+      return `PAY-${now.getFullYear()}-${timestamp}`;
+    }
+  };
+
+  // Auto-generate reference when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      generatePaymentReference().then(ref => {
+        setForm(prev => ({ ...prev, reference: ref }));
+      });
+    }
+  }, [isOpen, tenantId]);
 
   // Fetch clients
   const { data: clients } = useQuery({
@@ -125,8 +170,8 @@ export const PaymentRecordingModal: React.FC<PaymentRecordingModalProps> = ({ is
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100/50">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 tracking-tight">Enregistrer un paiement</h2>
-            <p className="text-sm text-gray-500 mt-1">Enregistrer un paiement client</p>
+            <h2 className="text-xl font-semibold text-gray-900 tracking-tight">{t('caisse.payment.title', 'Enregistrer un paiement')}</h2>
+            <p className="text-sm text-gray-500 mt-1">{t('caisse.payment.subtitle', 'Enregistrer un paiement client')}</p>
           </div>
           <button
             onClick={onClose}
@@ -245,20 +290,43 @@ export const PaymentRecordingModal: React.FC<PaymentRecordingModalProps> = ({ is
 
           {/* Reference */}
           <div className="space-y-2">
-            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span>Référence</span>
+            <label className="flex items-center justify-between text-sm font-medium text-gray-700">
+              <div className="flex items-center space-x-2">
+                <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>{t('caisse.payment.reference', 'Référence')}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => generatePaymentReference().then(ref => setForm(prev => ({ ...prev, reference: ref })))}
+                className="flex items-center space-x-1 text-xs text-purple-600 hover:text-purple-800 hover:bg-purple-50 px-2 py-1 rounded-lg transition-colors duration-200"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>{t('caisse.payment.regenerate', 'Régénérer')}</span>
+              </button>
             </label>
-            <input
-              type="text"
-              value={form.reference}
-              onChange={(e) => setForm(prev => ({ ...prev, reference: e.target.value }))}
-              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-gray-50 focus:bg-white"
-              placeholder="Référence du paiement"
-              required
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={form.reference}
+                onChange={(e) => setForm(prev => ({ ...prev, reference: e.target.value }))}
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 pr-12 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-gray-50 focus:bg-white font-mono text-sm"
+                placeholder={t('caisse.payment.referencePlaceholder', 'Référence du paiement')}
+                required
+              />
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 flex items-center space-x-1">
+              <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{t('caisse.payment.autoGenerated', 'Référence générée automatiquement')}</span>
+            </p>
           </div>
 
           {/* Notes */}

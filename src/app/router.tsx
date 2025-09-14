@@ -19,6 +19,7 @@ import { ReceptionViewPage } from '../features/operations/ReceptionViewPage';
 import { ClientOperationsPage } from '../features/operations/ClientOperationsPage';
 import { ReservationsPage } from '../features/reservations/ReservationsPage';
 import { ClientReservationsPage } from '../features/reservations/ClientReservationsPage';
+import SensorsPage from '../features/sensors/SensorsPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { useAuth } from '../lib/hooks/useAuth';
 
@@ -243,6 +244,14 @@ export const router = createBrowserRouter([
           <LayoutWrapper>
             <ClientOperationsPage />
           </LayoutWrapper>
+        ),
+      },
+      {
+        path: 'sensors',
+        element: (
+          <Layout>
+            <SensorsPage />
+          </Layout>
         ),
       },
     ],
