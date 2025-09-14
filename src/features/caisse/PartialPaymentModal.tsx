@@ -146,194 +146,156 @@ export const PartialPaymentModal: React.FC<PartialPaymentModalProps> = ({ isOpen
         <head>
           <title>Reçu de Paiement Partiel - ${payment.clientName} - LYAZAMI</title>
           <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-              margin: 0; 
-              padding: 20px; 
-              max-width: 500px; 
+              font-family: 'Courier New', monospace; 
+              font-size: 12px;
+              line-height: 1.2;
+              color: #000;
+              background: #fff;
+              width: 80mm;
               margin: 0 auto;
-              background-color: #fafafa;
+              padding: 2mm;
             }
             .receipt-container {
-              background-color: white;
-              padding: 30px;
-              border-radius: 8px;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+              width: 100%;
+              background: #fff;
             }
             .header { 
               text-align: center; 
-              border-bottom: 3px solid #2563eb; 
-              padding-bottom: 20px; 
-              margin-bottom: 25px;
+              border-bottom: 2px solid #000; 
+              padding-bottom: 8px; 
+              margin-bottom: 8px;
             }
             .company { 
-              font-size: 28px; 
-              font-weight: 900; 
-              color: #1e40af;
-              margin-bottom: 8px;
-              letter-spacing: 1px;
+              font-size: 16px; 
+              font-weight: bold; 
+              margin-bottom: 2px;
             }
             .subtitle {
-              font-size: 12px;
-              color: #64748b;
+              font-size: 8px;
               text-transform: uppercase;
-              letter-spacing: 2px;
-              margin-bottom: 5px;
+              margin-bottom: 2px;
             }
             .title { 
-              font-size: 18px; 
-              color: #374151;
-              font-weight: 600;
-              margin-bottom: 10px;
+              font-size: 12px; 
+              font-weight: bold;
+              margin-bottom: 4px;
             }
             .receipt-number {
-              font-size: 11px;
-              color: #6b7280;
+              font-size: 10px;
               font-family: monospace;
             }
-            .receipt-info { 
-              margin-bottom: 25px;
-            }
-            .info-section {
-              margin-bottom: 20px;
-            }
-            .section-title {
-              font-size: 14px;
-              font-weight: 700;
-              color: #374151;
-              margin-bottom: 10px;
-              padding-bottom: 5px;
-              border-bottom: 1px solid #e5e7eb;
+            .divider {
+              border-bottom: 1px solid #000;
+              margin: 6px 0;
             }
             .info-row { 
               display: flex; 
               justify-content: space-between; 
-              margin-bottom: 8px;
-              padding: 6px 0;
-              border-bottom: 1px dotted #e5e7eb;
+              margin-bottom: 3px;
+              font-size: 10px;
             }
             .label { 
-              font-weight: 600; 
-              color: #4b5563;
-              font-size: 13px;
+              font-weight: bold; 
             }
             .value { 
-              color: #111827;
-              font-weight: 500;
-              font-size: 13px;
+              text-align: right;
             }
             .amounts { 
-              background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-              padding: 20px; 
-              border-radius: 8px; 
-              margin: 25px 0;
-              border: 1px solid #e2e8f0;
+              border: 1px solid #000;
+              padding: 6px; 
+              margin: 8px 0;
             }
             .amount-row { 
               display: flex; 
               justify-content: space-between; 
-              margin-bottom: 12px;
-              font-size: 14px;
-              padding: 4px 0;
+              margin-bottom: 2px;
+              font-size: 10px;
             }
             .amount-label {
-              color: #4b5563;
-              font-weight: 500;
+              font-weight: bold;
             }
             .amount-value {
-              font-weight: 600;
-              color: #111827;
+              font-weight: bold;
             }
             .total-remaining { 
-              font-weight: 700; 
-              font-size: 16px; 
-              color: #dc2626;
-              border-top: 2px solid #fecaca; 
-              padding-top: 12px;
-              margin-top: 8px;
+              font-weight: bold; 
+              font-size: 11px; 
+              border-top: 1px solid #000; 
+              padding-top: 4px;
+              margin-top: 4px;
             }
             .payment-today {
-              color: #059669;
-              font-weight: 700;
+              font-weight: bold;
             }
             .notes-section {
-              margin-top: 25px;
-              padding: 15px;
-              background-color: #f9fafb;
-              border-radius: 6px;
-              border-left: 4px solid #3b82f6;
+              margin-top: 8px;
+              border: 1px solid #000;
+              padding: 4px;
             }
             .notes-title {
-              font-weight: 700;
-              color: #374151;
-              margin-bottom: 8px;
-              font-size: 14px;
+              font-weight: bold;
+              margin-bottom: 2px;
+              font-size: 10px;
             }
             .notes-content {
-              color: #6b7280;
-              font-style: italic;
-              font-size: 13px;
-              line-height: 1.4;
+              font-size: 9px;
+              line-height: 1.1;
             }
             .footer { 
               text-align: center; 
-              margin-top: 35px; 
-              font-size: 11px; 
-              color: #9ca3af;
-              border-top: 1px solid #e5e7eb;
-              padding-top: 15px;
+              margin-top: 12px; 
+              font-size: 8px; 
+              border-top: 1px solid #000;
+              padding-top: 6px;
             }
             .reference { 
-              font-family: 'Courier New', monospace; 
-              background-color: #f3f4f6; 
-              padding: 4px 8px; 
-              border-radius: 4px;
-              font-size: 12px;
-              color: #374151;
+              font-family: monospace; 
+              font-size: 9px;
             }
             .status-badge {
-              display: inline-block;
-              padding: 4px 12px;
-              border-radius: 20px;
-              font-size: 11px;
-              font-weight: 600;
+              font-size: 8px;
+              font-weight: bold;
               text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-            .status-partial {
-              background-color: #fef3c7;
-              color: #92400e;
             }
             .signature-section {
-              margin-top: 30px;
+              margin-top: 12px;
               display: flex;
               justify-content: space-between;
-              border-top: 1px solid #e5e7eb;
-              padding-top: 20px;
+              border-top: 1px solid #000;
+              padding-top: 8px;
             }
             .signature-box {
               text-align: center;
               width: 45%;
             }
             .signature-line {
-              border-bottom: 1px solid #374151;
-              margin-bottom: 5px;
-              height: 40px;
+              border-bottom: 1px solid #000;
+              margin-bottom: 2px;
+              height: 20px;
             }
             .signature-label {
-              font-size: 10px;
-              color: #6b7280;
+              font-size: 8px;
               text-transform: uppercase;
-              letter-spacing: 1px;
+            }
+            .center {
+              text-align: center;
+            }
+            .right {
+              text-align: right;
+            }
+            .bold {
+              font-weight: bold;
             }
             @media print {
               body { 
                 margin: 0; 
-                background-color: white;
+                padding: 0;
+                width: 80mm;
               }
               .receipt-container {
-                box-shadow: none;
-                padding: 20px;
+                width: 100%;
               }
             }
           </style>
@@ -341,81 +303,70 @@ export const PartialPaymentModal: React.FC<PartialPaymentModalProps> = ({ isOpen
         <body>
           <div class="receipt-container">
             <div class="header">
-              <div class="subtitle">Système de Gestion</div>
-              <div class="company">LYAZAMI</div>
-              <div class="title">Reçu de Paiement Partiel</div>
+              <div class="subtitle">Systeme de Gestion</div>
+              <div class="company">Entrepôt frigorifique LYAZAMI</div>
+              <div class="title">RECU DE PAIEMENT PARTIEL</div>
               <div class="receipt-number">N° ${form.reference}</div>
             </div>
             
-            <div class="receipt-info">
-              <div class="info-section">
-                <div class="section-title">Informations Client</div>
-                <div class="info-row">
-                  <span class="label">Nom du client:</span>
-                  <span class="value">${payment.clientName}</span>
-                </div>
-                <div class="info-row">
-                  <span class="label">Référence réservation:</span>
-                  <span class="value reference">${payment.reservationReference}</span>
-                </div>
-                <div class="info-row">
-                  <span class="label">Nombre de caisses:</span>
-                  <span class="value">${payment.reservedCrates} caisses</span>
-                </div>
-              </div>
-
-              <div class="info-section">
-                <div class="section-title">Détails du Paiement</div>
-                <div class="info-row">
-                  <span class="label">Référence paiement:</span>
-                  <span class="value reference">${form.reference}</span>
-                </div>
-                <div class="info-row">
-                  <span class="label">Mode de paiement:</span>
-                  <span class="value">${form.paymentMethod === 'cash' ? '💵 Espèces' : 
-                    form.paymentMethod === 'check' ? '📄 Chèque' :
-                    form.paymentMethod === 'transfer' ? '🏦 Virement bancaire' : '💳 Carte bancaire'}</span>
-                </div>
-                <div class="info-row">
-                  <span class="label">Date et heure:</span>
-                  <span class="value">${new Date().toLocaleDateString('fr-FR', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })} à ${new Date().toLocaleTimeString('fr-FR')}</span>
-                </div>
-                <div class="info-row">
-                  <span class="label">Statut:</span>
-                  <span class="value">
-                    <span class="status-badge status-partial">Paiement Partiel</span>
-                  </span>
-                </div>
-              </div>
+            <div class="divider"></div>
+            
+            <div class="info-row">
+              <span class="label">Client:</span>
+              <span class="value">${payment.clientName}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Reservation:</span>
+              <span class="value reference">${payment.reservationReference}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Caisses:</span>
+              <span class="value">${payment.reservedCrates}</span>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="info-row">
+              <span class="label">Paiement:</span>
+              <span class="value reference">${form.reference}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Mode:</span>
+              <span class="value">${form.paymentMethod === 'cash' ? 'ESPECES' : 
+                form.paymentMethod === 'check' ? 'CHEQUE' :
+                form.paymentMethod === 'transfer' ? 'VIREMENT' : 'CARTE'}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Date:</span>
+              <span class="value">${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Statut:</span>
+              <span class="value status-badge">PARTIEL</span>
             </div>
             
             <div class="amounts">
               <div class="amount-row">
-                <span class="amount-label">Total requis (${payment.reservedCrates} caisses):</span>
+                <span class="amount-label">Total requis:</span>
                 <span class="amount-value">${formatCurrency(payment.depositRequired)}</span>
               </div>
               <div class="amount-row">
-                <span class="amount-label">Montant déjà payé:</span>
+                <span class="amount-label">Deja paye:</span>
                 <span class="amount-value">${formatCurrency(payment.depositPaid)}</span>
               </div>
               <div class="amount-row">
-                <span class="amount-label">Montant payé aujourd'hui:</span>
+                <span class="amount-label">Paye aujourd'hui:</span>
                 <span class="amount-value payment-today">${formatCurrency(form.amount)}</span>
               </div>
               <div class="amount-row total-remaining">
-                <span class="amount-label">Montant restant à payer:</span>
+                <span class="amount-label">RESTANT:</span>
                 <span class="amount-value">${formatCurrency(payment.remainingAmount - form.amount)}</span>
               </div>
             </div>
             
             ${form.notes ? `
             <div class="notes-section">
-              <div class="notes-title">Notes et Observations</div>
+              <div class="notes-title">NOTES:</div>
               <div class="notes-content">${form.notes}</div>
             </div>
             ` : ''}
@@ -423,18 +374,18 @@ export const PartialPaymentModal: React.FC<PartialPaymentModalProps> = ({ isOpen
             <div class="signature-section">
               <div class="signature-box">
                 <div class="signature-line"></div>
-                <div class="signature-label">Signature Client</div>
+                <div class="signature-label">Client</div>
               </div>
               <div class="signature-box">
                 <div class="signature-line"></div>
-                <div class="signature-label">Signature Agent</div>
+                <div class="signature-label">Agent</div>
               </div>
             </div>
             
             <div class="footer">
-              <div style="margin-bottom: 10px; font-weight: 600; color: #374151;">Merci pour votre confiance</div>
-              <div>Reçu généré automatiquement le ${new Date().toLocaleString('fr-FR')}</div>
-              <div style="margin-top: 5px; font-size: 10px;">LYAZAMI - Système de Gestion Frigo</div>
+              <div class="bold">Merci pour votre confiance</div>
+              <div>${new Date().toLocaleString('fr-FR')}</div>
+              <div>LYAZAMI - Systeme Frigo</div>
             </div>
           </div>
         </body>

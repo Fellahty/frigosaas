@@ -523,7 +523,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
       <body>
         <div class="ticket">
           <div class="header">
-            <div class="title">${siteSettings?.name || 'Frigo SaaS'}</div>
+            <div class="title">${siteSettings?.name || 'Entrepôt frigorifique LYAZAMI'}</div>
             <div class="subtitle">TICKET DE PRÊT CAISSES VIDES</div>
             <div class="ticket-number">N° ${item.ticketId}</div>
           </div>
@@ -574,7 +574,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
           
           <div class="footer">═══════════════════════════════</div>
           <div class="footer">Merci pour votre confiance</div>
-          <div class="footer">${siteSettings?.name || 'Frigo SaaS'} - Gestion Frigorifique</div>
+          <div class="footer">${siteSettings?.name || 'Entrepôt frigorifique LYAZAMI'} - Gestion Frigorifique</div>
         </div>
       </body>
     </html>
