@@ -162,10 +162,10 @@ export const ReservationsPage: React.FC = () => {
   const kpis = {
     pending: reservations.filter(r => r.status === 'REQUESTED').length,
     approved: reservations.filter(r => r.status === 'APPROVED').length,
-    totalReserved: reservations.reduce((sum, r) => sum + r.reservedCrates, 0),
+    totalReserved: reservations.filter(r => r.status === 'APPROVED').reduce((sum, r) => sum + r.reservedCrates, 0),
     totalLoaned: reservations.reduce((sum, r) => sum + (r.loanedEmpty || 0), 0),
     totalInStock: reservations.reduce((sum, r) => sum + (r.inStock || 0), 0),
-    totalRoomsCrates: rooms.reduce((sum, room: any) => sum + (room.capacity || room.capacityCrates || 0), 0),
+    totalRoomsCrates: rooms.reduce((sum, room: any) => sum + (room.capacityCrates || room.capacity || 0), 0),
     numberOfRooms: rooms.length,
   };
 

@@ -34,7 +34,8 @@
     "management": "Gestion",
     "frigoSettings": "Paramètres",
     "system": "Système",
-    "sensors": "Capteurs"
+    "sensors": "Capteurs",
+    "clientSensors": "Mes Capteurs"
   },
   "reservations": {
     "subtitle": "Gérez les réservations de vos clients",
@@ -690,5 +691,46 @@
       "tempSlightlyHigh": "Température légèrement élevée dans {{room}}",
       "maintenanceTomorrow": "Maintenance prévue demain pour {{room}}"
     }
+  },
+  "operations": {
+    "title": "Mes Opérations",
+    "subtitle": "Consultez l'historique de vos opérations de caisses",
+    "emptyCrateLoaned": "Caisses vides prêtées",
+    "emptyCratesReturned": "Caisses vides rendues",
+    "fullCratesReceived": "Caisses pleines reçues",
+    "emptyCrateLoan": "Prêt caisses vides",
+    "reception": "Réception caisses pleines",
+    "completed": "Terminé",
+    "active": "En cours",
+    "pending": "En attente",
+    "noOperationsDescription": "Aucune opération trouvée pour le moment",
+    "productsByRoom": "Produits par chambre",
+    "productsByRoomSubtitle": "Voir où sont stockés vos produits",
+    "roomSensors": "Capteurs des chambres",
+    "roomSensorsSubtitle": "Surveillance en temps réel de vos chambres",
+    "room": "Chambre",
+    "products": "produits",
+    "sensors": "capteurs",
+    "crates": "caisses"
+  },
+  "clientSensors": {
+    "clientTitle": "Mes Capteurs",
+    "clientSubtitle": "Surveillance en temps réel de vos chambres de stockage",
+    "room": "Chambre",
+    "sensors": "capteurs",
+    "active": "Actif",
+    "lastUpdate": "Dernière mise à jour",
+    "status": "Statut",
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "error": "Erreur",
+    "temperature": "Température",
+    "humidity": "Humidité",
+    "pressure": "Pression",
+    "motion": "Mouvement",
+    "light": "Lumière",
+    "noSensors": "Aucun capteur trouvé",
+    "noSensorsDescription": "Vous n'avez pas encore de produits stockés dans des chambres avec des capteurs",
+    "noData": "Aucune donnée disponible"
   }
 }

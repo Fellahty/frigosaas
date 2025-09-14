@@ -120,6 +120,23 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
                   {t('sidebar.operations', 'Mes Opérations')}
                 </Link>
               </li>
+
+              {/* Capteurs */}
+              <li>
+                <Link
+                  to="/client-sensors"
+                  className={`flex items-center px-3 py-2 rounded-md transition-colors text-sm ${
+                    isActive('/client-sensors')
+                      ? 'bg-blue-50 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  {t('sidebar.clientSensors', 'Mes Capteurs')}
+                </Link>
+              </li>
             </ul>
           </nav>
 

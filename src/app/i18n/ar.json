@@ -688,5 +688,47 @@
       "tempSlightlyHigh": "ارتفاع طفيف في درجة الحرارة في {{room}}",
       "maintenanceTomorrow": "صيانة مجدولة غدًا لـ {{room}}"
     }
+  },
+  "operations": {
+    "title": "عملياتي",
+    "subtitle": "اطلع على تاريخ عمليات الصناديق الخاصة بك",
+    "emptyCrateLoaned": "صناديق فارغة مقترضة",
+    "emptyCratesReturned": "صناديق فارغة مستردة",
+    "fullCratesReceived": "صناديق ممتلئة مستلمة",
+    "emptyCrateLoan": "إقراض صناديق فارغة",
+    "reception": "استقبال صناديق ممتلئة",
+    "completed": "مكتمل",
+    "active": "جاري",
+    "pending": "في الانتظار",
+    "noOperationsDescription": "لم يتم العثور على عمليات في الوقت الحالي",
+    "productsByRoom": "المنتجات حسب الغرفة",
+    "productsByRoomSubtitle": "اطلع على مكان تخزين منتجاتك",
+    "roomSensors": "حساسات الغرف",
+    "roomSensorsSubtitle": "مراقبة في الوقت الفعلي لغرفك",
+    "room": "الغرفة",
+    "products": "منتجات",
+    "sensors": "حساسات",
+    "clientSensors": "حساساتي",
+    "crates": "صناديق"
+  },
+  "clientSensors": {
+    "clientTitle": "حساساتي",
+    "clientSubtitle": "مراقبة في الوقت الفعلي لغرف التخزين الخاصة بك",
+    "room": "الغرفة",
+    "sensors": "حساسات",
+    "active": "نشط",
+    "lastUpdate": "آخر تحديث",
+    "status": "الحالة",
+    "online": "متصل",
+    "offline": "غير متصل",
+    "error": "خطأ",
+    "temperature": "درجة الحرارة",
+    "humidity": "الرطوبة",
+    "pressure": "الضغط",
+    "motion": "الحركة",
+    "light": "الضوء",
+    "noSensors": "لم يتم العثور على حساسات",
+    "noSensorsDescription": "ليس لديك منتجات مخزنة في غرف تحتوي على حساسات بعد",
+    "noData": "لا توجد بيانات متاحة"
   }
 }

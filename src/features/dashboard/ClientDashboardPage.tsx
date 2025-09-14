@@ -17,9 +17,13 @@ interface ClientStats {
 
 interface RecentReservation {
   id: string;
-  date: Date;
-  status: string;
-  description: string;
+  reference: string;
+  clientName: string;
+  reservedCrates: number;
+  status: 'REQUESTED' | 'APPROVED' | 'CLOSED' | 'REFUSED';
+  depositRequired: number;
+  depositPaid: number;
+  createdAt: Date;
 }
 
 interface RecentOperation {
@@ -61,7 +65,7 @@ export const ClientDashboardPage: React.FC = () => {
 
       const totalReservations = reservationsSnapshot.docs.length;
       const activeReservations = reservationsSnapshot.docs.filter(doc => 
-        doc.data().status === 'active'
+        doc.data().status === 'APPROVED'
       ).length;
       
       const totalOperations = operationsSnapshot.docs.length;
@@ -96,10 +100,13 @@ export const ClientDashboardPage: React.FC = () => {
           const data = doc.data();
           return {
             id: doc.id,
-            date: data.date?.toDate?.() || new Date(),
-            status: data.status || 'pending',
-            description: data.description || '',
-            ...data
+            reference: data.reference || '',
+            clientName: data.clientName || '',
+            reservedCrates: data.reservedCrates || 0,
+            status: data.status || 'REQUESTED',
+            depositRequired: data.depositRequired || 0,
+            depositPaid: data.depositPaid || 0,
+            createdAt: data.createdAt?.toDate?.() || new Date(),
           } as RecentReservation;
         });
     },
@@ -262,15 +269,21 @@ export const ClientDashboardPage: React.FC = () => {
                 {recentReservations.map((reservation) => (
                   <div key={reservation.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{reservation.description || 'Réservation'}</p>
-                      <p className="text-xs text-gray-500">{reservation.date?.toLocaleDateString('fr-FR') || 'Date non disponible'}</p>
+                      <p className="text-sm font-medium text-gray-900 font-mono">{reservation.reference}</p>
+                      <p className="text-xs text-gray-500">{reservation.createdAt?.toLocaleDateString('fr-FR') || 'Date non disponible'}</p>
+                      <p className="text-xs text-gray-600">{reservation.reservedCrates} caisses • {reservation.depositRequired > 0 ? `${reservation.depositRequired.toFixed(2)} MAD` : 'Gratuit'}</p>
                     </div>
                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      reservation.status === 'active' 
+                      reservation.status === 'APPROVED' 
                         ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
+                        : reservation.status === 'REFUSED'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-yellow-100 text-yellow-800'
                     }`}>
-                      {reservation.status}
+                      {reservation.status === 'REQUESTED' ? 'En attente' : 
+                       reservation.status === 'APPROVED' ? 'Approuvée' :
+                       reservation.status === 'CLOSED' ? 'Clôturée' :
+                       reservation.status === 'REFUSED' ? 'Refusée' : reservation.status}
                     </span>
                   </div>
                 ))}

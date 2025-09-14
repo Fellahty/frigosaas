@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, Navigate, Outlet, useRouteError } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useRouteError } from 'react-router-dom';
 import { Layout } from './Layout';
 import { ClientLayout } from './ClientLayout';
 import { LoginPage } from '../features/auth/LoginPage';
@@ -20,6 +20,7 @@ import { ClientOperationsPage } from '../features/operations/ClientOperationsPag
 import { ReservationsPage } from '../features/reservations/ReservationsPage';
 import { ClientReservationsPage } from '../features/reservations/ClientReservationsPage';
 import SensorsPage from '../features/sensors/SensorsPage';
+import ClientSensorsPage from '../features/sensors/ClientSensorsPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { useAuth } from '../lib/hooks/useAuth';
 
@@ -252,6 +253,14 @@ export const router = createBrowserRouter([
           <Layout>
             <SensorsPage />
           </Layout>
+        ),
+      },
+      {
+        path: 'client-sensors',
+        element: (
+          <ClientLayout>
+            <ClientSensorsPage />
+          </ClientLayout>
         ),
       },
     ],
