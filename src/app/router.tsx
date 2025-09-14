@@ -9,7 +9,7 @@ import { ClientsPage } from '../features/clients/ClientsPage';
 import { StockAndLocations } from '../features/dashboard/StockAndLocations';
 import { BillingPage } from '../features/billing/BillingPage';
 import { UsersRolesPage } from '../features/users/UsersRolesPage';
-import { CaissePage } from '../features/caisse/CaissePage';
+import CaissePage from '../features/caisse/CaissePage';
 import { SettingsLayout } from '../features/settings/SettingsLayout';
 import AppSettingsPage from '../features/settings/AppSettingsPage';
 import { AlertsPage } from '../features/alerts/AlertsPage';

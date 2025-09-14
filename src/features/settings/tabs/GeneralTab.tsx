@@ -20,6 +20,7 @@ export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabPr
     currency: 'MAD',
     locale: 'fr',
     capacity_unit: 'caisses',
+    initial_cash_balance: 0,
     season: {
       from: '',
       to: '',
@@ -35,6 +36,7 @@ export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabPr
       currency: 'MAD',
       locale: 'fr',
       capacity_unit: 'caisses',
+      initial_cash_balance: 0,
       season: {
         from: '',
         to: '',
@@ -164,6 +166,29 @@ export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabPr
               <option value="fr">Français</option>
               <option value="ar">العربية</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {t('settings.general.initialCashBalance', 'Solde initial de la caisse')}
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.initial_cash_balance}
+                onChange={(e) => handleInputChange('initial_cash_balance', parseFloat(e.target.value) || 0)}
+                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="0.00"
+              />
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <span className="text-gray-500 text-sm">MAD</span>
+              </div>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              {t('settings.general.initialCashBalanceHelp', 'Montant de départ de la caisse en trésorerie') as string}
+            </p>
           </div>
 
         </div>

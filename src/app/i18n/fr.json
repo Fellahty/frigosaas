@@ -162,7 +162,16 @@
     "ticketTitle": "Ticket de prêt (caisses vides)",
     "emptyCratesTitle": "Caisses vides",
     "availableEmptyCrates": "Disponibles",
-    "totalConfigured": "Total"
+    "totalConfigured": "Total",
+    "clientInfo": {
+      "title": "Informations du client",
+      "reservedCrates": "Caisses réservées",
+      "emptyCratesNeeded": "Caisses vides nécessaires",
+      "activeReservations": "Réservations actives",
+      "closedReservations": "Réservations fermées",
+      "noReservations": "Ce client n'a aucune réservation active",
+      "goToReservations": "Aller aux réservations"
+    }
   },
   "settings": {
     "title": "Paramètres",
@@ -184,6 +193,8 @@
       "currency": "Devise",
       "currencyFixed": "La devise est fixée en MAD",
       "locale": "Langue par défaut",
+      "initialCashBalance": "Solde initial de la caisse",
+      "initialCashBalanceHelp": "Montant de départ de la caisse en trésorerie",
       "season": "Saison",
       "seasonFrom": "Début de saison",
       "seasonTo": "Fin de saison"
@@ -248,7 +259,39 @@
     "typeIn": "Entrée",
     "typeOut": "Sortie",
     "noEntries": "Aucune entrée",
-    "errorLoading": "Erreur de chargement"
+    "errorLoading": "Erreur de chargement",
+    "cashOut": {
+      "title": "Sortie de caisse",
+      "subtitle": "Enregistrer une sortie de caisse",
+      "amount": "Montant sorti (MAD)",
+      "reason": "Raison de la sortie",
+      "selectReason": "Sélectionner une raison",
+      "customReason": "Préciser la raison",
+      "customReasonPlaceholder": "Décrire la raison de la sortie...",
+      "reference": "Référence",
+      "referencePlaceholder": "REF-SORT-001",
+      "notes": "Notes additionnelles (optionnel)",
+      "notesPlaceholder": "Notes additionnelles...",
+      "electricityBill": "Paiement facture électricité",
+      "billImage": "Photo de la facture d'électricité",
+      "uploadImage": "Cliquer pour ajouter une photo",
+      "imageSize": "PNG, JPG, JPEG jusqu'à 10MB",
+      "imageUploaded": "Cliquer pour changer",
+      "removeImage": "Supprimer",
+      "warning": "Attention",
+      "warningMessage": "Cette sortie de caisse sera enregistrée dans le journal et affectera le solde de la caisse.",
+      "save": "Enregistrer la sortie",
+      "saving": "Enregistrement...",
+      "reasons": {
+        "electricity": "Paiement facture électricité",
+        "supplier": "Dépense fournisseur",
+        "maintenance": "Maintenance équipement",
+        "transport": "Frais de transport",
+        "material": "Achat de matériel",
+        "admin": "Frais administratifs",
+        "other": "Autre dépense"
+      }
+    }
   },
   "usersRoles": {
     "title": "Utilisateurs & Rôles",

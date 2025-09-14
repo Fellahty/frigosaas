@@ -1,283 +1,629 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, getDocs, addDoc, Timestamp, query, where } from 'firebase/firestore';
-import { useTranslation } from 'react-i18next';
+import { collection, query, where, orderBy, limit, getDocs, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
 import { Spinner } from '../../components/Spinner';
+import { logCreate, logUpdate } from '../../lib/logging';
+import { PaymentRecordingModal } from './PaymentRecordingModal';
+import { CashOutModal } from './CashOutModal';
+import { DayClosureModal } from './DayClosureModal';
+import { UpcomingPayments } from './UpcomingPayments';
 
-type EntryType = 'in' | 'out';
-
-interface CashEntry {
+// Types
+interface CashMovement {
   id: string;
-  date: Date;
-  description: string;
-  amount: number;
-  type: EntryType;
-  createdAt: Date;
-  clientId?: string | null;
+  type: 'in' | 'out';
+  reason: string;
+  clientId?: string;
   clientName?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  amount: number;
+  paymentMethod: 'cash' | 'check' | 'transfer' | 'card';
+  reference: string;
+  userId: string;
+  userName: string;
+  createdAt: Timestamp;
+  notes?: string;
 }
 
-interface ClientOption { id: string; name: string }
+interface PendingCollection {
+  id: string;
+  clientId: string;
+  clientName: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  dueDate: Timestamp;
+  amountDue: number;
+  status: 'pending' | 'overdue';
+}
 
-export const CaissePage: React.FC = () => {
-  const { t } = useTranslation();
+interface Caution {
+  id: string;
+  clientId: string;
+  clientName: string;
+  amount: number;
+  type: 'blocked' | 'to_refund';
+  createdAt: Timestamp;
+  loanId?: string;
+}
+
+interface CashOverview {
+  currentBalance: number;
+  todayReceipts: number;
+  todayPayments: number;
+  pendingCollections: number;
+  blockedCautions: number;
+  cautionsToRefund: number;
+}
+
+const CaissePage: React.FC = () => {
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'overview' | 'upcoming' | 'pending' | 'journal' | 'reports'>('overview');
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+  const [isCashOut, setIsCashOut] = useState(false);
+  const [isClosingDay, setIsClosingDay] = useState(false);
 
-  const [isAdding, setIsAdding] = React.useState(false);
-  const [form, setForm] = React.useState<{ date: string; description: string; amount: number; type: EntryType; clientId: string }>({
-    date: new Date().toISOString().slice(0, 10),
-    description: '',
-    amount: 0,
-    type: 'in',
-    clientId: '',
-  });
-
-  // Load clients for selection
-  const { data: clientOptions } = useQuery({
-    queryKey: ['clients', tenantId, 'for-caisse'],
-    queryFn: async (): Promise<ClientOption[]> => {
-      const q = query(collection(db, 'clients'), where('tenantId', '==', tenantId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
-        const data = d.data() as any;
-        return { id: d.id, name: data.name || '—' };
-      });
+  // Fetch general settings to get initial cash balance
+  const { data: generalSettings } = useQuery({
+    queryKey: ['general-settings', tenantId],
+    queryFn: async () => {
+      const docRef = doc(db, 'tenants', tenantId, 'settings', 'site');
+      const docSnap = await getDoc(docRef);
+      return docSnap.exists() ? docSnap.data() : { initial_cash_balance: 0 };
     },
   });
 
-  const { data: entries, isLoading, error } = useQuery({
-    queryKey: ['cash-entries', tenantId],
-    queryFn: async (): Promise<CashEntry[]> => {
-      const q = query(collection(db, 'cash_entries'), where('tenantId', '==', tenantId));
-      const snap = await getDocs(q);
-      const list = snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          date: data.date?.toDate?.() || data.date || new Date(),
-          description: data.description || '',
-          amount: Number(data.amount) || 0,
-          type: (data.type as EntryType) || 'in',
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-          clientId: data.clientId || null,
-          clientName: data.clientName || '',
-        };
-      });
-      // Sort descending by date on the client to avoid Firestore composite index requirement
-      return list.sort((a, b) => (new Date(b.date as any).getTime() - new Date(a.date as any).getTime()));
+  // Fetch cash overview
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ['cash-overview', tenantId, generalSettings?.initial_cash_balance],
+    enabled: !!generalSettings, // Only run when general settings are loaded
+    queryFn: async (): Promise<CashOverview> => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Get today's movements
+      const movementsQuery = query(
+        collection(db, 'tenants', tenantId, 'cashMovements'),
+        where('createdAt', '>=', Timestamp.fromDate(today)),
+        where('createdAt', '<', Timestamp.fromDate(tomorrow))
+      );
+      const movementsSnapshot = await getDocs(movementsQuery);
+      const todayMovements = movementsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashMovement));
+
+      // Get pending collections (next 7 days)
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      const pendingQuery = query(
+        collection(db, 'tenants', tenantId, 'pendingCollections'),
+        where('dueDate', '<=', Timestamp.fromDate(nextWeek))
+      );
+      const pendingSnapshot = await getDocs(pendingQuery);
+      const pendingCollections = pendingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PendingCollection));
+
+      // Get cautions
+      const cautionsQuery = query(collection(db, 'tenants', tenantId, 'cautions'));
+      const cautionsSnapshot = await getDocs(cautionsQuery);
+      const cautions = cautionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Caution));
+
+      // Calculate overview
+      const todayReceipts = todayMovements
+        .filter(m => m.type === 'in')
+        .reduce((sum, m) => sum + m.amount, 0);
+      
+      const todayPayments = todayMovements
+        .filter(m => m.type === 'out')
+        .reduce((sum, m) => sum + m.amount, 0);
+
+      const pendingAmount = pendingCollections
+        .reduce((sum, p) => sum + p.amountDue, 0);
+
+      const blockedCautions = cautions
+        .filter(c => c.type === 'blocked')
+        .reduce((sum, c) => sum + c.amount, 0);
+
+      const cautionsToRefund = cautions
+        .filter(c => c.type === 'to_refund')
+        .reduce((sum, c) => sum + c.amount, 0);
+
+      // Get initial cash balance from settings
+      const initialBalance = generalSettings?.initial_cash_balance || 0;
+      
+      // Calculate current balance (initial + receipts - payments)
+      const currentBalance = initialBalance + todayReceipts - todayPayments;
+
+      return {
+        currentBalance,
+        todayReceipts,
+        todayPayments,
+        pendingCollections: pendingAmount,
+        blockedCautions,
+        cautionsToRefund,
+      };
     },
   });
 
-  const addEntry = useMutation({
-    mutationFn: async (payload: typeof form) => {
-      const selectedClient = (clientOptions || []).find((c) => c.id === payload.clientId);
-      await addDoc(collection(db, 'cash_entries'), {
-        tenantId,
-        date: payload.date ? Timestamp.fromDate(new Date(payload.date)) : Timestamp.fromDate(new Date()),
-        description: payload.description,
-        amount: Number(payload.amount) || 0,
-        type: payload.type,
-        clientId: payload.type === 'in' ? (payload.clientId || null) : null,
-        clientName: payload.type === 'in' ? (selectedClient?.name || '') : '',
+  // Fetch pending collections
+  const { data: pendingCollections, isLoading: pendingLoading } = useQuery({
+    queryKey: ['pending-collections', tenantId],
+    queryFn: async (): Promise<PendingCollection[]> => {
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      const q = query(
+        collection(db, 'tenants', tenantId, 'pendingCollections'),
+        where('dueDate', '<=', Timestamp.fromDate(nextWeek)),
+        orderBy('dueDate', 'asc')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PendingCollection));
+    },
+  });
+
+  // Fetch journal (last 30 movements)
+  const { data: journal, isLoading: journalLoading } = useQuery({
+    queryKey: ['cash-journal', tenantId],
+    queryFn: async (): Promise<CashMovement[]> => {
+      const q = query(
+        collection(db, 'tenants', tenantId, 'cashMovements'),
+        orderBy('createdAt', 'desc'),
+        limit(30)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashMovement));
+    },
+  });
+
+  // Record payment mutation
+  const recordPayment = useMutation({
+    mutationFn: async (data: { clientId: string; invoiceIds: string[]; amount: number; paymentMethod: string; reference: string }) => {
+      const movementData = {
+        type: 'in' as const,
+        reason: 'Paiement client',
+        clientId: data.clientId,
+        amount: data.amount,
+        paymentMethod: data.paymentMethod,
+        reference: data.reference,
+        userId: 'current-user', // Would get from auth context
+        userName: 'Utilisateur actuel',
         createdAt: Timestamp.fromDate(new Date()),
-      });
+        notes: `Paiement pour ${data.invoiceIds.length} facture(s)`,
+      };
+
+      const docRef = await addDoc(collection(db, 'tenants', tenantId, 'cashMovements'), movementData);
+      await logCreate('cashMovement', docRef.id, `Paiement enregistré: ${data.amount} MAD`, 'admin', 'Administrateur');
+      return docRef.id;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['cash-entries', tenantId] });
-      setIsAdding(false);
-      setForm({ date: new Date().toISOString().slice(0, 10), description: '', amount: 0, type: 'in', clientId: '' });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cash-overview', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['cash-journal', tenantId] });
+      setIsRecordingPayment(false);
     },
   });
 
-  const balance = Array.isArray(entries)
-    ? entries.reduce((sum, e) => sum + (e.type === 'in' ? e.amount : -e.amount), 0)
-    : 0;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="text-center">
-          <Spinner size="lg" className="mx-auto mb-4" />
-          <p className="text-gray-600">{t('common.loading')}</p>
-        </div>
-      </div>
-    );
-  }
+  // Cash out mutation
+  const cashOut = useMutation({
+    mutationFn: async (data: { amount: number; reason: string; reference: string }) => {
+      const movementData = {
+        type: 'out' as const,
+        reason: data.reason,
+        amount: data.amount,
+        paymentMethod: 'cash' as const,
+        reference: data.reference,
+        userId: 'current-user',
+        userName: 'Utilisateur actuel',
+        createdAt: Timestamp.fromDate(new Date()),
+        notes: 'Sortie de caisse',
+      };
 
-  if (error) {
+      const docRef = await addDoc(collection(db, 'tenants', tenantId, 'cashMovements'), movementData);
+      await logCreate('cashMovement', docRef.id, `Sortie de caisse: ${data.amount} MAD`, 'admin', 'Administrateur');
+      return docRef.id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cash-overview', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['cash-journal', tenantId] });
+      setIsCashOut(false);
+    },
+  });
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'MAD',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const formatDate = (timestamp: Timestamp) => {
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(timestamp.toDate());
+  };
+
+  const getPaymentMethodIcon = (method: string) => {
+    switch (method) {
+      case 'cash':
+        return '💵';
+      case 'check':
+        return '📄';
+      case 'transfer':
+        return '🏦';
+      case 'card':
+        return '💳';
+      default:
+        return '💰';
+    }
+  };
+
+  const getMovementTypeColor = (type: 'in' | 'out') => {
+    return type === 'in' ? 'text-green-600' : 'text-red-600';
+  };
+
+  const getMovementTypeIcon = (type: 'in' | 'out') => {
+    return type === 'in' ? '↗️' : '↘️';
+  };
+
+  if (overviewLoading) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-        <p className="font-medium">{t('caisse.errorLoading', 'Erreur de chargement')}</p>
+      <div className="flex items-center justify-center h-64">
+        <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 text-sm md:text-base">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{t('caisse.title', 'Caisse')}</h1>
-          <p className="text-gray-600">{t('caisse.subtitle', 'Suivez vos entrées/sorties de caisse')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setForm({ date: new Date().toISOString().slice(0, 10), description: '', amount: 0, type: 'in' });
-              setIsAdding(true);
-            }}
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75V11h5.75a.75.75 0 010 1.5H12.75v5.75a.75.75 0 01-1.5 0V12.5H5.5a.75.75 0 010-1.5h5.75V5.25A.75.75 0 0112 4.5z" clipRule="evenodd" /></svg>
-            {t('caisse.addEntry', 'Ajouter une entrée')}
-          </button>
-          <button
-            onClick={() => {
-              setForm({ date: new Date().toISOString().slice(0, 10), description: '', amount: 0, type: 'out' });
-              setIsAdding(true);
-            }}
-            className="inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 11-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" /></svg>
-            {t('caisse.addOut', 'Ajouter une sortie')}
-          </button>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-2xl p-4 sm:p-6 border border-white/30 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+              <span className="text-lg">💰</span>
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Trésorerie</h1>
+              <p className="text-sm text-gray-600">Gestion de la caisse et suivi des encaissements</p>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2 sm:gap-3">
+            <button
+              onClick={() => setIsRecordingPayment(true)}
+              className="group px-3 py-2 sm:px-4 sm:py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 flex items-center space-x-2 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
+            >
+              <span className="text-sm sm:text-base">💵</span>
+              <span className="text-xs sm:text-sm font-medium hidden sm:inline">Enregistrer paiement</span>
+              <span className="text-xs sm:text-sm font-medium sm:hidden">Paiement</span>
+            </button>
+            
+            <button
+              onClick={() => setIsCashOut(true)}
+              className="group px-3 py-2 sm:px-4 sm:py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 flex items-center space-x-2 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
+            >
+              <span className="text-sm sm:text-base">📤</span>
+              <span className="text-xs sm:text-sm font-medium hidden sm:inline">Sortie de caisse</span>
+              <span className="text-xs sm:text-sm font-medium sm:hidden">Sortie</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 rounded-lg border bg-white">
-            <div className="text-sm text-gray-600">{t('caisse.balance', 'Solde')}</div>
-            <div className="mt-1 text-2xl font-bold text-blue-600">{balance.toFixed(2)} MAD</div>
+      {/* Overview Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+        <Card className="p-3 sm:p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 border-0 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-blue-600/70 uppercase tracking-wider">Solde actuel</p>
+              <p className="text-lg sm:text-xl font-semibold text-gray-900 mt-1 sm:mt-2 tracking-tight">
+                {formatCurrency(overview?.currentBalance || 0)}
+              </p>
+              {generalSettings?.initial_cash_balance && generalSettings.initial_cash_balance > 0 && (
+                <p className="text-xs text-blue-500/60 mt-1">
+                  Solde initial: {formatCurrency(generalSettings.initial_cash_balance)}
+                </p>
+              )}
+            </div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/60 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm self-end sm:self-auto">
+              <span className="text-sm sm:text-lg">💰</span>
+            </div>
           </div>
-          <div className="p-4 rounded-lg border bg-white">
-            <div className="text-sm text-gray-600">{t('caisse.totalIn', 'Entrées')}</div>
-            <div className="mt-1 text-2xl font-bold text-green-600">{(entries||[]).filter(e=>e.type==='in').reduce((s,e)=>s+e.amount,0).toFixed(2)} MAD</div>
-          </div>
-          <div className="p-4 rounded-lg border bg-white">
-            <div className="text-sm text-gray-600">{t('caisse.totalOut', 'Sorties')}</div>
-            <div className="mt-1 text-2xl font-bold text-red-600">{(entries||[]).filter(e=>e.type==='out').reduce((s,e)=>s+e.amount,0).toFixed(2)} MAD</div>
-          </div>
-        </div>
-      </Card>
+        </Card>
 
-      {isAdding && (
-        <Card>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('caisse.date', 'Date')}</label>
-              <input
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                className="w-full border rounded-md px-3 py-2"
-              />
+        <Card className="p-3 sm:p-4 bg-gradient-to-br from-green-50 to-green-100/50 border-0 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-green-600/70 uppercase tracking-wider">Encaissements aujourd'hui</p>
+              <p className="text-lg sm:text-xl font-semibold text-gray-900 mt-1 sm:mt-2 tracking-tight">
+                {formatCurrency(overview?.todayReceipts || 0)}
+              </p>
             </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('caisse.description', 'Description')}</label>
-              <input
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                className="w-full border rounded-md px-3 py-2"
-                placeholder={t('caisse.descriptionPlaceholder', 'Ex: Règlement client') as string}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('billing.amount', 'Montant')}</label>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.amount}
-                onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))}
-                className="w-full border rounded-md px-3 py-2"
-                placeholder="0.00"
-              />
-            </div>
-            {form.type === 'in' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('billing.client', 'Client')}</label>
-                <select
-                  value={form.clientId}
-                  onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
-                  className="w-full border rounded-md px-3 py-2"
-                >
-                  <option value="">{t('billing.selectClient', 'Sélectionner un client')}</option>
-                  {(clientOptions || []).map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('caisse.type', 'Type')}</label>
-              <select
-                value={form.type}
-                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as EntryType }))}
-                className="w-full border rounded-md px-3 py-2"
-              >
-                <option value="in">{t('caisse.typeIn', 'Entrée')}</option>
-                <option value="out">{t('caisse.typeOut', 'Sortie')}</option>
-              </select>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/60 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm self-end sm:self-auto">
+              <span className="text-sm sm:text-lg">↗️</span>
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-3">
+        </Card>
+
+        <Card className="p-3 sm:p-4 bg-gradient-to-br from-red-50 to-red-100/50 border-0 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-red-600/70 uppercase tracking-wider">Décaissements aujourd'hui</p>
+              <p className="text-lg sm:text-xl font-semibold text-gray-900 mt-1 sm:mt-2 tracking-tight">
+                {formatCurrency(overview?.todayPayments || 0)}
+              </p>
+            </div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/60 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm self-end sm:self-auto">
+              <span className="text-sm sm:text-lg">↘️</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-3 sm:p-4 bg-gradient-to-br from-orange-50 to-orange-100/50 border-0 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-orange-600/70 uppercase tracking-wider">À encaisser (7 jours)</p>
+              <p className="text-lg sm:text-xl font-semibold text-gray-900 mt-1 sm:mt-2 tracking-tight">
+                {formatCurrency(overview?.pendingCollections || 0)}
+              </p>
+            </div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/60 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm self-end sm:self-auto">
+              <span className="text-sm sm:text-lg">⏰</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+
+      {/* Tabs */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-xl p-1.5 sm:p-2 shadow-sm border border-gray-100/50">
+        <nav className="flex flex-wrap gap-1">
+          {[
+            { id: 'overview', label: 'Vue d\'ensemble', icon: '📊', shortLabel: 'Vue' },
+            { id: 'upcoming', label: 'Prochains Paiements', icon: '💰', shortLabel: 'Paiements' },
+            { id: 'pending', label: 'À encaisser', icon: '⏰', shortLabel: 'Encaisser' },
+            { id: 'journal', label: 'Journal', icon: '📋', shortLabel: 'Journal' },
+            { id: 'reports', label: 'Rapports', icon: '📈', shortLabel: 'Rapports' },
+          ].map((tab) => (
             <button
-              onClick={() => addEntry.mutate(form)}
-              disabled={!form.date || !form.description || form.amount <= 0 || (form.type==='in' && !form.clientId) || addEntry.isLoading}
-              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60"
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg font-medium text-xs flex items-center space-x-1.5 sm:space-x-2 whitespace-nowrap transition-all duration-200 ${
+                activeTab === tab.id
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
+              }`}
             >
-              {addEntry.isLoading ? t('common.loading') : t('common.save')}
+              <span className="text-xs sm:text-sm">{tab.icon}</span>
+              <span className="hidden xs:inline sm:hidden">{tab.shortLabel}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
-            <button onClick={() => setIsAdding(false)} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200">
-              {t('common.cancel')}
-            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="space-y-4 sm:space-y-6">
+          <Card className="p-4 sm:p-6 bg-white/80 backdrop-blur-sm border-0 shadow-sm">
+            <h3 className="text-base sm:text-lg font-semibold mb-4 sm:mb-6 text-gray-900">Actions rapides</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+              <button
+                onClick={() => setIsRecordingPayment(true)}
+                className="group p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/50 rounded-xl sm:rounded-2xl hover:from-blue-100 hover:to-blue-200/50 hover:border-blue-300/50 transition-all duration-200 text-center hover:shadow-md hover:scale-105"
+              >
+                <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-200">💵</div>
+                <div className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900">Enregistrer un paiement</div>
+                <div className="text-xs text-gray-500 mt-1 hidden sm:block">Client → Facture(s)</div>
+              </button>
+
+
+              <button
+                onClick={() => setIsCashOut(true)}
+                className="group p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-orange-50 to-orange-100/50 border border-orange-200/50 rounded-xl sm:rounded-2xl hover:from-orange-100 hover:to-orange-200/50 hover:border-orange-300/50 transition-all duration-200 text-center hover:shadow-md hover:scale-105"
+              >
+                <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-200">📤</div>
+                <div className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900">Sortie de caisse</div>
+                <div className="text-xs text-gray-500 mt-1 hidden sm:block">Dépense</div>
+              </button>
+
+              <button
+                onClick={() => setIsClosingDay(true)}
+                className="group p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200/50 rounded-xl sm:rounded-2xl hover:from-purple-100 hover:to-purple-200/50 hover:border-purple-300/50 transition-all duration-200 text-center hover:shadow-md hover:scale-105"
+              >
+                <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-200">🔒</div>
+                <div className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900">Clôture de journée</div>
+                <div className="text-xs text-gray-500 mt-1 hidden sm:block">Verrouiller le journal</div>
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'upcoming' && (
+        <UpcomingPayments />
+      )}
+
+      {activeTab === 'pending' && (
+        <Card>
+          <div className="p-4 md:p-6 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+              <h3 className="text-lg font-semibold">À encaisser (échéances)</h3>
+              <div className="flex flex-wrap gap-2">
+                <button className="px-3 py-1 text-xs sm:text-sm bg-red-100 text-red-700 rounded-full">
+                  En retard
+                </button>
+                <button className="px-3 py-1 text-xs sm:text-sm bg-blue-100 text-blue-700 rounded-full">
+                  Cette semaine
+                </button>
+              </div>
+            </div>
           </div>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeader>Client</TableHeader>
+                <TableHeader>Facture</TableHeader>
+                <TableHeader>Échéance</TableHeader>
+                <TableHeader>Montant dû</TableHeader>
+                <TableHeader>Actions</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {pendingLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8">
+                    <Spinner />
+                  </TableCell>
+                </TableRow>
+              ) : pendingCollections?.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    Aucune échéance en attente
+                  </TableCell>
+                </TableRow>
+              ) : (
+                pendingCollections?.map((collection) => (
+                  <TableRow key={collection.id}>
+                    <TableCell>{collection.clientName}</TableCell>
+                    <TableCell className="font-mono">{collection.invoiceNumber}</TableCell>
+                    <TableCell>{formatDate(collection.dueDate)}</TableCell>
+                    <TableCell className="font-semibold">{formatCurrency(collection.amountDue)}</TableCell>
+                    <TableCell>
+                      <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                        Encaisser
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </Card>
       )}
 
-      <Card>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableHeader>{t('caisse.date', 'Date')}</TableHeader>
-              <TableHeader>{t('caisse.description', 'Description')}</TableHeader>
-              <TableHeader>{t('billing.client', 'Client')}</TableHeader>
-              <TableHeader>{t('billing.amount', 'Montant')}</TableHeader>
-              <TableHeader>{t('caisse.type', 'Type')}</TableHeader>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {Array.isArray(entries) && entries.length > 0 ? (
-              entries.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell className="whitespace-nowrap">{e.date instanceof Date ? e.date.toLocaleDateString() : e.date}</TableCell>
-                  <TableCell>{e.description}</TableCell>
-                  <TableCell>{e.clientName || '-'}</TableCell>
-                  <TableCell className={e.type==='in' ? 'text-green-700' : 'text-red-700'}>{e.amount.toFixed(2)} MAD</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 text-xs rounded-full border ${e.type==='in' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                      {e.type==='in' ? t('caisse.typeIn', 'Entrée') : t('caisse.typeOut', 'Sortie')}
-                    </span>
+      {activeTab === 'journal' && (
+        <Card>
+          <div className="p-4 md:p-6 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+              <h3 className="text-lg font-semibold">Journal (30 derniers mouvements)</h3>
+              <div className="flex flex-wrap gap-2">
+                <button className="px-3 py-1 text-xs sm:text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                  Exporter CSV
+                </button>
+                <button className="px-3 py-1 text-xs sm:text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                  Exporter PDF
+                </button>
+              </div>
+            </div>
+          </div>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeader>Date/Heure</TableHeader>
+                <TableHeader>Type</TableHeader>
+                <TableHeader>Raison</TableHeader>
+                <TableHeader>Client/Facture</TableHeader>
+                <TableHeader>Montant</TableHeader>
+                <TableHeader>Mode</TableHeader>
+                <TableHeader>Réf</TableHeader>
+                <TableHeader>Utilisateur</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {journalLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <Spinner />
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                  {t('caisse.noEntries', 'Aucune entrée')}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+              ) : journal?.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                    Aucun mouvement enregistré
+                  </TableCell>
+                </TableRow>
+              ) : (
+                journal?.map((movement) => (
+                  <TableRow key={movement.id}>
+                    <TableCell className="text-sm">{formatDate(movement.createdAt)}</TableCell>
+                    <TableCell>
+                      <span className={`flex items-center space-x-1 ${getMovementTypeColor(movement.type)}`}>
+                        <span>{getMovementTypeIcon(movement.type)}</span>
+                        <span className="text-sm font-medium">
+                          {movement.type === 'in' ? 'Entrée' : 'Sortie'}
+                        </span>
+                      </span>
+                    </TableCell>
+                    <TableCell>{movement.reason}</TableCell>
+                    <TableCell>
+                      {movement.clientName && (
+                        <div>
+                          <div className="font-medium">{movement.clientName}</div>
+                          {movement.invoiceNumber && (
+                            <div className="text-sm text-gray-500 font-mono">{movement.invoiceNumber}</div>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className={`font-semibold ${getMovementTypeColor(movement.type)}`}>
+                      {movement.type === 'in' ? '+' : '-'}{formatCurrency(movement.amount)}
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex items-center space-x-1">
+                        <span>{getPaymentMethodIcon(movement.paymentMethod)}</span>
+                        <span className="text-sm capitalize">{movement.paymentMethod}</span>
+                      </span>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">{movement.reference}</TableCell>
+                    <TableCell className="text-sm">{movement.userName}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {activeTab === 'reports' && (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Rapports (période)</h3>
+            <div className="text-center py-8 text-gray-500">
+              <div className="text-4xl mb-4">📈</div>
+              <p>Fonctionnalité de rapports en cours de développement</p>
+              <p className="text-sm">Totaux in/out, top clients payeurs, écarts vs fermeture</p>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Modals */}
+      <PaymentRecordingModal
+        isOpen={isRecordingPayment}
+        onClose={() => setIsRecordingPayment(false)}
+      />
+      
+      <CashOutModal
+        isOpen={isCashOut}
+        onClose={() => setIsCashOut(false)}
+      />
+      
+      <DayClosureModal
+        isOpen={isClosingDay}
+        onClose={() => setIsClosingDay(false)}
+      />
     </div>
   );
 };
 
-
+export default CaissePage;

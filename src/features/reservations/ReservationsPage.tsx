@@ -70,8 +70,10 @@ export const ReservationsPage: React.FC = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
+    clientId: '',
     reservedCrates: 0,
-    depositRequired: 0,
+    emptyCratesNeeded: 0,
+    advanceAmount: 0,
     depositPaid: 0,
   });
 
@@ -250,7 +252,9 @@ export const ReservationsPage: React.FC = () => {
       const reservationRef = doc(db, 'tenants', tenantId, 'reservations', id);
       await updateDoc(reservationRef, {
         reservedCrates: updates.reservedCrates,
-        depositRequired: updates.depositRequired,
+        emptyCratesNeeded: updates.emptyCratesNeeded,
+        advanceAmount: updates.advanceAmount,
+        depositRequired: updates.advanceAmount, // Use advanceAmount as depositRequired
         depositPaid: updates.depositPaid,
         updatedAt: Timestamp.fromDate(new Date()),
       });
@@ -272,9 +276,11 @@ export const ReservationsPage: React.FC = () => {
   const handleEditReservation = () => {
     if (selectedReservation) {
       setEditForm({
+        clientId: selectedReservation.clientId,
         reservedCrates: selectedReservation.reservedCrates,
-        depositRequired: selectedReservation.depositRequired,
-        depositPaid: selectedReservation.depositPaid,
+        emptyCratesNeeded: selectedReservation.emptyCratesNeeded || 0,
+        advanceAmount: selectedReservation.advanceAmount || 0,
+        depositPaid: selectedReservation.depositPaid || 0,
       });
       setIsEditing(true);
     }
@@ -292,8 +298,10 @@ export const ReservationsPage: React.FC = () => {
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditForm({
+      clientId: '',
       reservedCrates: 0,
-      depositRequired: 0,
+      emptyCratesNeeded: 0,
+      advanceAmount: 0,
       depositPaid: 0,
     });
   };
@@ -301,6 +309,7 @@ export const ReservationsPage: React.FC = () => {
   const handleStatusChange = (id: string, status: string, reason?: string) => {
     updateReservationStatus.mutate({ id, status, reason });
   };
+
 
 
   // Loading state
@@ -486,15 +495,17 @@ export const ReservationsPage: React.FC = () => {
               <TableHeader>Réf</TableHeader>
               <TableHeader>Client</TableHeader>
               <TableHeader>Réservé</TableHeader>
-              <TableHeader>Statut</TableHeader>
+              <TableHeader>Caisses vides</TableHeader>
+              <TableHeader>Montant requis</TableHeader>
               <TableHeader>Montant avancé</TableHeader>
+              <TableHeader>Statut</TableHeader>
               <TableHeader>Capacité</TableHeader>
             </TableRow>
           </TableHead>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={9} className="text-center py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                   </div>
@@ -502,7 +513,7 @@ export const ReservationsPage: React.FC = () => {
               </TableRow>
             ) : filteredReservations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                   Aucune réservation trouvée
                 </TableCell>
               </TableRow>
@@ -573,10 +584,14 @@ export const ReservationsPage: React.FC = () => {
                   <TableCell className="font-mono text-sm">{reservation.reference || 'N/A'}</TableCell>
                   <TableCell>{reservation.clientName}</TableCell>
                   <TableCell className="text-center">{reservation.reservedCrates}</TableCell>
-                  <TableCell>{getStatusBadge(reservation.status)}</TableCell>
+                  <TableCell className="text-center">{reservation.emptyCratesNeeded || 0}</TableCell>
+                  <TableCell className="text-sm">
+                    {reservation.depositRequired > 0 ? `${reservation.depositRequired.toFixed(2)} MAD` : '-'}
+                  </TableCell>
                   <TableCell className="text-sm">
                     {reservation.depositPaid > 0 ? `${reservation.depositPaid.toFixed(2)} MAD` : '-'}
                   </TableCell>
+                  <TableCell>{getStatusBadge(reservation.status)}</TableCell>
                   <TableCell className="text-center">{getCapacityIcon(reservation.capacityOk)}</TableCell>
                 </TableRow>
               ))
@@ -814,6 +829,7 @@ export const ReservationsPage: React.FC = () => {
                 </div>
               </div>
             </div>
+            
             <div className="mt-6 flex justify-end space-x-3">
               <button
                 onClick={handleEditReservation}
@@ -849,44 +865,98 @@ export const ReservationsPage: React.FC = () => {
             </div>
             
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre de caisses réservées
+              {/* Client Selection */}
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>Client</span>
+                </label>
+                <EnhancedSelect
+                  options={clients?.map(client => ({
+                    value: client.id,
+                    label: client.name,
+                    company: client.company
+                  })) || []}
+                  value={editForm.clientId}
+                  onChange={(value) => setEditForm(f => ({ ...f, clientId: value }))}
+                  placeholder="Sélectionner un client"
+                  className="w-full"
+                />
+              </div>
+
+              {/* Number of Crates to Return */}
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                  <span>Nombre de caisses à rentrer</span>
                 </label>
                 <input
                   type="number"
                   min="1"
                   value={editForm.reservedCrates}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, reservedCrates: Number(e.target.value) }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => setEditForm(f => ({ ...f, reservedCrates: Number(e.target.value) }))}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 bg-gray-50 focus:bg-white"
+                  placeholder="0"
                 />
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Montant de la caution requis (MAD)
+
+              {/* Empty Crates Needed */}
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <span>Caisses vides nécessaires</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.emptyCratesNeeded}
+                  onChange={(e) => setEditForm(f => ({ ...f, emptyCratesNeeded: Number(e.target.value) }))}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 bg-gray-50 focus:bg-white"
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Advance Amount */}
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  </svg>
+                  <span>Montant qui va être avancé (MAD)</span>
                 </label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={editForm.depositRequired}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, depositRequired: Number(e.target.value) }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editForm.advanceAmount}
+                  onChange={(e) => setEditForm(f => ({ ...f, advanceAmount: Number(e.target.value) }))}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-gray-50 focus:bg-white"
+                  placeholder="0.00"
                 />
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Montant de la caution payé (MAD)
+
+              {/* Amount Paid */}
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Montant avancé (MAD)</span>
                 </label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   value={editForm.depositPaid}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, depositPaid: Number(e.target.value) }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => setEditForm(f => ({ ...f, depositPaid: Number(e.target.value) }))}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 bg-gray-50 focus:bg-white"
+                  placeholder="0.00"
                 />
               </div>
             </div>

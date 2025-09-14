@@ -162,7 +162,16 @@
     "ticketTitle": "تذكرة إعارة (صناديق فارغة)",
     "emptyCratesTitle": "الصناديق الفارغة",
     "availableEmptyCrates": "متاحة",
-    "totalConfigured": "المجموع"
+    "totalConfigured": "المجموع",
+    "clientInfo": {
+      "title": "معلومات العميل",
+      "reservedCrates": "الصناديق المحجوزة",
+      "emptyCratesNeeded": "الصناديق الفارغة المطلوبة",
+      "activeReservations": "الحجوزات النشطة",
+      "closedReservations": "الحجوزات المغلقة",
+      "noReservations": "هذا العميل ليس لديه حجوزات نشطة",
+      "goToReservations": "الذهاب إلى الحجوزات"
+    }
   },
   "settings": {
     "title": "الإعدادات",
@@ -184,6 +193,8 @@
       "currency": "العملة",
       "currencyFixed": "العملة ثابتة بالدرهم المغربي",
       "locale": "اللغة الافتراضية",
+      "initialCashBalance": "الرصيد الأولي للخزينة",
+      "initialCashBalanceHelp": "المبلغ الابتدائي للخزينة في الخزينة",
       "season": "الموسم",
       "seasonFrom": "بداية الموسم",
       "seasonTo": "نهاية الموسم"
@@ -248,7 +259,39 @@
     "typeIn": "إيراد",
     "typeOut": "مصروف",
     "noEntries": "لا توجد عمليات",
-    "errorLoading": "خطأ في التحميل"
+    "errorLoading": "خطأ في التحميل",
+    "cashOut": {
+      "title": "سحب من الصندوق",
+      "subtitle": "تسجيل سحب من الصندوق",
+      "amount": "المبلغ المسحوب (درهم)",
+      "reason": "سبب السحب",
+      "selectReason": "اختر السبب",
+      "customReason": "تحديد السبب",
+      "customReasonPlaceholder": "وصف سبب السحب...",
+      "reference": "المرجع",
+      "referencePlaceholder": "REF-SORT-001",
+      "notes": "ملاحظات إضافية (اختياري)",
+      "notesPlaceholder": "ملاحظات إضافية...",
+      "electricityBill": "دفع فاتورة الكهرباء",
+      "billImage": "صورة فاتورة الكهرباء",
+      "uploadImage": "انقر لإضافة صورة",
+      "imageSize": "PNG, JPG, JPEG حتى 10 ميجا",
+      "imageUploaded": "انقر للتغيير",
+      "removeImage": "حذف",
+      "warning": "تحذير",
+      "warningMessage": "سيتم تسجيل هذا السحب في السجل وسيؤثر على رصيد الصندوق.",
+      "save": "حفظ السحب",
+      "saving": "جاري الحفظ...",
+      "reasons": {
+        "electricity": "دفع فاتورة الكهرباء",
+        "supplier": "مصروف مورد",
+        "maintenance": "صيانة المعدات",
+        "transport": "مصروفات النقل",
+        "material": "شراء مواد",
+        "admin": "مصروفات إدارية",
+        "other": "مصروف آخر"
+      }
+    }
   },
   "usersRoles": {
     "title": "المستخدمون والأدوار",

@@ -8,6 +8,7 @@ export const generalSettingsSchema = z.object({
   capacity_unit: z.enum(['caisses', 'palettes']).default('caisses'),
   ratio_caisses_par_palette: z.number().positive().optional(),
   baseUrl: z.string().url().optional(),
+  initial_cash_balance: z.number().min(0, 'Le solde initial doit être positif').default(0),
   season: z.object({
     from: z.string().min(1, 'Date de début requise'),
     to: z.string().min(1, 'Date de fin requise'),
@@ -66,6 +67,7 @@ export interface SiteSettingsDoc {
   capacity_unit: 'caisses' | 'palettes';
   ratio_caisses_par_palette?: number;
   baseUrl?: string;
+  initial_cash_balance?: number;
 }
 
 export interface RoomDoc {
