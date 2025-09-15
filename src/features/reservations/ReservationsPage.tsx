@@ -8,6 +8,7 @@ import { useAppSettings, usePoolSettings } from '../../lib/hooks/useAppSettings'
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
 import { EnhancedSelect } from '../../components/EnhancedSelect';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { logCreate, logUpdate, logDelete } from '../../lib/logging';
 
 // Types
@@ -21,6 +22,8 @@ interface Reservation {
   depositRequired: number;
   depositPaid: number;
   capacityOk: boolean;
+  selectedRooms: string[];
+  roomNames?: string[]; // Computed field for display
   createdAt: Timestamp;
   updatedAt: Timestamp;
   // Computed fields
@@ -69,12 +72,13 @@ export const ReservationsPage: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
   const [editForm, setEditForm] = useState({
     clientId: '',
     reservedCrates: 0,
     emptyCratesNeeded: 0,
-    advanceAmount: 0,
-    depositPaid: 0,
+    selectedRooms: [] as string[],
   });
 
   // Form state for creating reservation
@@ -82,7 +86,7 @@ export const ReservationsPage: React.FC = () => {
     clientId: '',
     reservedCrates: 0,
     emptyCratesNeeded: 0,
-    advanceAmount: 0,
+    selectedRooms: [] as string[],
   });
 
 
@@ -115,24 +119,36 @@ export const ReservationsPage: React.FC = () => {
 
   // Fetch reservations
   const { data: reservations = [], isLoading } = useQuery({
-    queryKey: ['reservations', tenantId],
+    queryKey: ['reservations', tenantId, rooms],
     queryFn: async (): Promise<Reservation[]> => {
       const q = query(
         collection(db, 'tenants', tenantId, 'reservations'),
         orderBy('createdAt', 'desc')
       );
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        // Add computed fields (simplified for now)
-        loanedEmpty: 0,
-        receivedFull: 0,
-        inStock: 0,
-        exited: 0,
-        remaining: doc.data().reservedCrates,
-      } as Reservation));
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const selectedRooms = data.selectedRooms || [];
+        const roomNames = selectedRooms.map((roomId: string) => {
+          const room = rooms.find(r => r.id === roomId);
+          return room ? (room.room || room.name || `Room ${roomId}`) : `Room ${roomId}`;
+        });
+        
+        return {
+          id: doc.id,
+          ...data,
+          selectedRooms,
+          roomNames,
+          // Add computed fields (simplified for now)
+          loanedEmpty: 0,
+          receivedFull: 0,
+          inStock: 0,
+          exited: 0,
+          remaining: data.reservedCrates,
+        } as Reservation;
+      });
     },
+    enabled: !!rooms.length, // Only run when rooms are loaded
   });
 
   // Filter reservations based on active tab and filters
@@ -191,10 +207,8 @@ export const ReservationsPage: React.FC = () => {
         clientName: client.name,
         reservedCrates: data.reservedCrates,
         emptyCratesNeeded: data.emptyCratesNeeded,
-        advanceAmount: data.advanceAmount,
+        selectedRooms: data.selectedRooms,
         status: 'REQUESTED',
-        depositRequired: data.advanceAmount, // Use advanceAmount as depositRequired
-        depositPaid: 0,
         capacityOk: true, // Simplified for now
         createdAt: Timestamp.fromDate(new Date()),
         updatedAt: Timestamp.fromDate(new Date()),
@@ -211,7 +225,7 @@ export const ReservationsPage: React.FC = () => {
         clientId: '',
         reservedCrates: 0,
         emptyCratesNeeded: 0,
-        advanceAmount: 0,
+        selectedRooms: [],
       });
     },
   });
@@ -253,9 +267,7 @@ export const ReservationsPage: React.FC = () => {
       await updateDoc(reservationRef, {
         reservedCrates: updates.reservedCrates,
         emptyCratesNeeded: updates.emptyCratesNeeded,
-        advanceAmount: updates.advanceAmount,
-        depositRequired: updates.advanceAmount, // Use advanceAmount as depositRequired
-        depositPaid: updates.depositPaid,
+        selectedRooms: updates.selectedRooms,
         updatedAt: Timestamp.fromDate(new Date()),
       });
     },
@@ -269,6 +281,23 @@ export const ReservationsPage: React.FC = () => {
     },
   });
 
+  // Delete reservation mutation
+  const deleteReservation = useMutation({
+    mutationFn: async (id: string) => {
+      const reservationRef = doc(db, 'tenants', tenantId, 'reservations', id);
+      await deleteDoc(reservationRef);
+      await logDelete('reservation', id, 'Réservation supprimée', 'admin', 'Administrateur');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reservations', tenantId] });
+      setIsDeleteModalOpen(false);
+      setReservationToDelete(null);
+    },
+    onError: (error) => {
+      console.error('Erreur lors de la suppression:', error);
+    },
+  });
+
   const handleCreateReservation = () => {
     createReservation.mutate(form);
   };
@@ -279,8 +308,7 @@ export const ReservationsPage: React.FC = () => {
         clientId: selectedReservation.clientId,
         reservedCrates: selectedReservation.reservedCrates,
         emptyCratesNeeded: selectedReservation.emptyCratesNeeded || 0,
-        advanceAmount: selectedReservation.advanceAmount || 0,
-        depositPaid: selectedReservation.depositPaid || 0,
+        selectedRooms: selectedReservation.selectedRooms || [],
       });
       setIsEditing(true);
     }
@@ -301,13 +329,28 @@ export const ReservationsPage: React.FC = () => {
       clientId: '',
       reservedCrates: 0,
       emptyCratesNeeded: 0,
-      advanceAmount: 0,
-      depositPaid: 0,
+      selectedRooms: [],
     });
   };
 
   const handleStatusChange = (id: string, status: string, reason?: string) => {
     updateReservationStatus.mutate({ id, status, reason });
+  };
+
+  const handleDeleteClick = (reservation: Reservation) => {
+    setReservationToDelete(reservation);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (reservationToDelete) {
+      deleteReservation.mutate(reservationToDelete.id);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setIsDeleteModalOpen(false);
+    setReservationToDelete(null);
   };
 
 
@@ -496,8 +539,7 @@ export const ReservationsPage: React.FC = () => {
               <TableHeader>Client</TableHeader>
               <TableHeader>Réservé</TableHeader>
               <TableHeader>Caisses vides</TableHeader>
-              <TableHeader>Montant requis</TableHeader>
-              <TableHeader>Montant avancé</TableHeader>
+              <TableHeader>Salles</TableHeader>
               <TableHeader>Statut</TableHeader>
               <TableHeader>Capacité</TableHeader>
             </TableRow>
@@ -505,7 +547,7 @@ export const ReservationsPage: React.FC = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                   </div>
@@ -513,7 +555,7 @@ export const ReservationsPage: React.FC = () => {
               </TableRow>
             ) : filteredReservations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                   Aucune réservation trouvée
                 </TableCell>
               </TableRow>
@@ -585,11 +627,21 @@ export const ReservationsPage: React.FC = () => {
                   <TableCell>{reservation.clientName}</TableCell>
                   <TableCell className="text-center">{reservation.reservedCrates}</TableCell>
                   <TableCell className="text-center">{reservation.emptyCratesNeeded || 0}</TableCell>
-                  <TableCell className="text-sm">
-                    {reservation.depositRequired > 0 ? `${reservation.depositRequired.toFixed(2)} MAD` : '-'}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {reservation.depositPaid > 0 ? `${reservation.depositPaid.toFixed(2)} MAD` : '-'}
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {reservation.roomNames && reservation.roomNames.length > 0 ? (
+                        reservation.roomNames.map((roomName, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                          >
+                            {roomName}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 text-sm">Aucune salle</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>{getStatusBadge(reservation.status)}</TableCell>
                   <TableCell className="text-center">{getCapacityIcon(reservation.capacityOk)}</TableCell>
@@ -728,23 +780,87 @@ export const ReservationsPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Advance Amount */}
-              <div className="space-y-2">
+              {/* Room Selection */}
+              <div className="space-y-3">
                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
-                  <span>Montant qui va être avancé</span>
-                  <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">MAD</span>
+                  <span>Salles à utiliser</span>
+                  <span className="text-xs text-gray-500">({form.selectedRooms.length} sélectionnée{form.selectedRooms.length > 1 ? 's' : ''})</span>
                 </label>
-                <input
-                  type="number"
-                  value={form.advanceAmount}
-                  onChange={(e) => setForm(f => ({ ...f, advanceAmount: Number(e.target.value) }))}
-                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-gray-50 focus:bg-white"
-                  placeholder="0.00"
-                />
+                
+                {/* Selected Rooms Summary */}
+                {form.selectedRooms.length > 0 && (
+                  <div className="flex flex-wrap gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    {form.selectedRooms.map((roomId) => {
+                      const room = rooms.find((r: any) => r.id === roomId);
+                      return (
+                        <span
+                          key={roomId}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
+                        >
+                          {room?.room || room?.name || `Room ${roomId}`}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm(f => ({ ...f, selectedRooms: f.selectedRooms.filter(id => id !== roomId) }));
+                            }}
+                            className="ml-1 text-blue-600 hover:text-blue-800"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Room Selection Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                  {rooms
+                    .sort((a: any, b: any) => {
+                      const nameA = (a.room || a.name || '').toLowerCase();
+                      const nameB = (b.room || b.name || '').toLowerCase();
+                      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+                    })
+                    .map((room: any) => (
+                    <label 
+                      key={room.id} 
+                      className={`flex items-center space-x-2 p-2 rounded-md cursor-pointer transition-all duration-200 ${
+                        form.selectedRooms.includes(room.id)
+                          ? 'bg-indigo-50 border-indigo-200 border'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.selectedRooms.includes(room.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setForm(f => ({ ...f, selectedRooms: [...f.selectedRooms, room.id] }));
+                          } else {
+                            setForm(f => ({ ...f, selectedRooms: f.selectedRooms.filter(id => id !== room.id) }));
+                          }
+                        }}
+                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-gray-900 truncate">{room.room || room.name || `Room ${room.id}`}</div>
+                        <div className="text-xs text-gray-500">
+                          {room.capacityCrates || room.capacity || 0} caisses
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                  {rooms.length === 0 && (
+                    <div className="col-span-2 text-center py-4 text-gray-500 text-sm">
+                      Aucune salle disponible
+                    </div>
+                  )}
+                </div>
               </div>
+
             </div>
 
             {/* Footer Actions */}
@@ -830,19 +946,43 @@ export const ReservationsPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="mt-6 flex justify-end space-x-3">
+            <div className="mt-6 flex justify-between">
               <button
-                onClick={handleEditReservation}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                onClick={() => handleDeleteClick(selectedReservation)}
+                disabled={deleteReservation.isPending}
+                className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Modifier
+                {deleteReservation.isPending ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Suppression...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>Supprimer</span>
+                  </>
+                )}
               </button>
-              <button
-                onClick={() => setIsDetailOpen(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Fermer
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleEditReservation}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Modifier
+                </button>
+                <button
+                  onClick={() => setIsDetailOpen(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -922,43 +1062,87 @@ export const ReservationsPage: React.FC = () => {
                 />
               </div>
 
-              {/* Advance Amount */}
-              <div className="space-y-2">
+              {/* Room Selection */}
+              <div className="space-y-3">
                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
-                  <span>Montant qui va être avancé (MAD)</span>
+                  <span>Salles à utiliser</span>
+                  <span className="text-xs text-gray-500">({editForm.selectedRooms.length} sélectionnée{editForm.selectedRooms.length > 1 ? 's' : ''})</span>
                 </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editForm.advanceAmount}
-                  onChange={(e) => setEditForm(f => ({ ...f, advanceAmount: Number(e.target.value) }))}
-                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-gray-50 focus:bg-white"
-                  placeholder="0.00"
-                />
+                
+                {/* Selected Rooms Summary */}
+                {editForm.selectedRooms.length > 0 && (
+                  <div className="flex flex-wrap gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    {editForm.selectedRooms.map((roomId) => {
+                      const room = rooms.find((r: any) => r.id === roomId);
+                      return (
+                        <span
+                          key={roomId}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
+                        >
+                          {room?.room || room?.name || `Room ${roomId}`}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditForm(f => ({ ...f, selectedRooms: f.selectedRooms.filter(id => id !== roomId) }));
+                            }}
+                            className="ml-1 text-blue-600 hover:text-blue-800"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Room Selection Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                  {rooms
+                    .sort((a: any, b: any) => {
+                      const nameA = (a.room || a.name || '').toLowerCase();
+                      const nameB = (b.room || b.name || '').toLowerCase();
+                      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+                    })
+                    .map((room: any) => (
+                    <label 
+                      key={room.id} 
+                      className={`flex items-center space-x-2 p-2 rounded-md cursor-pointer transition-all duration-200 ${
+                        editForm.selectedRooms.includes(room.id)
+                          ? 'bg-indigo-50 border-indigo-200 border'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editForm.selectedRooms.includes(room.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEditForm(f => ({ ...f, selectedRooms: [...f.selectedRooms, room.id] }));
+                          } else {
+                            setEditForm(f => ({ ...f, selectedRooms: f.selectedRooms.filter(id => id !== room.id) }));
+                          }
+                        }}
+                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-gray-900 truncate">{room.room || room.name || `Room ${room.id}`}</div>
+                        <div className="text-xs text-gray-500">
+                          {room.capacityCrates || room.capacity || 0} caisses
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                  {rooms.length === 0 && (
+                    <div className="col-span-2 text-center py-4 text-gray-500 text-sm">
+                      Aucune salle disponible
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Amount Paid */}
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Montant avancé (MAD)</span>
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editForm.depositPaid}
-                  onChange={(e) => setEditForm(f => ({ ...f, depositPaid: Number(e.target.value) }))}
-                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 bg-gray-50 focus:bg-white"
-                  placeholder="0.00"
-                />
-              </div>
             </div>
             
             <div className="mt-6 flex justify-end space-x-3">
@@ -979,6 +1163,19 @@ export const ReservationsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="Supprimer la réservation"
+        message={`Êtes-vous sûr de vouloir supprimer la réservation ${reservationToDelete?.reference || ''} pour le client ${reservationToDelete?.clientName || ''} ? Cette action est irréversible.`}
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        type="danger"
+        isLoading={deleteReservation.isPending}
+      />
     </div>
   );
 };

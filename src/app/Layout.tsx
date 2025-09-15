@@ -15,7 +15,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({
-    operations: false,
+    operations: true,
     finance: false,
   });
   const isRtl = typeof document !== 'undefined' && document.documentElement.getAttribute('dir') === 'rtl';
@@ -45,21 +45,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile Top Bar */}
-      <div className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-200">
-        <div className="flex items-center justify-between px-4 py-3">
+      <div className="md:hidden sticky top-0 z-40 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200/50">
+        <div className="flex items-center justify-between px-3 py-2.5">
           <button
             aria-label="Toggle menu"
             onClick={() => setIsSidebarOpen((v) => !v)}
-            className="p-2 rounded-md border border-gray-200 text-gray-700"
+            className="p-2 rounded-lg bg-white/80 backdrop-blur-sm text-gray-700 hover:bg-gray-100 transition-colors shadow-sm border border-gray-200/50"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
           <div className="flex-1 text-center">
-            <h1 className="text-sm font-semibold text-gray-900">Frigo SaaS</h1>
+            <div className="flex flex-col">
+              <h1 className="text-xs font-light text-gray-900 tracking-tight">Domaine</h1>
+              <h2 className="text-sm font-semibold text-gray-800 tracking-wide">LYAZAMI</h2>
+            </div>
             {user && (
-              <p className="text-xs text-gray-500">{user.name} • {t(`roles.${user.role}`, user.role)}</p>
+              <p className="text-xs text-gray-600 mt-0.5">{user.name} • {t(`roles.${user.role}`, user.role)}</p>
             )}
           </div>
           <LangSwitcher />
@@ -76,22 +79,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="hidden md:flex items-center justify-between p-6 border-b border-gray-200">
-            <h1 className="text-xl font-bold text-gray-900">LYAZAMI</h1>
+          <div className="hidden md:flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200/50">
+            <div className="flex flex-col">
+              <h1 className="text-xl font-light text-gray-900 tracking-tight">Domaine</h1>
+              <h2 className="text-2xl font-semibold text-gray-800 tracking-wide">LYAZAMI</h2>
+            </div>
             <LangSwitcher />
           </div>
 
           {/* Navigation */}
           <nav className="flex-1 p-4">
-            <ul className="space-y-1">
+            <ul className="space-y-2">
               {/* Dashboard */}
               <li>
                 <Link
                   to="/dashboard"
-                  className={`flex items-center px-3 py-2 rounded-md transition-colors text-sm ${
+                  className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
                     isActive('/dashboard')
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,10 +112,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <li>
                 <Link
                   to="/clients"
-                  className={`flex items-center px-3 py-2 rounded-md transition-colors text-sm ${
+                  className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
                     isActive('/clients')
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,10 +129,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <li>
                 <Link
                   to="/reservations"
-                  className={`flex items-center px-3 py-2 rounded-md transition-colors text-sm ${
+                  className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
                     isActive('/reservations')
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,36 +142,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </Link>
               </li>
 
-              {/* Capteurs */}
-              <li>
-                <Link
-                  to="/sensors"
-                  className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm ${
-                    isActive('/sensors')
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    {t('sidebar.sensors', 'Capteurs')}
-                  </div>
-                  <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r from-orange-100 to-amber-100 text-orange-600 border border-orange-200/50 shadow-sm">
-                    DEMO
-                  </span>
-                </Link>
-              </li>
-
               {/* Opérations */}
               <li>
                 <button
                   onClick={() => toggleSection('operations')}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm ${
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
                     isSectionActive(['/loans', '/reception'])
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex items-center">
@@ -184,14 +168,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   </svg>
                 </button>
                 {expandedSections.operations && (
-                  <ul className="ml-4 mt-1 space-y-1">
+                  <ul className="ml-4 mt-2 space-y-1.5">
                     <li>
                       <Link
                         to="/loans"
-                        className={`flex items-center px-3 py-1.5 rounded-md transition-colors text-xs ${
+                        className={`flex items-center px-4 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
                           isActive('/loans')
-                            ? 'bg-blue-100 text-blue-600 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 shadow-sm border border-blue-200'
+                            : 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                         }`}
                       >
                         <svg className="w-3 h-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,10 +187,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <li>
                       <Link
                         to="/reception"
-                        className={`flex items-center px-3 py-1.5 rounded-md transition-colors text-xs ${
+                        className={`flex items-center px-4 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
                           isActive('/reception')
-                            ? 'bg-blue-100 text-blue-600 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 shadow-sm border border-blue-200'
+                            : 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                         }`}
                       >
                         <svg className="w-3 h-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,10 +207,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <li>
                 <button
                   onClick={() => toggleSection('finance')}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm ${
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
                     isSectionActive(['/billing', '/caisse'])
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex items-center">
@@ -245,14 +229,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   </svg>
                 </button>
                 {expandedSections.finance && (
-                  <ul className="ml-4 mt-1 space-y-1">
+                  <ul className="ml-4 mt-2 space-y-1.5">
                     <li>
                       <Link
                         to="/billing"
-                        className={`flex items-center px-3 py-1.5 rounded-md transition-colors text-xs ${
+                        className={`flex items-center px-4 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
                           isActive('/billing')
-                            ? 'bg-blue-100 text-blue-600 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 shadow-sm border border-blue-200'
+                            : 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                         }`}
                       >
                         <svg className="w-3 h-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -264,10 +248,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <li>
                       <Link
                         to="/caisse"
-                        className={`flex items-center px-3 py-1.5 rounded-md transition-colors text-xs ${
+                        className={`flex items-center px-4 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
                           isActive('/caisse')
-                            ? 'bg-blue-100 text-blue-600 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50'
+                            ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 shadow-sm border border-blue-200'
+                            : 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                         }`}
                       >
                         <svg className="w-3 h-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -280,14 +264,36 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 )}
               </li>
 
+              {/* Capteurs */}
+              <li>
+                <Link
+                  to="/sensors"
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
+                    isActive('/sensors')
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    {t('sidebar.sensors', 'Capteurs')}
+                  </div>
+                  <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r from-orange-100 to-amber-100 text-orange-600 border border-orange-200/50 shadow-sm">
+                    DEMO
+                  </span>
+                </Link>
+              </li>
+
               {/* Paramètres */}
               <li>
                 <Link
                   to="/settings"
-                  className={`flex items-center px-3 py-2 rounded-md transition-colors text-sm ${
+                  className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
                     isActive('/settings')
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -302,10 +308,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <li>
                 <Link
                   to="/users"
-                  className={`flex items-center px-3 py-2 rounded-md transition-colors text-sm ${
+                  className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
                     isActive('/users')
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
                 >
                   <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -428,24 +428,9 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
       try {
         console.log('Fetching clients for tenant:', tenantId);
         
-        // Utiliser uniquement la collection tenant (recommandé pour SaaS)
-        let q = query(collection(db, 'tenants', tenantId, 'clients'));
-        let querySnapshot = await getDocs(q);
-        
-        // Si pas de clients trouvés, essayer de migrer depuis la collection globale
-        if (querySnapshot.docs.length === 0) {
-          console.log('No clients in tenant collection, checking global collection for migration...');
-          const globalQuery = query(collection(db, 'clients'));
-          const globalSnapshot = await getDocs(globalQuery);
-          
-          if (globalSnapshot.docs.length > 0) {
-            console.log(`Found ${globalSnapshot.docs.length} clients in global collection, migrating to tenant collection...`);
-            await migrateClientsToTenant(globalSnapshot.docs);
-            
-            // Recharger après migration
-            querySnapshot = await getDocs(q);
-          }
-        }
+        // Use tenant-specific subcollection (recommended for SaaS)
+        const q = query(collection(db, 'tenants', tenantId, 'clients'));
+        const querySnapshot = await getDocs(q);
         
         const clientsData = querySnapshot.docs.map(doc => {
           const data = doc.data();
@@ -465,58 +450,18 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
         });
         
         console.log('Clients loaded:', clientsData.length, 'clients');
-        
-        // Indiquer d'où viennent les clients
-        if (querySnapshot.docs.length > 0) {
-          const firstDoc = querySnapshot.docs[0];
-          const collectionPath = firstDoc.ref.path;
-          console.log('Clients loaded from collection:', collectionPath);
-        }
-        
-        // Si aucun client trouvé, essayer de créer des clients de test dans Firestore
-        if (clientsData.length === 0) {
-          console.log('No clients found in any collection, creating test clients in Firestore...');
-          try {
-            await createTestClientsInFirestore();
-            // Recharger après création
-            const retrySnapshot = await getDocs(q);
-            const retryData = retrySnapshot.docs.map(doc => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                name: data.name || 'Unknown',
-                email: data.email || '',
-                phone: data.phone || '',
-                company: data.company || '',
-                createdAt: data.createdAt || Timestamp.fromDate(new Date()),
-                lastVisit: data.lastVisit,
-                createdBy: data.createdBy || 'Système',
-                lastModifiedBy: data.lastModifiedBy,
-                lastModifiedAt: data.lastModifiedAt?.toDate(),
-              };
-            });
-            console.log('Test clients created, loaded:', retryData.length, 'clients');
-            return retryData;
-          } catch (createError) {
-            console.error('Error creating test clients:', createError);
-            console.log('Falling back to mock data');
-            return getMockClients();
-          }
-        }
-        
         return clientsData;
       } catch (error) {
         console.error('Error fetching clients:', error);
-        // If Firestore collection doesn't exist, return mock data
-        console.warn('Clients collection not found, using mock data');
-        return getMockClients();
+        // Return empty array instead of mock data to avoid confusion
+        return [];
       }
     },
     enabled: !!tenantId,
     staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh longer
     cacheTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
-    retry: 2, // Reduce retries
-    retryDelay: 2000, // Increase delay between retries
+    retry: 1, // Reduce retries to 1
+    retryDelay: 1000, // Reduce delay between retries
     refetchOnWindowFocus: false, // Don't refetch when window gains focus
     refetchOnMount: false, // Don't refetch on component mount if data exists
   });

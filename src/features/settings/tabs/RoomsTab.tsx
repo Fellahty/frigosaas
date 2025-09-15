@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormCard } from '../../../components/FormCard';
+import { Card } from '../../../components/Card';
 import { roomSchema, type Room } from '../../../types/settings';
 import { useTenantId } from '../../../lib/hooks/useTenantId';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { toast } from 'react-hot-toast';
 
 interface RoomDoc extends Room {
   id: string;
   tenantId: string;
+  capacityCrates?: number;
+  capacityPallets?: number;
+  createdAt?: Date;
 }
+
 
 interface RoomsTabProps {
   onDirtyChange: (dirty: boolean) => void;
@@ -21,7 +26,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
   const { t } = useTranslation();
   const tenantId = useTenantId();
   const [rooms, setRooms] = useState<RoomDoc[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState<RoomDoc | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -35,6 +40,13 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     active: true,
   });
   const [sensorIdError, setSensorIdError] = useState<string>('');
+  const [sortField, setSortField] = useState<keyof RoomDoc | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Calculate total room capacity for crates
+  const totalRoomCrateCapacity = rooms.reduce((total, room) => {
+    return total + (room.capacityCrates || 0);
+  }, 0);
 
   useEffect(() => {
     // Initialize with empty array immediately
@@ -56,10 +68,14 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     try {
       const q = query(collection(db, 'rooms'), where('tenantId', '==', tenantId));
       const querySnapshot = await getDocs(q);
-      const roomsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as RoomDoc));
+      const roomsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt ? data.createdAt.toDate() : new Date()
+        } as RoomDoc;
+      });
       setRooms(roomsData);
     } catch (error) {
       console.error('Error loading rooms:', error);
@@ -105,7 +121,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
       );
       
       if (existingRoom) {
-        setSensorIdError(t('settings.rooms.sensorIdExists', 'Cet ID de capteur existe déjà'));
+        setSensorIdError(t('settings.rooms.sensorIdExists', 'Cet ID de capteur existe déjà') as string);
         return;
       }
     }
@@ -119,6 +135,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
         sensorId: formData.sensorId,
         active: formData.active,
         tenantId,
+        createdAt: serverTimestamp(),
       };
 
       if (editingRoom) {
@@ -162,7 +179,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     setRoomToDelete(null);
   };
 
-  const handleInputChange = (field: keyof Room, value: any) => {
+  const handleInputChange = (field: keyof (Room & { capacityCrates: number; capacityPallets: number }), value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -185,7 +202,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     );
     
     if (existingRoom) {
-      setSensorIdError(t('settings.rooms.sensorIdExists', 'Cet ID de capteur existe déjà'));
+      setSensorIdError(t('settings.rooms.sensorIdExists', 'Cet ID de capteur existe déjà') as string);
     } else {
       setSensorIdError('');
     }
@@ -196,15 +213,121 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     setSensorIdError('');
   };
 
+  const handleSort = (field: keyof RoomDoc) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Natural sort function for alphanumeric strings
+  const naturalSort = (a: string, b: string): number => {
+    const normalize = (str: string) => {
+      return str.toLowerCase().replace(/(\d+)/g, (match) => {
+        return match.padStart(10, '0');
+      });
+    };
+    
+    const normalizedA = normalize(a);
+    const normalizedB = normalize(b);
+    
+    if (normalizedA < normalizedB) return -1;
+    if (normalizedA > normalizedB) return 1;
+    return 0;
+  };
+
+  const getSortedRooms = () => {
+    if (!sortField) return rooms;
+    
+    return [...rooms].sort((a, b) => {
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+      
+      // Handle undefined/null values first
+      if (aValue === undefined || aValue === null) aValue = '';
+      if (bValue === undefined || bValue === null) bValue = '';
+      
+      // Handle date comparison
+      if (sortField === 'createdAt') {
+        const aDate = aValue instanceof Date ? aValue : new Date(aValue as string | number || 0);
+        const bDate = bValue instanceof Date ? bValue : new Date(bValue as string | number || 0);
+        aValue = aDate.getTime();
+        bValue = bDate.getTime();
+      } else if (sortField === 'room' && typeof aValue === 'string' && typeof bValue === 'string') {
+        // Use natural sort for room names (handles numbers and characters properly)
+        const result = naturalSort(aValue, bValue);
+        return sortDirection === 'asc' ? result : -result;
+      } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+        // Handle other string comparison (case-insensitive)
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+      
+      if (aValue < bValue) {
+        return sortDirection === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortDirection === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  const getSortIcon = (field: keyof RoomDoc) => {
+    if (sortField !== field) {
+      return (
+        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    
+    return sortDirection === 'asc' ? (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+      </svg>
+    ) : (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+      </svg>
+    );
+  };
+
   if (isLoading) {
     return <div className="text-center py-8">{t('common.loading')}</div>;
   }
 
   return (
     <div className="space-y-6">
+      {/* Total Room Crate Capacity Display */}
+      <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-green-900 mb-1">
+                🏠 Capacité totale des chambres
+              </h3>
+              <p className="text-sm text-green-700">
+                Nombre total de caisses que peuvent contenir toutes les chambres
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold text-green-900">
+                {totalRoomCrateCapacity.toLocaleString()}
+              </div>
+              <div className="text-sm text-green-600 font-medium">
+                caisses en capacité
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       <FormCard
         title={t('settings.rooms.title', 'Chambres & capteurs')}
-        description={t('settings.rooms.description', 'Gérez les chambres et leurs capteurs de surveillance')}
+        description={t('settings.rooms.description', 'Gérez les chambres et leurs capteurs de surveillance') as string}
       >
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900">
@@ -227,20 +350,59 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('settings.rooms.room', 'Chambre')}
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('room')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.room', 'Chambre')}</span>
+                      {getSortIcon('room')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('settings.rooms.capacityCrates', 'Caisses')}
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('capacityCrates')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.capacityCrates', 'Caisses')}</span>
+                      {getSortIcon('capacityCrates')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('settings.rooms.capacityPallets', 'Palettes')}
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('capacityPallets')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.capacityPallets', 'Palettes')}</span>
+                      {getSortIcon('capacityPallets')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('settings.rooms.sensorId', 'ID Capteur')}
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('sensorId')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.sensorId', 'ID Capteur')}</span>
+                      {getSortIcon('sensorId')}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('settings.rooms.status', 'Statut')}
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('active')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.status', 'Statut')}</span>
+                      {getSortIcon('active')}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('createdAt')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.dateAdded', 'Date d\'ajout') as string}</span>
+                      {getSortIcon('createdAt')}
+                    </div>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {t('common.actions', 'Actions')}
@@ -248,7 +410,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {rooms.map((room) => (
+                {getSortedRooms().map((room) => (
                   <tr key={room.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {room.room}
@@ -270,6 +432,15 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                       }`}>
                         {room.active ? t('common.active', 'Actif') : t('common.inactive', 'Inactif')}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {room.createdAt ? room.createdAt.toLocaleDateString('fr-FR', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button

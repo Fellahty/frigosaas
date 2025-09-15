@@ -24,7 +24,7 @@
     "overview": "Vue d'ensemble",
     "operations": "Opérations",
     "warehouseOps": "Opérations Entrepôt",
-    "receptionFull": "Réception pleines",
+    "receptionFull": "Entre Caisse Pommiers",
     "reservations": "Réservations",
     "finance": "Finance",
     "financialOps": "Opérations Financières",
@@ -119,8 +119,8 @@
       "received": "Reçu",
       "remaining": "Restant",
       "close": "Fermer",
-      "loanEmptyCrates": "Prêt caisses vides",
-      "receptionFull": "Réception pleines"
+      "loanEmptyCrates": "Sortie Caisses Vides",
+      "receptionFull": "Entre Caisse Pommiers"
     },
     "messages": {
       "noReservations": "Aucune réservation trouvée",
@@ -135,9 +135,9 @@
     "description": "Cette fonctionnalité sera disponible dans une prochaine mise à jour."
   },
   "loans": {
-    "title": "Prêt caisses vides",
+    "title": "Sortie Caisses Vides",
     "subtitle": "Gestion de prêt des caisses vides",
-    "add": "Nouveau prêt",
+    "add": "Nouveau sortie caisses vides",
     "crates": "Caisses",
     "deposit": "Caution",
     "ticket": "Ticket",
@@ -212,6 +212,7 @@
       "capacityPallets": "Palettes",
       "sensorId": "ID Capteur",
         "status": "Statut",
+        "dateAdded": "Date d'ajout",
         "noRooms": "Aucune chambre configurée",
         "confirmDelete": "Supprimer la chambre",
         "confirmDeleteMessage": "Êtes-vous sûr de vouloir supprimer la chambre \"{roomName}\" ? Cette action est irréversible.",
@@ -456,7 +457,7 @@
     "isActive": "Utilisateur actif"
   },
   "reception": {
-    "title": "Réception pleines ",
+    "title": "Entre Caisse Pommiers",
     "subtitle": "Gérer les entrées de caisses produits clients",
     "addReception": "Nouvelle réception",
     "client": "Client",
@@ -698,7 +699,7 @@
     "emptyCrateLoaned": "Caisses vides prêtées",
     "emptyCratesReturned": "Caisses vides rendues",
     "fullCratesReceived": "Caisses pleines reçues",
-    "emptyCrateLoan": "Prêt caisses vides",
+    "emptyCrateLoan": "Sortie Caisses Vides",
     "reception": "Réception caisses pleines",
     "completed": "Terminé",
     "active": "En cours",

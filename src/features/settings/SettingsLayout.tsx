@@ -56,7 +56,6 @@ export const SettingsLayout: React.FC = () => {
   
   // Refs to call save functions on each tab
   const generalTabRef = useRef<{ save: () => Promise<void> }>(null);
-  const roomsTabRef = useRef<{ save: () => Promise<void> }>(null);
   const poolTabRef = useRef<{ save: () => Promise<void> }>(null);
   const pricingTabRef = useRef<{ save: () => Promise<void> }>(null);
 
@@ -71,9 +70,7 @@ export const SettingsLayout: React.FC = () => {
           }
           break;
         case 'rooms':
-          if (roomsTabRef.current?.save) {
-            await roomsTabRef.current.save();
-          }
+          // Rooms tab doesn't have save functionality
           break;
         case 'pool':
           if (poolTabRef.current?.save) {
@@ -104,7 +101,7 @@ export const SettingsLayout: React.FC = () => {
       case 'general':
         return <GeneralTab ref={generalTabRef} onDirtyChange={setIsDirty} onValidChange={setIsValid} />;
       case 'rooms':
-        return <RoomsTab ref={roomsTabRef} onDirtyChange={setIsDirty} onValidChange={setIsValid} />;
+        return <RoomsTab onDirtyChange={setIsDirty} onValidChange={setIsValid} />;
       case 'pool':
         return <PoolTab ref={poolTabRef} onDirtyChange={setIsDirty} onValidChange={setIsValid} />;
       case 'pricing':

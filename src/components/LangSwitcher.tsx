@@ -9,23 +9,23 @@ export const LangSwitcher: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex items-center bg-gray-100 rounded-lg p-0.5 shadow-sm border border-gray-200/50">
       <button
         onClick={() => changeLanguage('fr')}
-        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+        className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
           i18n.language === 'fr'
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
         }`}
       >
         FR
       </button>
       <button
         onClick={() => changeLanguage('ar')}
-        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+        className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
           i18n.language === 'ar'
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
         }`}
       >
         AR

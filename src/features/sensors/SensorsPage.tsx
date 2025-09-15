@@ -118,7 +118,7 @@ const SensorsPage: React.FC = () => {
           capacity: roomDoc.capacity,
           sensorId: roomDoc.sensorId,
           active: roomDoc.active,
-          sensors
+          sensors: sensors || []
         });
       }
       
@@ -297,7 +297,7 @@ const SensorsPage: React.FC = () => {
 
               {/* Sensors */}
               <div className="space-y-3">
-                {room.sensors.map((sensor) => (
+                {room.sensors && room.sensors.length > 0 ? room.sensors.map((sensor) => (
                   <div
                     key={sensor.id}
                     onClick={() => handleSensorClick(sensor)}
@@ -349,7 +349,11 @@ const SensorsPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    Aucun capteur configuré
+                  </div>
+                )}
               </div>
             </div>
           ))}
