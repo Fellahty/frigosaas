@@ -117,6 +117,19 @@ export const ReservationsPage: React.FC = () => {
     },
   });
 
+  // Fetch crate types to calculate total empty crates
+  const { data: crateTypes = [] } = useQuery({
+    queryKey: ['crate-types', tenantId],
+    queryFn: async () => {
+      const q = query(collection(db, 'tenants', tenantId, 'crate-types'), where('isActive', '==', true));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    },
+  });
+
 
   // Fetch reservations
   const { data: reservations = [], isLoading } = useQuery({
@@ -182,6 +195,9 @@ export const ReservationsPage: React.FC = () => {
     return true;
   });
 
+  // Calculate total empty crates from crate-types
+  const totalEmptyCrates = crateTypes.reduce((total, crateType: any) => total + (crateType.quantity || 0), 0);
+
   // Calculate KPIs
   const kpis = {
     pending: reservations.filter(r => r.status === 'REQUESTED').length,
@@ -191,6 +207,7 @@ export const ReservationsPage: React.FC = () => {
     totalInStock: reservations.reduce((sum, r) => sum + (r.inStock || 0), 0),
     totalRoomsCrates: rooms.reduce((sum, room: any) => sum + (room.capacityCrates || room.capacity || 0), 0),
     numberOfRooms: rooms.length,
+    totalEmptyCrates,
   };
 
   // Debug logging (can be removed in production)
@@ -506,7 +523,7 @@ export const ReservationsPage: React.FC = () => {
         </Card>
         <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
           <div className="text-center">
-            <div className="text-2xl font-bold text-indigo-600">{poolSettings.pool_vides_total.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-indigo-600">{kpis.totalEmptyCrates.toLocaleString()}</div>
             <div className="text-sm text-indigo-700 font-medium">Total caisses vides</div>
             <div className="text-xs text-indigo-600 mt-1">Disponibles sur le site</div>
           </div>

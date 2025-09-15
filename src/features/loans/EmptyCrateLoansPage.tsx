@@ -22,6 +22,7 @@ interface CrateTypeConfig {
   color: CrateColor;
   customName?: string;
   depositAmount: number;
+  quantity: number;
   isActive: boolean;
   createdAt: Date;
 }
@@ -36,10 +37,6 @@ interface LoanItem {
   crateTypeName: string;
   crateType: CrateType;
   crateColor: CrateColor;
-  depositMad: number;
-  depositType?: 'cash' | 'check';
-  depositReference?: string;
-  depositPhoto?: string;
   status: LoanStatus;
   createdAt: Date;
 }
@@ -142,18 +139,12 @@ export const EmptyCrateLoansPage: React.FC = () => {
     clientId: string; 
     crates: number; 
     crateTypeId: string;
-    depositMad: number;
-    depositType: 'cash' | 'check';
-    depositReference: string;
-    depositPhoto: string;
+    customDate: string;
   }>({
     clientId: '',
     crates: 1,
     crateTypeId: '',
-    depositMad: 0,
-    depositType: 'cash',
-    depositReference: '',
-    depositPhoto: '',
+    customDate: new Date().toISOString().split('T')[0], // Default to today
   });
 
 
@@ -181,6 +172,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
           color: data.color || 'blue',
           customName: data.customName || '',
           depositAmount: Number(data.depositAmount) || 0,
+          quantity: Number(data.quantity) || 0,
           isActive: data.isActive || true,
           createdAt: data.createdAt?.toDate?.() || new Date(),
         };
@@ -240,25 +232,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
     return stats;
   }, [clientReservations]);
 
-  // Récupérer les paramètres des caisses vides
-  const { data: poolSettings } = useQuery({
-    queryKey: ['pool-settings', tenantId],
-    queryFn: async () => {
-      const docSnap = await getDocs(collection(db, 'tenants', tenantId, 'settings'));
-      const poolDoc = docSnap.docs.find(d => d.id === 'pool');
-      return poolDoc ? poolDoc.data() : { pool_vides_total: 0, seuil_alerte_vides: 0 };
-    },
-  });
 
-  // Récupérer les paramètres de tarification pour la caution par caisse
-  const { data: pricingSettings } = useQuery({
-    queryKey: ['pricing-settings', tenantId],
-    queryFn: async () => {
-      const docRef = doc(db, 'tenants', tenantId, 'settings', 'pricing');
-      const docSnap = await getDoc(docRef);
-      return docSnap.exists() ? docSnap.data() : { caution_par_caisse: 0 };
-    },
-  });
 
   const { data: loans, isLoading, error } = useQuery({
     queryKey: ['empty-crate-loans', tenantId],
@@ -277,10 +251,6 @@ export const EmptyCrateLoansPage: React.FC = () => {
           crateTypeName: data.crateTypeName || '',
           crateType: data.crateType || 'plastic',
           crateColor: data.crateColor || 'blue',
-          depositMad: Number(data.depositMad) || 0,
-          depositType: data.depositType || 'cash',
-          depositReference: data.depositReference || '',
-          depositPhoto: data.depositPhoto || '',
           status: (data.status as LoanStatus) || 'open',
           createdAt: data.createdAt?.toDate?.() || new Date(),
         };
@@ -291,30 +261,23 @@ export const EmptyCrateLoansPage: React.FC = () => {
     refetchInterval: 15000,
   });
 
+  // Calculer le total des caisses vides à partir des types de caisses
+  const totalEmptyCrates = React.useMemo(() => {
+    if (!crateTypes) return 0;
+    return crateTypes.reduce((total, crateType) => total + crateType.quantity, 0);
+  }, [crateTypes]);
+
   // Calculer les caisses vides disponibles (total - prêts en cours)
   const availableEmptyCrates = React.useMemo(() => {
-    if (!poolSettings?.pool_vides_total || !loans) return 0;
+    if (!totalEmptyCrates || !loans) return 0;
     
     const totalLoaned = loans
       .filter(loan => loan.status === 'open')
       .reduce((sum, loan) => sum + loan.crates, 0);
     
-    return Math.max(0, poolSettings.pool_vides_total - totalLoaned);
-  }, [poolSettings?.pool_vides_total, loans]);
+    return Math.max(0, totalEmptyCrates - totalLoaned);
+  }, [totalEmptyCrates, loans]);
 
-  // Calculer la caution totale basée sur le nombre de caisses et le tarif par caisse
-  const calculateTotalCaution = React.useCallback((crates: number) => {
-    const cautionParCaisse = pricingSettings?.caution_par_caisse || 0;
-    return crates * cautionParCaisse;
-  }, [pricingSettings?.caution_par_caisse]);
-
-  // Mettre à jour automatiquement la caution quand le nombre de caisses change
-  React.useEffect(() => {
-    if (form.crates > 0 && pricingSettings?.caution_par_caisse) {
-      const totalCaution = calculateTotalCaution(form.crates);
-      setForm(prev => ({ ...prev, depositMad: totalCaution }));
-    }
-  }, [form.crates, calculateTotalCaution, pricingSettings?.caution_par_caisse]);
 
   const addLoan = useMutation({
     mutationFn: async (payload: typeof form) => {
@@ -331,12 +294,8 @@ export const EmptyCrateLoansPage: React.FC = () => {
         crateTypeName: crateType?.name || '',
         crateType: crateType?.type || 'plastic',
         crateColor: crateType?.color || 'blue',
-        depositMad: Number(payload.depositMad) || 0,
-        depositType: payload.depositType || 'cash',
-        depositReference: payload.depositReference || '',
-        depositPhoto: payload.depositPhoto || '',
         status: 'open',
-        createdAt: Timestamp.fromDate(new Date()),
+        createdAt: Timestamp.fromDate(new Date(payload.customDate)),
       });
     },
     onSuccess: async () => {
@@ -346,10 +305,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
         clientId: '', 
         crates: 1, 
         crateTypeId: '',
-        depositMad: 0, 
-        depositType: 'cash', 
-        depositReference: '', 
-        depositPhoto: '' 
+        customDate: new Date().toISOString().split('T')[0]
       });
     },
   });
@@ -366,10 +322,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
         crateTypeName: crateType?.name || '',
         crateType: crateType?.type || 'plastic',
         crateColor: crateType?.color || 'blue',
-        depositMad: Number(payload.updates.depositMad) || 0,
-        depositType: payload.updates.depositType || 'cash',
-        depositReference: payload.updates.depositReference || '',
-        depositPhoto: payload.updates.depositPhoto || '',
+        createdAt: Timestamp.fromDate(new Date(payload.updates.customDate)),
       });
     },
     onSuccess: async () => {
@@ -404,10 +357,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
       clientId: item.clientId || '',
       crates: item.crates,
       crateTypeId: item.crateTypeId || '',
-      depositMad: item.depositMad,
-      depositType: item.depositType || 'cash',
-      depositReference: item.depositReference || '',
-      depositPhoto: item.depositPhoto || '',
+      customDate: item.createdAt.toISOString().split('T')[0],
     });
     setIsEditing(true);
   };
@@ -428,10 +378,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
       clientId: '',
       crates: 1,
       crateTypeId: '',
-      depositMad: 0,
-      depositType: 'cash',
-      depositReference: '',
-      depositPhoto: '',
+      customDate: new Date().toISOString().split('T')[0],
     });
   };
 
@@ -472,23 +419,23 @@ export const EmptyCrateLoansPage: React.FC = () => {
     setLoanToDelete(null);
   };
 
-  const getConfirmMessage = (item: LoanItem) => {
+  const getConfirmMessage = () => {
     if (i18n.language === 'ar') {
-      return `هل أنت متأكد من أن الصناديق قد رجعت إلى المخزن والضمان ${item.depositMad.toFixed(2)} درهم تم إرجاعه للعميل؟`;
+      return `هل أنت متأكد من أن الصناديق قد رجعت إلى المخزن؟`;
     }
-    return `Êtes-vous sûr que les caisses sont rentrées au frigo et la caution ${item.depositMad.toFixed(2)} MAD a été retournée au client ?`;
+    return `Êtes-vous sûr que les caisses sont rentrées au frigo ?`;
   };
 
   const getDeleteConfirmMessage = (item: LoanItem) => {
     if (i18n.language === 'ar') {
-      return `هل أنت متأكد من حذف هذا السجل نهائياً؟\n\nالعميل: ${item.clientName}\nعدد الصناديق: ${item.crates}\nالضمان: ${item.depositMad.toFixed(2)} درهم\n\nهذا الإجراء لا يمكن التراجع عنه.`;
+      return `هل أنت متأكد من حذف هذا السجل نهائياً؟\n\nالعميل: ${item.clientName}\nعدد الصناديق: ${item.crates}\n\nهذا الإجراء لا يمكن التراجع عنه.`;
     }
-    return `Êtes-vous sûr de vouloir supprimer définitivement ce prêt ?\n\nClient: ${item.clientName}\nCaisses: ${item.crates}\nCaution: ${item.depositMad.toFixed(2)} MAD\n\nCette action est irréversible.`;
+    return `Êtes-vous sûr de vouloir supprimer définitivement ce prêt ?\n\nClient: ${item.clientName}\nCaisses: ${item.crates}\n\nCette action est irréversible.`;
   };
 
   // Handle print ticket for thermal POS-80 printer
   const handlePrintTicket = (item: LoanItem) => {
-    const currentDate = new Date();
+    const currentDate = item.createdAt;
     const qrUrl = `${window.location.origin}/loan?ticket=${item.ticketId}`;
     
     // Try to open print window
@@ -649,10 +596,6 @@ export const EmptyCrateLoansPage: React.FC = () => {
               <span class="label">Caisses vides:</span>
               <span class="value">${item.crates}</span>
             </div>
-            <div class="row">
-              <span class="label">Caution:</span>
-              <span class="value">${item.depositMad.toFixed(2)} MAD</span>
-            </div>
           </div>
           
           <div class="highlight">
@@ -758,10 +701,6 @@ export const EmptyCrateLoansPage: React.FC = () => {
           <div style="display: flex; justify-content: space-between; margin: 1mm 0; padding: 0.5mm 0; font-size: 9px;">
             <span style="font-weight: bold; flex: 1;">Caisses vides:</span>
             <span style="text-align: right; flex: 1; font-weight: normal;">${item.crates}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin: 1mm 0; padding: 0.5mm 0; font-size: 9px;">
-            <span style="font-weight: bold; flex: 1;">Caution:</span>
-            <span style="text-align: right; flex: 1; font-weight: normal;">${item.depositMad.toFixed(2)} MAD</span>
           </div>
         </div>
         
@@ -869,7 +808,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
             {t('loans.title', 'Sortie Caisses Vides')}
           </h1>
           <p className="text-xs sm:text-sm md:text-base text-gray-600 font-medium">
-            {t('loans.subtitle', 'Gestion des tickets QR et caution')}
+            {t('loans.subtitle', 'Gestion des prêts de caisses vides')}
           </p>
         </div>
         <button 
@@ -925,23 +864,23 @@ export const EmptyCrateLoansPage: React.FC = () => {
                   {availableEmptyCrates.toLocaleString()}
                 </div>
                 <div className="text-xs sm:text-sm text-gray-600 font-medium">
-                  {t('loans.totalConfigured', 'Total')}: {poolSettings?.pool_vides_total?.toLocaleString() || 0}
+                  {t('loans.totalConfigured', 'Total')}: {totalEmptyCrates.toLocaleString()}
                 </div>
               </div>
               
               {/* Enhanced status indicator */}
               <div className="flex flex-col items-center gap-1 sm:gap-2">
                 <div className={`w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 rounded-full shadow-sm ${
-                  availableEmptyCrates > (poolSettings?.pool_vides_total || 0) * 0.3 
+                  availableEmptyCrates > totalEmptyCrates * 0.3 
                     ? 'bg-green-400' 
-                    : availableEmptyCrates > (poolSettings?.pool_vides_total || 0) * 0.1 
+                    : availableEmptyCrates > totalEmptyCrates * 0.1 
                       ? 'bg-yellow-400' 
                       : 'bg-red-400'
                 }`}></div>
                 <div className="text-xs text-gray-500 font-medium hidden sm:block">
-                  {availableEmptyCrates > (poolSettings?.pool_vides_total || 0) * 0.3 
+                  {availableEmptyCrates > totalEmptyCrates * 0.3 
                     ? 'Bon' 
-                    : availableEmptyCrates > (poolSettings?.pool_vides_total || 0) * 0.1 
+                    : availableEmptyCrates > totalEmptyCrates * 0.1 
                       ? 'Faible' 
                       : 'Critique'
                   }
@@ -973,20 +912,13 @@ export const EmptyCrateLoansPage: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Type de caisse</label>
               <select
                 value={form.crateTypeId}
-                onChange={(e) => {
-                  const selectedCrateType = (crateTypes || []).find(ct => ct.id === e.target.value);
-                  setForm((f) => ({ 
-                    ...f, 
-                    crateTypeId: e.target.value,
-                    depositMad: selectedCrateType ? selectedCrateType.depositAmount * f.crates : f.depositMad
-                  }));
-                }}
+                onChange={(e) => setForm((f) => ({ ...f, crateTypeId: e.target.value }))}
                 className="w-full border rounded-md px-3 py-2"
               >
                 <option value="">Sélectionner un type de caisse</option>
                 {(crateTypes || []).map((ct) => (
                   <option key={ct.id} value={ct.id}>
-                    {ct.customName || ct.name} - {ct.type} - {ct.color} ({ct.depositAmount} MAD)
+                    {ct.customName || ct.name} - {ct.type} - {ct.color}
                   </option>
                 ))}
               </select>
@@ -1005,101 +937,14 @@ export const EmptyCrateLoansPage: React.FC = () => {
               <input type="number" min={1} value={form.crates} onChange={(e) => setForm((f)=>({ ...f, crates: Number(e.target.value) }))} className="w-full border rounded-md px-3 py-2" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('loans.deposit', 'Caution')}
-                {pricingSettings?.caution_par_caisse && (
-                  <span className="text-xs text-gray-500 ml-2">
-                    ({pricingSettings.caution_par_caisse} MAD/{t('loans.perCrate', 'caisse')})
-                  </span>
-                )}
-              </label>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  min={0} 
-                  step={0.01} 
-                  value={form.depositMad} 
-                  onChange={(e) => setForm((f)=>({ ...f, depositMad: Number(e.target.value) }))} 
-                  className={`w-full border rounded-md px-3 py-2 ${pricingSettings?.caution_par_caisse ? 'bg-gray-50 text-gray-700' : 'bg-white'}`}
-                  placeholder="0.00"
-                  readOnly={!!pricingSettings?.caution_par_caisse}
-                />
-                {pricingSettings?.caution_par_caisse && (
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                )}
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.date', 'Date')}</label>
+              <input 
+                type="date" 
+                value={form.customDate} 
+                onChange={(e) => setForm((f)=>({ ...f, customDate: e.target.value }))} 
+                className="w-full border rounded-md px-3 py-2" 
+              />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.depositType', 'Type de caution')}</label>
-              <select
-                value={form.depositType}
-                onChange={(e) => setForm((f) => ({ ...f, depositType: e.target.value as 'cash' | 'check' }))}
-                className="w-full border rounded-md px-3 py-2"
-              >
-                <option value="cash">{t('loans.cash', 'Espèces')}</option>
-                <option value="check">{t('loans.check', 'Chèque')}</option>
-              </select>
-            </div>
-            {form.depositType === 'check' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.checkReference', 'Référence chèque')}</label>
-                  <input 
-                    type="text" 
-                    value={form.depositReference} 
-                    onChange={(e) => setForm((f)=>({ ...f, depositReference: e.target.value }))} 
-                    className="w-full border rounded-md px-3 py-2" 
-                    placeholder="N° chèque"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.depositPhoto', 'Photo de caution')}</label>
-                  <div className="relative">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            setForm((f) => ({ ...f, depositPhoto: event.target?.result as string }));
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="hidden"
-                      id="deposit-photo"
-                    />
-                    <label 
-                      htmlFor="deposit-photo" 
-                      className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
-                    >
-                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span className="text-sm text-gray-600">
-                        {form.depositPhoto ? 'Photo ajoutée' : 'Ajouter photo'}
-                      </span>
-                    </label>
-                    {form.depositPhoto && (
-                      <button
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, depositPhoto: '' }))}
-                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button onClick={() => addLoan.mutate(form)} disabled={!form.clientId || form.crates <=0 || addLoan.isLoading} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60">
@@ -1144,93 +989,14 @@ export const EmptyCrateLoansPage: React.FC = () => {
               <input type="number" min={1} value={form.crates} onChange={(e) => setForm((f)=>({ ...f, crates: Number(e.target.value) }))} className="w-full border rounded-md px-3 py-2" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('loans.deposit', 'Caution')}
-                {pricingSettings?.caution_par_caisse && (
-                  <span className="text-xs text-gray-500 ml-2">
-                    ({pricingSettings.caution_par_caisse} MAD/{t('loans.perCrate', 'caisse')})
-                  </span>
-                )}
-              </label>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  min={0} 
-                  step={0.01} 
-                  value={form.depositMad} 
-                  onChange={(e) => setForm((f)=>({ ...f, depositMad: Number(e.target.value) }))} 
-                  className="w-full border rounded-md px-3 py-2"
-                  placeholder="0.00"
-                />
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.date', 'Date')}</label>
+              <input 
+                type="date" 
+                value={form.customDate} 
+                onChange={(e) => setForm((f)=>({ ...f, customDate: e.target.value }))} 
+                className="w-full border rounded-md px-3 py-2" 
+              />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.depositType', 'Type de caution')}</label>
-              <select
-                value={form.depositType}
-                onChange={(e) => setForm((f) => ({ ...f, depositType: e.target.value as 'cash' | 'check' }))}
-                className="w-full border rounded-md px-3 py-2"
-              >
-                <option value="cash">{t('loans.cash', 'Espèces')}</option>
-                <option value="check">{t('loans.check', 'Chèque')}</option>
-              </select>
-            </div>
-            {form.depositType === 'check' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.checkReference', 'Référence chèque')}</label>
-                  <input 
-                    type="text" 
-                    value={form.depositReference} 
-                    onChange={(e) => setForm((f)=>({ ...f, depositReference: e.target.value }))} 
-                    className="w-full border rounded-md px-3 py-2" 
-                    placeholder="N° chèque"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.depositPhoto', 'Photo de caution')}</label>
-                  <div className="relative">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            setForm((f) => ({ ...f, depositPhoto: event.target?.result as string }));
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="hidden"
-                      id="edit-deposit-photo"
-                    />
-                    <label 
-                      htmlFor="edit-deposit-photo" 
-                      className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
-                    >
-                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span className="text-sm text-gray-600">
-                        {form.depositPhoto ? 'Photo ajoutée' : 'Ajouter photo'}
-                      </span>
-                    </label>
-                    {form.depositPhoto && (
-                      <button
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, depositPhoto: '' }))}
-                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button onClick={handleSaveEdit} disabled={!form.clientId || form.crates <=0 || editLoan.isLoading} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60">
@@ -1254,18 +1020,6 @@ export const EmptyCrateLoansPage: React.FC = () => {
                 </TableHeader>
                 <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
                   Type de caisse
-                </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
-                  {t('loans.deposit', 'Caution')}
-                </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
-                  {t('loans.depositType', 'Type')}
-                </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden md:table-cell">
-                  {t('loans.checkReference', 'Référence')}
-                </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden lg:table-cell">
-                  {t('loans.depositPhoto', 'Photo')}
                 </TableHeader>
                 <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden sm:table-cell">
                   {t('clients.created', 'Créé le')}
@@ -1311,49 +1065,6 @@ export const EmptyCrateLoansPage: React.FC = () => {
                         <span className="text-xs text-gray-600 capitalize">{l.crateType}</span>
                       </div>
                     </div>
-                  </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center">
-                    <div className="text-xs sm:text-sm md:text-base text-gray-900">
-                      {l.depositMad.toFixed(2)} MAD
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center">
-                    <span className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-medium ${
-                      l.depositType === 'cash' 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {l.depositType === 'cash' ? 'Espèces' : 'Chèque'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center hidden md:table-cell">
-                    <div className="text-xs sm:text-sm text-gray-600">
-                      {l.depositReference || '-'}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center hidden lg:table-cell">
-                    {l.depositPhoto ? (
-                      <button
-                        onClick={() => {
-                          const newWindow = window.open();
-                          if (newWindow) {
-                            newWindow.document.write(`
-                              <html>
-                                <head><title>Photo de caution</title></head>
-                                <body style="margin:0; padding:20px; text-align:center;">
-                                  <img src="${l.depositPhoto}" style="max-width:100%; max-height:80vh;" alt="Photo de caution">
-                                </body>
-                              </html>
-                            `);
-                          }
-                        }}
-                        className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                      >
-                        Voir
-                      </button>
-                    ) : (
-                      <span className="text-gray-400 text-xs">-</span>
-                    )}
                   </TableCell>
                   <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center hidden sm:table-cell">
                     <div className="text-xs sm:text-sm text-gray-600">
@@ -1411,7 +1122,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-12 text-gray-500">
+                <TableCell colSpan={6} className="text-center py-12 text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -1432,7 +1143,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
         onClose={cancelReturn}
         onConfirm={confirmReturn}
         title={t('loans.confirmReturnTitle', 'Confirmer le retour')}
-        message={loanToReturn ? getConfirmMessage(loanToReturn) : ''}
+        message={loanToReturn ? getConfirmMessage() : ''}
         confirmText={t('loans.confirmReturn', 'Confirmer le retour') as string}
         cancelText={t('common.cancel', 'Annuler') as string}
         type="warning"

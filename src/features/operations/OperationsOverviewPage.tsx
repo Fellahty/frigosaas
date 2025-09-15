@@ -459,158 +459,113 @@ export const OperationsOverviewPage: React.FC = () => {
             {filteredClientStatuses.map((clientStatus) => (
               <div 
                 key={clientStatus.client.id} 
-                className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group cursor-pointer"
+                className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 group cursor-pointer"
               >
                 {/* Client Header */}
-                <div className="flex items-start justify-between mb-6">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/25">
-                        <span className="text-white font-bold text-lg">
-                          {clientStatus.client.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-semibold text-gray-900 truncate">
-                          {clientStatus.client.name}
-                        </h3>
-                        {clientStatus.client.company && (
-                          <p className="text-sm text-gray-500 truncate">
-                            {clientStatus.client.company}
-                          </p>
-                        )}
-                      </div>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="relative">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+                      <span className="text-white font-bold text-lg">
+                        {clientStatus.client.name.charAt(0).toUpperCase()}
+                      </span>
                     </div>
-                    {clientStatus.client.phone && (
-                      <p className="text-xs text-gray-400 flex items-center gap-1">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                        </svg>
-                        {clientStatus.client.phone}
+                    <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                      clientStatus.summary.lastActivity && 
+                      (Date.now() - clientStatus.summary.lastActivity.getTime()) < 7 * 24 * 60 * 60 * 1000
+                        ? 'bg-green-500'
+                        : 'bg-gray-400'
+                    }`}></div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 truncate text-lg">
+                      {clientStatus.client.name}
+                    </h3>
+                    {clientStatus.client.company && (
+                      <p className="text-sm text-gray-500 truncate">
+                        {clientStatus.client.company}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      clientStatus.summary.lastActivity && 
-                      (Date.now() - clientStatus.summary.lastActivity.getTime()) < 7 * 24 * 60 * 60 * 1000
-                        ? 'bg-green-500 shadow-lg shadow-green-500/50'
-                        : 'bg-gray-400'
-                    }`}></div>
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                      clientStatus.summary.activeReservations > 0 || clientStatus.summary.openLoans > 0
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {clientStatus.summary.activeReservations > 0 || clientStatus.summary.openLoans > 0
-                        ? t('operations.active', 'Actif')
-                        : t('operations.inactive', 'Inactif')
-                      }
-                    </span>
-                  </div>
                 </div>
 
-                {/* Metrics Grid */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-2xl p-4 border border-blue-100/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
-                        {t('operations.reserved', 'Réservées')}
-                      </p>
-                      <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V7a2 2 0 012-2h4a2 2 0 012 2v0M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
-                      </svg>
+                {/* Simple Metrics */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0V7a2 2 0 012-2h4a2 2 0 012 2v0M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-600">{t('operations.reserved', 'Réservées')}</span>
                     </div>
-                    <p className="text-2xl font-bold text-blue-900">
+                    <span className="text-xl font-bold text-gray-900">
                       {clientStatus.summary.totalReserved}
-                    </p>
+                    </span>
                   </div>
 
-                  <div className="bg-gradient-to-br from-green-50 to-green-100/50 rounded-2xl p-4 border border-green-100/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">
-                        {t('operations.loaned', 'Prêtées')}
-                      </p>
-                      <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                      </svg>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-600">{t('operations.loaned', 'Prêtées')}</span>
                     </div>
-                    <p className="text-2xl font-bold text-green-900">
+                    <span className="text-xl font-bold text-gray-900">
                       {clientStatus.summary.totalLoaned}
-                    </p>
+                    </span>
                   </div>
 
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-2xl p-4 border border-purple-100/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">
-                        {t('operations.received', 'Reçues')}
-                      </p>
-                      <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-600">{t('operations.received', 'Reçues')}</span>
                     </div>
-                    <p className="text-2xl font-bold text-purple-900">
+                    <span className="text-xl font-bold text-gray-900">
                       {clientStatus.summary.totalReceived}
-                    </p>
+                    </span>
                   </div>
 
-                  <div className="bg-gradient-to-br from-orange-50 to-orange-100/50 rounded-2xl p-4 border border-orange-100/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">
-                        {t('operations.exited', 'Sorties')}
-                      </p>
-                      <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-600">{t('operations.exited', 'Sorties')}</span>
                     </div>
-                    <p className="text-2xl font-bold text-orange-900">
+                    <span className="text-xl font-bold text-gray-900">
                       {clientStatus.summary.totalExited}
-                    </p>
+                    </span>
                   </div>
                 </div>
 
-                {/* Activity Summary */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-gray-600">
-                      {t('operations.activeReservations', 'Réservations actives')}
-                    </span>
-                    <span className="font-semibold text-gray-900">
-                      {clientStatus.summary.activeReservations}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-gray-600">
-                      {t('operations.openLoans', 'Prêts ouverts')}
-                    </span>
-                    <span className="font-semibold text-gray-900">
-                      {clientStatus.summary.openLoans}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-gray-600">
-                      {t('operations.deposit', 'Cautions')}
-                    </span>
-                    <span className="font-semibold text-gray-900">
-                      {clientStatus.summary.totalDeposit.toLocaleString()} MAD
-                    </span>
-                  </div>
-
+                {/* Status Footer */}
+                <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    clientStatus.summary.activeReservations > 0 || clientStatus.summary.openLoans > 0
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {clientStatus.summary.activeReservations > 0 || clientStatus.summary.openLoans > 0
+                      ? t('operations.active', 'Actif')
+                      : t('operations.inactive', 'Inactif')
+                    }
+                  </span>
                   {clientStatus.summary.lastActivity && (
-                    <div className="flex items-center justify-between py-2 border-t border-gray-100 pt-3">
-                      <span className="text-sm text-gray-600">
-                        {t('operations.lastActivity', 'Dernière activité')}
-                      </span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {clientStatus.summary.lastActivity.toLocaleDateString('fr-FR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: '2-digit'
-                        })}
-                      </span>
-                    </div>
+                    <span className="text-xs text-gray-500">
+                      {t('operations.lastActivity', 'Dernière activité')}: {clientStatus.summary.lastActivity.toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit'
+                      })}
+                    </span>
                   )}
                 </div>
               </div>
