@@ -147,7 +147,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <button
                   onClick={() => toggleSection('operations')}
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
-                    isSectionActive(['/loans', '/reception'])
+                    isSectionActive(['/loans', '/reception', '/operations-overview'])
                       ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
                       : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
@@ -169,6 +169,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </button>
                 {expandedSections.operations && (
                   <ul className="ml-4 mt-2 space-y-1.5">
+                    <li>
+                      <Link
+                        to="/operations-overview"
+                        className={`flex items-center px-4 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
+                          isActive('/operations-overview')
+                            ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 shadow-sm border border-blue-200'
+                            : 'text-gray-600 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
+                        }`}
+                      >
+                        <svg className="w-3 h-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        {t('sidebar.operationsOverview', 'Vue d\'ensemble')}
+                      </Link>
+                    </li>
                     <li>
                       <Link
                         to="/loans"

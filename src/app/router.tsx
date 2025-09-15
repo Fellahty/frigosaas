@@ -17,6 +17,7 @@ import { EmptyCrateLoansPage } from '../features/loans/EmptyCrateLoansPage';
 import { ReceptionPage } from '../features/operations/ReceptionPage';
 import { ReceptionViewPage } from '../features/operations/ReceptionViewPage';
 import { ClientOperationsPage } from '../features/operations/ClientOperationsPage';
+import { OperationsOverviewPage } from '../features/operations/OperationsOverviewPage';
 import { ReservationsPage } from '../features/reservations/ReservationsPage';
 import { ClientReservationsPage } from '../features/reservations/ClientReservationsPage';
 import SensorsPage from '../features/sensors/SensorsPage';
@@ -245,6 +246,14 @@ export const router = createBrowserRouter([
           <LayoutWrapper>
             <ClientOperationsPage />
           </LayoutWrapper>
+        ),
+      },
+      {
+        path: 'operations-overview',
+        element: (
+          <Layout>
+            <OperationsOverviewPage />
+          </Layout>
         ),
       },
       {

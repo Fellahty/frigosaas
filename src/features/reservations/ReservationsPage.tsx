@@ -24,6 +24,7 @@ interface Reservation {
   capacityOk: boolean;
   selectedRooms: string[];
   roomNames?: string[]; // Computed field for display
+  totalRoomCapacity?: number; // Total capacity of all selected rooms
   createdAt: Timestamp;
   updatedAt: Timestamp;
   // Computed fields
@@ -67,7 +68,7 @@ export const ReservationsPage: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [clientFilter, setClientFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'requests' | 'approved' | 'closed' | 'refused'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'approved' | 'closed' | 'refused'>('approved');
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -134,11 +135,18 @@ export const ReservationsPage: React.FC = () => {
           return room ? (room.room || room.name || `Room ${roomId}`) : `Room ${roomId}`;
         });
         
+        // Calculate total capacity of selected rooms
+        const totalRoomCapacity = selectedRooms.reduce((total, roomId) => {
+          const room = rooms.find(r => r.id === roomId);
+          return total + (room ? (room.capacityCrates || room.capacity || 0) : 0);
+        }, 0);
+        
         return {
           id: doc.id,
           ...data,
           selectedRooms,
           roomNames,
+          totalRoomCapacity,
           // Add computed fields (simplified for now)
           loanedEmpty: 0,
           receivedFull: 0,
@@ -509,8 +517,8 @@ export const ReservationsPage: React.FC = () => {
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
           {[
-            { key: 'requests', label: 'Demandes', count: reservations.filter(r => r.status === 'REQUESTED').length },
             { key: 'approved', label: 'Approuvées', count: reservations.filter(r => r.status === 'APPROVED').length },
+            { key: 'requests', label: 'Demandes', count: reservations.filter(r => r.status === 'REQUESTED').length },
             { key: 'closed', label: 'Clôturées', count: reservations.filter(r => r.status === 'CLOSED').length },
             { key: 'refused', label: 'Refusées', count: reservations.filter(r => r.status === 'REFUSED').length },
           ].map((tab) => (
@@ -535,7 +543,6 @@ export const ReservationsPage: React.FC = () => {
           <TableHead>
             <TableRow>
               <TableHeader>Actions</TableHeader>
-              <TableHeader>Réf</TableHeader>
               <TableHeader>Client</TableHeader>
               <TableHeader>Réservé</TableHeader>
               <TableHeader>Caisses vides</TableHeader>
@@ -547,7 +554,7 @@ export const ReservationsPage: React.FC = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8">
+                <TableCell colSpan={7} className="text-center py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                   </div>
@@ -555,13 +562,15 @@ export const ReservationsPage: React.FC = () => {
               </TableRow>
             ) : filteredReservations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   Aucune réservation trouvée
                 </TableCell>
               </TableRow>
             ) : (
-              filteredReservations.map((reservation) => (
-                <TableRow key={reservation.id}>
+              filteredReservations.map((reservation) => {
+                const isOverCapacity = reservation.reservedCrates > (reservation.totalRoomCapacity || 0);
+                return (
+                <TableRow key={reservation.id} className={isOverCapacity ? 'bg-red-50 border-l-4 border-red-400' : ''}>
                   <TableCell>
                     <div className="flex flex-col space-y-1">
                       <button
@@ -623,30 +632,42 @@ export const ReservationsPage: React.FC = () => {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{reservation.reference || 'N/A'}</TableCell>
                   <TableCell>{reservation.clientName}</TableCell>
                   <TableCell className="text-center">{reservation.reservedCrates}</TableCell>
                   <TableCell className="text-center">{reservation.emptyCratesNeeded || 0}</TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {reservation.roomNames && reservation.roomNames.length > 0 ? (
-                        reservation.roomNames.map((roomName, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                          >
-                            {roomName}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-gray-400 text-sm">Aucune salle</span>
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap gap-1">
+                        {reservation.roomNames && reservation.roomNames.length > 0 ? (
+                          reservation.roomNames.map((roomName, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                            >
+                              {roomName}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-400 text-sm">Aucune salle</span>
+                        )}
+                      </div>
+                      {reservation.totalRoomCapacity && reservation.totalRoomCapacity > 0 && (
+                        <div className={`text-sm font-semibold ${isOverCapacity ? 'text-red-600' : 'text-gray-900'}`}>
+                          {reservation.totalRoomCapacity.toLocaleString()}
+                          {isOverCapacity && (
+                            <span className="ml-2 text-xs text-red-500">
+                              ⚠️ Dépassement
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   </TableCell>
                   <TableCell>{getStatusBadge(reservation.status)}</TableCell>
                   <TableCell className="text-center">{getCapacityIcon(reservation.capacityOk)}</TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>
