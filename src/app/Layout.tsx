@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/hooks/useAuth';
 import { LangSwitcher } from '../components/LangSwitcher';
+import { SyncStatusIndicator } from '../components/SyncStatusIndicator';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -147,7 +148,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <button
                   onClick={() => toggleSection('operations')}
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
-                    isSectionActive(['/loans', '/reception', '/operations-overview'])
+                    isSectionActive(['/loans', '/reception', '/operations-overview', '/caution-management'])
                       ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
                       : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
@@ -212,6 +213,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                         </svg>
                         {t('sidebar.receptionFull', 'Réception pleines')}
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        to="/caution-management"
+                        className={`flex items-center px-4 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
+                          isActive('/caution-management')
+                            ? 'bg-gradient-to-r from-orange-100 to-amber-100 text-orange-700 shadow-sm border border-orange-200'
+                            : 'text-gray-600 hover:bg-gradient-to-r hover:from-orange-50 hover:to-amber-50 hover:shadow-sm'
+                        }`}
+                      >
+                        <svg className="w-3 h-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </svg>
+                        {t('sidebar.deposits', 'Cautions')}
                       </Link>
                     </li>
                   </ul>
@@ -341,19 +357,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           {/* Footer */}
           <div className="p-6 border-t border-gray-200">
-            {/* User Info */}
+            {/* User Info with Sync Status */}
             {user && (
               <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center mb-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                      <p className="text-xs text-gray-500">{t(`roles.${user.role}`, user.role)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                    <p className="text-xs text-gray-500">{t(`roles.${user.role}`, user.role)}</p>
-                  </div>
+                  <SyncStatusIndicator showDetails={false} />
                 </div>
               </div>
             )}

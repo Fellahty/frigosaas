@@ -5,6 +5,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, o
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { useAppSettings, usePoolSettings } from '../../lib/hooks/useAppSettings';
+import { useOfflineQuery, useOfflineMutation } from '../../lib/hooks/useOfflineSync';
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
 import { EnhancedSelect } from '../../components/EnhancedSelect';
@@ -131,10 +132,10 @@ export const ReservationsPage: React.FC = () => {
   });
 
 
-  // Fetch reservations
-  const { data: reservations = [], isLoading } = useQuery({
-    queryKey: ['reservations', tenantId, rooms],
-    queryFn: async (): Promise<Reservation[]> => {
+  // Fetch reservations with offline support
+  const { data: reservations = [], isLoading, isOffline, lastSync, refetch } = useOfflineQuery(
+    ['reservations', tenantId, rooms],
+    async (): Promise<Reservation[]> => {
       const q = query(
         collection(db, 'tenants', tenantId, 'reservations'),
         orderBy('createdAt', 'desc')
@@ -169,8 +170,41 @@ export const ReservationsPage: React.FC = () => {
         } as Reservation;
       });
     },
-    enabled: !!rooms.length, // Only run when rooms are loaded
-  });
+    {
+      collection: `tenants/${tenantId}/reservations`,
+      constraints: [orderBy('createdAt', 'desc')],
+      transform: (snapshot) => snapshot.docs.map(doc => {
+        const data = doc.data();
+        const selectedRooms = data.selectedRooms || [];
+        const roomNames = selectedRooms.map((roomId: string) => {
+          const room = rooms.find(r => r.id === roomId);
+          return room ? (room.room || room.name || `Room ${roomId}`) : `Room ${roomId}`;
+        });
+        
+        const totalRoomCapacity = selectedRooms.reduce((total, roomId) => {
+          const room = rooms.find(r => r.id === roomId);
+          return total + (room ? (room.capacityCrates || room.capacity || 0) : 0);
+        }, 0);
+        
+        return {
+          id: doc.id,
+          ...data,
+          selectedRooms,
+          roomNames,
+          totalRoomCapacity,
+          loanedEmpty: 0,
+          receivedFull: 0,
+          inStock: 0,
+          exited: 0,
+          remaining: data.reservedCrates,
+        } as Reservation;
+      })
+    },
+    {
+      enabled: !!rooms.length && !!tenantId,
+      staleTime: 2 * 60 * 1000, // 2 minutes
+    }
+  );
 
   // Filter reservations based on active tab and filters
   const filteredReservations = reservations.filter(reservation => {
@@ -215,9 +249,9 @@ export const ReservationsPage: React.FC = () => {
   // console.log('Total rooms crates:', kpis.totalRoomsCrates);
   // console.log('Number of rooms:', kpis.numberOfRooms);
 
-  // Create reservation mutation
-  const createReservation = useMutation({
-    mutationFn: async (data: typeof form) => {
+  // Create reservation mutation with offline support
+  const createReservation = useOfflineMutation(
+    async (data: typeof form) => {
       const client = clients?.find(c => c.id === data.clientId);
       if (!client) throw new Error('Client not found');
 
@@ -243,21 +277,27 @@ export const ReservationsPage: React.FC = () => {
       await logCreate('reservation', docRef.id, `Réservation créée: ${client.name}`, 'admin', 'Administrateur');
       return docRef.id;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reservations', tenantId] });
-      setIsCreating(false);
-      setForm({
-        clientId: '',
-        reservedCrates: 0,
-        emptyCratesNeeded: 0,
-        selectedRooms: [],
-      });
-    },
-  });
+    {
+      onSuccess: () => {
+        setIsCreating(false);
+        setForm({
+          clientId: '',
+          reservedCrates: 0,
+          emptyCratesNeeded: 0,
+          selectedRooms: [],
+        });
+        // Data will automatically sync due to real-time listener
+      },
+      onError: (error) => {
+        console.error('Error creating reservation:', error);
+      },
+      retryOnReconnect: true,
+    }
+  );
 
-  // Update reservation status
-  const updateReservationStatus = useMutation({
-    mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
+  // Update reservation status with offline support
+  const updateReservationStatus = useOfflineMutation(
+    async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
       const reservationRef = doc(db, 'tenants', tenantId, 'reservations', id);
       
       // Prepare update data - only include reason if it's provided
@@ -274,20 +314,21 @@ export const ReservationsPage: React.FC = () => {
       await updateDoc(reservationRef, updateData);
       await logUpdate('reservation', id, `Statut changé: ${status}${reason ? ` - ${reason}` : ''}`, 'admin', 'Administrateur');
     },
-    onSuccess: (_, { status }) => {
-      queryClient.invalidateQueries({ queryKey: ['reservations', tenantId] });
-      // You could add a toast notification here if you have one
-      console.log(`Reservation ${status.toLowerCase()} avec succès`);
-    },
-    onError: (error) => {
-      console.error('Erreur lors du changement de statut:', error);
-      // You could add error toast notification here
-    },
-  });
+    {
+      onSuccess: (_, { status }) => {
+        console.log(`Reservation ${status.toLowerCase()} avec succès`);
+        // Data will automatically sync due to real-time listener
+      },
+      onError: (error) => {
+        console.error('Erreur lors du changement de statut:', error);
+      },
+      retryOnReconnect: true,
+    }
+  );
 
-  // Update reservation details
-  const updateReservation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: typeof editForm }) => {
+  // Update reservation details with offline support
+  const updateReservation = useOfflineMutation(
+    async ({ id, updates }: { id: string; updates: typeof editForm }) => {
       const reservationRef = doc(db, 'tenants', tenantId, 'reservations', id);
       await updateDoc(reservationRef, {
         reservedCrates: updates.reservedCrates,
@@ -296,32 +337,38 @@ export const ReservationsPage: React.FC = () => {
         updatedAt: Timestamp.fromDate(new Date()),
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reservations', tenantId] });
-      setIsEditing(false);
-      setIsDetailOpen(false);
-    },
-    onError: (error) => {
-      console.error('Erreur lors de la modification:', error);
-    },
-  });
+    {
+      onSuccess: () => {
+        setIsEditing(false);
+        setIsDetailOpen(false);
+        // Data will automatically sync due to real-time listener
+      },
+      onError: (error) => {
+        console.error('Erreur lors de la modification:', error);
+      },
+      retryOnReconnect: true,
+    }
+  );
 
-  // Delete reservation mutation
-  const deleteReservation = useMutation({
-    mutationFn: async (id: string) => {
+  // Delete reservation mutation with offline support
+  const deleteReservation = useOfflineMutation(
+    async (id: string) => {
       const reservationRef = doc(db, 'tenants', tenantId, 'reservations', id);
       await deleteDoc(reservationRef);
       await logDelete('reservation', id, 'Réservation supprimée', 'admin', 'Administrateur');
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reservations', tenantId] });
-      setIsDeleteModalOpen(false);
-      setReservationToDelete(null);
-    },
-    onError: (error) => {
-      console.error('Erreur lors de la suppression:', error);
-    },
-  });
+    {
+      onSuccess: () => {
+        setIsDeleteModalOpen(false);
+        setReservationToDelete(null);
+        // Data will automatically sync due to real-time listener
+      },
+      onError: (error) => {
+        console.error('Erreur lors de la suppression:', error);
+      },
+      retryOnReconnect: true,
+    }
+  );
 
   const handleCreateReservation = () => {
     createReservation.mutate(form);
@@ -389,6 +436,11 @@ export const ReservationsPage: React.FC = () => {
           <p className="text-gray-600">
             {settingsLoading ? 'Chargement des paramètres...' : 'Chargement des réservations...'}
           </p>
+          {isOffline && (
+            <p className="text-orange-600 text-sm mt-2">
+              Mode hors ligne - Les données peuvent être limitées
+            </p>
+          )}
         </div>
       </div>
     );
@@ -416,18 +468,48 @@ export const ReservationsPage: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('sidebar.reservations', 'Réservations')}</h1>
-          <p className="text-gray-600 mt-1">{t('reservations.subtitle', 'Gérez les réservations de vos clients')}</p>
+          <div className="flex items-center space-x-3">
+            <h1 className="text-2xl font-bold text-gray-900">{t('sidebar.reservations', 'Réservations')}</h1>
+            {isOffline && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                  <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+                </svg>
+                Hors ligne
+              </span>
+            )}
+          </div>
+          <p className="text-gray-600 mt-1">
+            {t('reservations.subtitle', 'Gérez les réservations de vos clients')}
+            {lastSync && (
+              <span className="text-xs text-gray-500 ml-2">
+                • Dernière sync: {lastSync.toLocaleTimeString()}
+              </span>
+            )}
+          </p>
         </div>
-        <button
-          onClick={() => setIsCreating(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Créer une réservation
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => refetch()}
+            disabled={isLoading}
+            className="px-3 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+            title="Actualiser les données"
+          >
+            <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setIsCreating(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Créer une réservation
+          </button>
+        </div>
       </div>
 
       {/* Modern Search */}

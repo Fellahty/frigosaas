@@ -6,7 +6,7 @@ import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { MetricsToday, Kpis, RoomSummary, AlertItem, TopClient, MoveItem } from '../../types/metrics';
 import { KpiCards } from './KpiCards';
-import { FacilityMap } from './FacilityMap';
+import FacilityMap from './FacilityMap';
 import { Spinner } from '../../components/Spinner';
 
 export const DashboardPage: React.FC = () => {
@@ -230,7 +230,10 @@ export const DashboardPage: React.FC = () => {
           alerts,
           topClients,
           recentMoves,
-          lastUpdated: new Date()
+          lastUpdated: new Date(),
+          // Add additional data for FacilityMap
+          receptions,
+          clients
         };
 
         console.log('Dashboard metrics calculated:', {
@@ -312,7 +315,11 @@ export const DashboardPage: React.FC = () => {
         <KpiCards kpis={metrics.kpis} />
         
         {/* Facility Map - Full Width */}
-        <FacilityMap rooms={metrics.rooms} />
+        <FacilityMap 
+          rooms={metrics.rooms} 
+          receptions={metrics.receptions || []}
+          clients={metrics.clients || []}
+        />
       </div>
     </div>
   );

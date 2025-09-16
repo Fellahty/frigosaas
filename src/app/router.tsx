@@ -18,6 +18,7 @@ import { ReceptionPage } from '../features/operations/ReceptionPage';
 import { ReceptionViewPage } from '../features/operations/ReceptionViewPage';
 import { ClientOperationsPage } from '../features/operations/ClientOperationsPage';
 import { OperationsOverviewPage } from '../features/operations/OperationsOverviewPage';
+import CautionManagement from '../features/operations/CautionManagement';
 import { ReservationsPage } from '../features/reservations/ReservationsPage';
 import { ClientReservationsPage } from '../features/reservations/ClientReservationsPage';
 import SensorsPage from '../features/sensors/SensorsPage';
@@ -253,6 +254,14 @@ export const router = createBrowserRouter([
         element: (
           <Layout>
             <OperationsOverviewPage />
+          </Layout>
+        ),
+      },
+      {
+        path: 'caution-management',
+        element: (
+          <Layout>
+            <CautionManagement />
           </Layout>
         ),
       },

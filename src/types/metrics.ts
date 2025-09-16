@@ -49,4 +49,6 @@ export interface MetricsToday {
   topClients: TopClient[];
   recentMoves: MoveItem[];
   lastUpdated: Date;
+  receptions?: any[];
+  clients?: any[];
 }

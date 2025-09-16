@@ -1,10 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
-import { Card } from '../../components/Card';
 import { Spinner } from '../../components/Spinner';
 
 interface Client {
@@ -319,6 +318,7 @@ export const OperationsOverviewPage: React.FC = () => {
     );
   }
 
+
   return (
     <div className="min-h-screen bg-gray-50/50">
       {/* Header Section */}
@@ -345,7 +345,7 @@ export const OperationsOverviewPage: React.FC = () => {
                 </div>
                 <input
                   type="text"
-                  placeholder={t('operations.searchClients', 'Rechercher des clients...')}
+                  placeholder={t('operations.searchClients', 'Rechercher des clients...') as string}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full sm:w-80 pl-12 pr-4 py-3 border border-gray-200 rounded-2xl bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 text-gray-900 placeholder-gray-500"
@@ -362,6 +362,7 @@ export const OperationsOverviewPage: React.FC = () => {
                 <option value="active">{t('operations.activeClients', 'Clients actifs')}</option>
                 <option value="inactive">{t('operations.inactiveClients', 'Clients inactifs')}</option>
               </select>
+
             </div>
           </div>
         </div>
