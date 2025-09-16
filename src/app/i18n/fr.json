@@ -140,6 +140,9 @@
     "subtitle": "Gestion des prêts de caisses vides",
     "add": "Nouveau prêt",
     "crates": "Caisses",
+    "crateType": "Type de caisse",
+    "stockAvailable": "Stock disponible",
+    "stockDescription": "Caisses vides disponibles pour ce type",
     "date": "Date",
     "ticket": "Ticket",
     "markReturned": "Marquer retourné",
@@ -157,12 +160,45 @@
     "totalConfigured": "Total",
     "clientInfo": {
       "title": "Informations du client",
+      "reservedRooms": "Chambres réservées",
+      "cautionPaid": "Caution payée",
+      "cratesCanTake": "Caisses pouvant être prises",
+      "overLimit": "Limite dépassée!",
+      "limit": "limite",
       "reservedCrates": "Caisses réservées",
       "emptyCratesNeeded": "Caisses vides nécessaires",
       "activeReservations": "Réservations actives",
       "closedReservations": "Réservations fermées",
       "noReservations": "Ce client n'a aucune réservation active",
       "goToReservations": "Aller aux réservations"
+    },
+    "crateTypes": {
+      "wood": "Bois",
+      "plastic": "Plastique"
+    },
+    "colors": {
+      "red": "Rouge",
+      "blue": "Bleu",
+      "green": "Vert",
+      "yellow": "Jaune",
+      "orange": "Orange",
+      "purple": "Violet",
+      "pink": "Rose",
+      "gray": "Gris",
+      "black": "Noir",
+      "white": "Blanc",
+      "brown": "Marron",
+      "cyan": "Cyan",
+      "lime": "Lime",
+      "indigo": "Indigo",
+      "teal": "Sarcelle"
+    },
+    "errors": {
+      "printError": "Erreur lors de l'impression. Essayez de cliquer sur le bouton d'impression dans la fenêtre qui s'est ouverte."
+    },
+    "views": {
+      "table": "Tableau",
+      "cards": "Cartes"
     }
   },
   "settings": {
@@ -349,14 +385,14 @@
       "title": "Sortie de caisse",
       "subtitle": "Enregistrer une sortie de caisse",
       "amount": "Montant sorti (MAD)",
-      "reason": "Raison de la sortie",
-      "selectReason": "Sélectionner une raison",
-      "customReason": "Préciser la raison",
-      "customReasonPlaceholder": "Décrire la raison de la sortie...",
+      "reason": "Motif de la sortie",
+      "selectReason": "Choisir un motif",
+      "customReason": "Préciser le motif",
+      "customReasonPlaceholder": "Décrire le motif de la sortie...",
       "reference": "Référence",
       "referencePlaceholder": "REF-SORT-001",
-      "notes": "Notes additionnelles (optionnel)",
-      "notesPlaceholder": "Notes additionnelles...",
+      "notes": "Notes supplémentaires (optionnel)",
+      "notesPlaceholder": "Notes supplémentaires...",
       "electricityBill": "Paiement facture électricité",
       "billImage": "Photo de la facture d'électricité",
       "uploadImage": "Cliquer pour ajouter une photo",
@@ -377,6 +413,10 @@
         "material": "Achat de matériel",
         "admin": "Frais administratifs",
         "other": "Autre dépense"
+      },
+      "errors": {
+        "fileTooLarge": "Le fichier est trop volumineux. Taille maximale: 10MB",
+        "invalidFileType": "Veuillez sélectionner un fichier image valide"
       }
     }
   },

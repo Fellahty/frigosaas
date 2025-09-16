@@ -64,7 +64,7 @@ export const PaymentRecordingModal: React.FC<PaymentRecordingModalProps> = ({ is
       const paddedNumber = nextNumber.toString().padStart(3, '0');
       return `PAY-${currentYear}-${paddedNumber}`;
     } catch (error) {
-      console.error('Error generating payment reference:', error);
+      console.error('Erreur lors de la génération de la référence de paiement:', error);
       // Fallback to timestamp-based reference
       const now = new Date();
       const timestamp = now.getTime().toString().slice(-6);

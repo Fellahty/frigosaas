@@ -50,7 +50,7 @@ export const CashOutModal: React.FC<CashOutModalProps> = ({ isOpen, onClose }) =
       const paddedNumber = nextNumber.toString().padStart(3, '0');
       return `SORT-${currentYear}-${paddedNumber}`;
     } catch (error) {
-      console.error('Error generating reference:', error);
+      console.error('Erreur lors de la génération de la référence:', error);
       // Fallback to timestamp-based reference
       const now = new Date();
       const timestamp = now.getTime().toString().slice(-6);
@@ -227,12 +227,12 @@ export const CashOutModal: React.FC<CashOutModalProps> = ({ isOpen, onClose }) =
                     if (file) {
                       // Validate file size (10MB max)
                       if (file.size > 10 * 1024 * 1024) {
-                        alert('Le fichier est trop volumineux. Taille maximale: 10MB');
+                        alert(t('caisse.cashOut.errors.fileTooLarge'));
                         return;
                       }
                       // Validate file type
                       if (!file.type.startsWith('image/')) {
-                        alert('Veuillez sélectionner un fichier image valide');
+                        alert(t('caisse.cashOut.errors.invalidFileType'));
                         return;
                       }
                       setForm(prev => ({ ...prev, image: file }));

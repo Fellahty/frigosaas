@@ -44,10 +44,10 @@ interface LoanItem {
 interface ClientOption { id: string; name: string }
 
 interface ClientStats {
-  totalReservedCrates: number;
   totalEmptyCratesNeeded: number;
-  activeReservations: number;
-  closedReservations: number;
+  reservedRooms: string[];
+  totalCautionPaid: number;
+  cratesCanTake: number;
 }
 
 // Component for displaying client information
@@ -59,35 +59,92 @@ const ClientInfoDisplay: React.FC<{
   
   return (
     <div className="md:col-span-2 lg:col-span-3">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-blue-900 mb-3 flex items-center">
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 shadow-sm">
+        <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           {t('loans.clientInfo.title', 'Informations du client')}
         </h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{clientStats.totalReservedCrates}</div>
-            <div className="text-xs text-blue-700">{t('loans.clientInfo.reservedCrates', 'Caisses réservées')}</div>
+        
+        {/* Room Reservations */}
+        {clientStats.reservedRooms.length > 0 && (
+          <div className="mb-6">
+            <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              {t('loans.clientInfo.reservedRooms', 'Chambres réservées')}
+            </h5>
+            <div className="flex flex-wrap gap-2">
+              {clientStats.reservedRooms.map((room, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200"
+                >
+                  {room}
+                </span>
+              ))}
+            </div>
           </div>
+        )}
+
+        {/* Caution Information */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{clientStats.totalCautionPaid.toLocaleString()} DH</div>
+              <div className="text-xs text-gray-600">{t('loans.clientInfo.cautionPaid', 'Caution payée')}</div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="text-center">
+              <div className={`text-2xl font-bold ${clientStats.cratesCanTake > 1000 ? 'text-red-600' : 'text-blue-600'}`}>
+                {clientStats.cratesCanTake}
+              </div>
+              <div className="text-xs text-gray-600 mb-3">{t('loans.clientInfo.cratesCanTake', 'Caisses pouvant être prises')}</div>
+              
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    clientStats.cratesCanTake > 1000 
+                      ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                      : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                  }`}
+                  style={{ 
+                    width: `${Math.min((clientStats.cratesCanTake / 1000) * 100, 100)}%` 
+                  }}
+                ></div>
+              </div>
+              
+              {/* Progress Label */}
+              <div className="text-xs text-gray-500 mt-2">
+                {clientStats.cratesCanTake > 1000 ? (
+                  <span className="text-red-600 font-medium">
+                    {t('loans.clientInfo.overLimit', 'Limite dépassée!')}
+                  </span>
+                ) : (
+                  <span>
+                    {clientStats.cratesCanTake}/1000 {t('loans.clientInfo.limit', 'limite')}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Crate Information */}
+        <div className="grid grid-cols-1 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">{clientStats.totalEmptyCratesNeeded}</div>
             <div className="text-xs text-green-700">{t('loans.clientInfo.emptyCratesNeeded', 'Caisses vides nécessaires')}</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-orange-600">{clientStats.activeReservations}</div>
-            <div className="text-xs text-orange-700">{t('loans.clientInfo.activeReservations', 'Réservations actives')}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-600">{clientStats.closedReservations}</div>
-            <div className="text-xs text-gray-700">{t('loans.clientInfo.closedReservations', 'Réservations fermées')}</div>
-          </div>
         </div>
         
         {/* Action button when no reservations */}
-        {clientStats.totalReservedCrates === 0 && (
-          <div className="mt-4 pt-4 border-t border-blue-200">
+        {clientStats.totalEmptyCratesNeeded === 0 && (
+          <div className="mt-6 pt-4 border-t border-blue-200">
             <div className="text-center">
               <p className="text-sm text-blue-700 mb-3">
                 {t('loans.clientInfo.noReservations', 'Ce client n\'a aucune réservation active')}
@@ -115,6 +172,156 @@ export const EmptyCrateLoansPage: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  // Helper function to translate crate types
+  const translateCrateType = (type: CrateType): string => {
+    return t(`loans.crateTypes.${type}`, type);
+  };
+
+  // Helper function to translate colors
+  const translateColor = (color: string): string => {
+    return t(`loans.colors.${color.toLowerCase()}`, color);
+  };
+
+  // Card view component - Apple-style design
+  const LoanCard: React.FC<{ loan: LoanItem }> = ({ loan }) => (
+    <div className="group relative">
+      <div className="bg-white/80 backdrop-blur-xl border border-white/20 rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/5 hover:shadow-3xl hover:shadow-black/10 transition-all duration-500 hover:-translate-y-1 sm:hover:-translate-y-2 hover:scale-[1.01] sm:hover:scale-[1.02] overflow-hidden">
+        {/* Status indicator bar */}
+        <div className={`h-1 w-full ${
+          loan.status === 'open' 
+            ? 'bg-gradient-to-r from-orange-400 to-orange-500' 
+            : 'bg-gradient-to-r from-green-400 to-green-500'
+        }`}></div>
+        
+        <div className="p-4 sm:p-6">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-4 sm:mb-6">
+            <div className="flex-1 min-w-0 mr-3">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 tracking-tight break-words">
+                {loan.clientName || '-'}
+              </h3>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                <p className="text-sm font-medium text-gray-600">
+                  {loan.crates} {loan.crates > 1 ? 'caisses' : 'caisse'}
+                </p>
+              </div>
+            </div>
+            <div className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm flex-shrink-0 ${
+              loan.status === 'open' 
+                ? 'bg-orange-100/80 text-orange-800 border border-orange-200/50' 
+                : 'bg-green-100/80 text-green-800 border border-green-200/50'
+            }`}>
+              {loan.status === 'open' ? 'Ouvert' : 'Rendu'}
+            </div>
+          </div>
+          
+          {/* Crate Type Section */}
+          <div className="mb-4 sm:mb-6">
+            <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gradient-to-br from-gray-50/50 to-gray-100/30 rounded-xl sm:rounded-2xl border border-gray-100/50">
+              <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full shadow-lg flex-shrink-0 ${
+                loan.crateColor === 'blue' ? 'bg-gradient-to-br from-blue-400 to-blue-600' :
+                loan.crateColor === 'green' ? 'bg-gradient-to-br from-green-400 to-green-600' :
+                loan.crateColor === 'red' ? 'bg-gradient-to-br from-red-400 to-red-600' :
+                loan.crateColor === 'yellow' ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
+                loan.crateColor === 'white' ? 'bg-gradient-to-br from-gray-100 to-gray-300 border-2 border-gray-300' :
+                loan.crateColor === 'black' ? 'bg-gradient-to-br from-gray-800 to-black' :
+                loan.crateColor === 'gray' ? 'bg-gradient-to-br from-gray-400 to-gray-600' :
+                loan.crateColor === 'brown' ? 'bg-gradient-to-br from-amber-500 to-amber-700' : 'bg-gradient-to-br from-gray-400 to-gray-600'
+              }`}></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm sm:text-base font-semibold text-gray-900 break-words">
+                  {loan.crateTypeName || 'N/A'}
+                </p>
+                <p className="text-xs sm:text-sm text-gray-600 capitalize break-words">
+                  {translateCrateType(loan.crateType)} • {loan.crateColor}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Info Section - Vertical Layout */}
+          <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+            {/* Date */}
+            <div className="flex items-center gap-3 p-3 sm:p-4 bg-white/60 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-100/50">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Date de création</p>
+                <p className="text-sm sm:text-base font-semibold text-gray-900 break-words">{loan.createdAt.toLocaleDateString('fr-FR')}</p>
+              </div>
+            </div>
+            
+            {/* Ticket ID */}
+            <div className="flex items-center gap-3 p-3 sm:p-4 bg-white/60 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-100/50">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-100 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Numéro de ticket</p>
+                <p className="text-sm sm:text-base font-semibold text-gray-900 font-mono break-all">{loan.ticketId}</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {loan.status === 'open' && (
+                <button
+                  onClick={() => handleMarkReturned(loan)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Rendu</span>
+                </button>
+              )}
+              
+              <button
+                onClick={() => handlePrintTicket(loan)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                <span>Print</span>
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-1 justify-end sm:justify-start">
+              <button
+                onClick={() => handleEditLoan(loan)}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 hover:scale-110"
+                title="Modifier"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              
+              <button
+                onClick={() => handleDeleteLoan(loan)}
+                className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all duration-200 hover:scale-110"
+                title="Supprimer"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   // Get site settings for company name
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings', tenantId],
@@ -135,6 +342,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
   const [loanToReturn, setLoanToReturn] = React.useState<LoanItem | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [loanToDelete, setLoanToDelete] = React.useState<LoanItem | null>(null);
+  const [viewType, setViewType] = React.useState<'table' | 'cards'>('table');
   const [form, setForm] = React.useState<{ 
     clientId: string; 
     crates: number; 
@@ -180,6 +388,19 @@ export const EmptyCrateLoansPage: React.FC = () => {
     },
   });
 
+  // Get rooms information
+  const { data: rooms } = useQuery({
+    queryKey: ['rooms', tenantId],
+    queryFn: async () => {
+      const q = query(collection(db, 'tenants', tenantId, 'rooms'));
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    },
+  });
+
   // Get client reservation information
   const { data: clientReservations } = useQuery({
     queryKey: ['client-reservations', tenantId, form.clientId],
@@ -199,38 +420,113 @@ export const EmptyCrateLoansPage: React.FC = () => {
     enabled: !!form.clientId,
   });
 
+  // Get deposit per crate from pricing settings
+  const { data: depositPerCrate = 50 } = useQuery({
+    queryKey: ['deposit-per-crate', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return 50;
+      try {
+        const pricingRef = doc(db, `tenants/${tenantId}/settings/pricing`);
+        const pricingDoc = await getDoc(pricingRef);
+        if (pricingDoc.exists()) {
+          const data = pricingDoc.data();
+          return data?.caution_par_caisse || 50;
+        }
+        return 50;
+      } catch (error) {
+        console.error('Error fetching deposit per crate:', error);
+        return 50;
+      }
+    },
+    enabled: !!tenantId,
+  });
+
+  // Get client caution records from operations
+  const { data: cautionRecords } = useQuery({
+    queryKey: ['caution-records', tenantId, form.clientId],
+    queryFn: async () => {
+      if (!form.clientId) return [];
+      const q = query(
+        collection(db, 'caution_records'),
+        where('tenantId', '==', tenantId),
+        where('clientId', '==', form.clientId)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          clientId: data.clientId || '',
+          clientName: data.clientName || '',
+          amount: data.amount || 0,
+          type: data.type || 'deposit',
+          method: data.method || 'cash',
+          reference: data.reference || '',
+          reason: data.reason || '',
+          status: data.status || 'completed',
+          createdAt: data.createdAt?.toDate?.() || new Date(),
+          updatedAt: data.updatedAt?.toDate?.() || new Date(),
+          processedBy: data.processedBy || '',
+          notes: data.notes || ''
+        };
+      });
+    },
+    enabled: !!form.clientId,
+  });
+
   // Calculate client statistics
   const clientStats = React.useMemo(() => {
     if (!clientReservations || clientReservations.length === 0) {
       return {
-        totalReservedCrates: 0,
         totalEmptyCratesNeeded: 0,
-        activeReservations: 0,
-        closedReservations: 0
+        reservedRooms: [],
+        totalCautionPaid: 0,
+        cratesCanTake: 0
       };
     }
 
     const stats = clientReservations.reduce((acc, reservation: any) => {
       const reservedCrates = reservation.reservedCrates || 0;
-      acc.totalReservedCrates += reservedCrates;
       acc.totalEmptyCratesNeeded += reservedCrates; // Assuming each reserved crate needs an empty crate
-      
-      if (reservation.status === 'APPROVED') {
-        acc.activeReservations += 1;
-      } else if (reservation.status === 'CLOSED') {
-        acc.closedReservations += 1;
+
+      // Collect room names
+      if (reservation.selectedRooms && Array.isArray(reservation.selectedRooms)) {
+        reservation.selectedRooms.forEach((roomId: string) => {
+          const room = rooms?.find((r: any) => r.id === roomId);
+          if (room) {
+            const roomName = room.room || room.name || `Chambre ${roomId}`;
+            if (!acc.reservedRooms.includes(roomName)) {
+              acc.reservedRooms.push(roomName);
+            }
+          }
+        });
       }
       
       return acc;
     }, {
-      totalReservedCrates: 0,
       totalEmptyCratesNeeded: 0,
-      activeReservations: 0,
-      closedReservations: 0
+      reservedRooms: [],
+      totalCautionPaid: 0,
+      cratesCanTake: 0
     });
 
+    // Calculate caution information
+    if (cautionRecords && cautionRecords.length > 0) {
+      // Calculate total deposits (only completed deposits)
+      stats.totalCautionPaid = cautionRecords
+        .filter((record: any) => record.type === 'deposit' && record.status === 'completed')
+        .reduce((sum: number, record: any) => sum + (record.amount || 0), 0);
+    }
+    
+    // Calculate how many crates the client can take based on their caution amount
+    if (depositPerCrate > 0) {
+      stats.cratesCanTake = Math.floor(stats.totalCautionPaid / depositPerCrate);
+    } else {
+      stats.cratesCanTake = 0;
+    }
+
     return stats;
-  }, [clientReservations]);
+  }, [clientReservations, rooms, cautionRecords, depositPerCrate]);
 
 
 
@@ -658,8 +954,8 @@ export const EmptyCrateLoansPage: React.FC = () => {
             printWindow.print();
             console.log('Print dialog opened successfully');
           } catch (error) {
-            console.error('Error printing:', error);
-            alert('Erreur lors de l\'impression. Essayez de cliquer sur le bouton d\'impression dans la fenêtre qui s\'est ouverte.');
+            console.error('Erreur lors de l\'impression:', error);
+            alert(t('loans.errors.printError'));
           }
         }, 1000);
       }, 500);
@@ -811,15 +1107,47 @@ export const EmptyCrateLoansPage: React.FC = () => {
             {t('loans.subtitle', 'Gestion des prêts de caisses vides')}
           </p>
         </div>
-        <button 
-          onClick={() => setIsAdding((v) => !v)} 
-          className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-3 rounded-lg sm:rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-xs sm:text-sm md:text-base"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5">
-            <path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75V11h5.75a.75.75 0 010 1.5H12.75v5.75a.75.75 0 01-1.5 0V12.5H5.5a.75.75 0 010-1.5h5.75V5.25A.75.75 0 0112 4.5z" clipRule="evenodd" />
-          </svg>
-          {t('loans.add', 'Nouveau prêt')}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* View Toggle */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewType('table')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                viewType === 'table'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {t('loans.views.table')}
+            </button>
+            <button
+              onClick={() => setViewType('cards')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                viewType === 'cards'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              {t('loans.views.cards')}
+            </button>
+          </div>
+          
+          <button 
+            onClick={() => setIsAdding((v) => !v)} 
+            className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-3 rounded-lg sm:rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-xs sm:text-sm md:text-base"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5">
+              <path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75V11h5.75a.75.75 0 010 1.5H12.75v5.75a.75.75 0 01-1.5 0V12.5H5.5a.75.75 0 010-1.5h5.75V5.25A.75.75 0 0112 4.5z" clipRule="evenodd" />
+            </svg>
+            {t('loans.add', 'Nouveau prêt')}
+          </button>
+        </div>
       </div>
 
       {/* Résumé des caisses vides - Apple-style design */}
@@ -909,7 +1237,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type de caisse</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('loans.crateType', 'Type de caisse')}</label>
               <select
                 value={form.crateTypeId}
                 onChange={(e) => setForm((f) => ({ ...f, crateTypeId: e.target.value }))}
@@ -918,10 +1246,30 @@ export const EmptyCrateLoansPage: React.FC = () => {
                 <option value="">Sélectionner un type de caisse</option>
                 {(crateTypes || []).map((ct) => (
                   <option key={ct.id} value={ct.id}>
-                    {ct.customName || ct.name} - {ct.type} - {ct.color}
+                    {ct.customName || ct.name} - {translateCrateType(ct.type)} - {translateColor(ct.color)}
                   </option>
                 ))}
               </select>
+              
+              {/* Stock Information */}
+              {form.crateTypeId && (
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-blue-900">
+                      {t('loans.stockAvailable', 'Stock disponible')}:
+                    </span>
+                    <span className="text-lg font-bold text-blue-600">
+                      {(() => {
+                        const selectedCrateType = crateTypes?.find(ct => ct.id === form.crateTypeId);
+                        return selectedCrateType ? selectedCrateType.quantity || 0 : 0;
+                      })()}
+                    </span>
+                  </div>
+                  <div className="text-xs text-blue-700 mt-1">
+                    {t('loans.stockDescription', 'Caisses vides disponibles pour ce type')}
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Client Information Display */}
@@ -1007,9 +1355,11 @@ export const EmptyCrateLoansPage: React.FC = () => {
         </Card>
       )}
 
-      <Card className="bg-white border-0 shadow-sm rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
+      {/* Loans Display - Table or Cards */}
+      {viewType === 'table' ? (
+        <Card className="bg-white border-0 shadow-sm rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
             <TableHead>
               <TableRow className="border-b border-gray-100">
                 <TableHeader className="text-left py-3 px-3 sm:py-4 sm:px-4 md:px-6 font-semibold text-gray-900 text-xs sm:text-sm">
@@ -1019,7 +1369,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
                   {t('loans.crates', 'Caisses')}
                 </TableHeader>
                 <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
-                  Type de caisse
+                  {t('loans.crateType', 'Type de caisse')}
                 </TableHeader>
                 <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden sm:table-cell">
                   {t('clients.created', 'Créé le')}
@@ -1062,7 +1412,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
                           l.crateColor === 'gray' ? 'bg-gray-500' :
                           l.crateColor === 'brown' ? 'bg-amber-600' : 'bg-gray-400'
                         }`}></div>
-                        <span className="text-xs text-gray-600 capitalize">{l.crateType}</span>
+                        <span className="text-xs text-gray-600 capitalize">{translateCrateType(l.crateType)}</span>
                       </div>
                     </div>
                   </TableCell>
@@ -1134,8 +1484,34 @@ export const EmptyCrateLoansPage: React.FC = () => {
             )}
           </TableBody>
         </Table>
+          </div>
+        </Card>
+      ) : (
+        <div className="w-full">
+          {Array.isArray(loans) && loans.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8 justify-items-center px-4 sm:px-0">
+              {loans.map((loan) => (
+                <div key={loan.id} className="w-full max-w-xs sm:max-w-sm">
+                  <LoanCard loan={loan} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <Card className="bg-white border-0 shadow-sm rounded-2xl overflow-hidden max-w-md w-full">
+                <div className="text-center py-12 text-gray-500">
+                  <div className="flex flex-col items-center gap-2">
+                    <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <span className="text-sm font-medium">Aucun prêt enregistré</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
-      </Card>
+      )}
 
       {/* Confirmation Modal for Return */}
       <ConfirmationModal

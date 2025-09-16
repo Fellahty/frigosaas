@@ -56,7 +56,7 @@ export const PartialPaymentModal: React.FC<PartialPaymentModalProps> = ({ isOpen
       const paddedNumber = nextNumber.toString().padStart(3, '0');
       return `PARTIAL-${currentYear}-${paddedNumber}`;
     } catch (error) {
-      console.error('Error generating partial payment reference:', error);
+      console.error('Erreur lors de la génération de la référence de paiement partiel:', error);
       const now = new Date();
       const timestamp = now.getTime().toString().slice(-6);
       return `PARTIAL-${now.getFullYear()}-${timestamp}`;
@@ -87,7 +87,7 @@ export const PartialPaymentModal: React.FC<PartialPaymentModalProps> = ({ isOpen
   // Partial payment mutation
   const recordPartialPayment = useMutation({
     mutationFn: async (data: typeof form) => {
-      if (!payment) throw new Error('No payment selected');
+      if (!payment) throw new Error('Aucun paiement sélectionné');
 
       // Record the cash movement
       const movementData = {
