@@ -47,6 +47,7 @@ interface ClientStats {
   totalEmptyCratesNeeded: number;
   reservedRooms: string[];
   totalCautionPaid: number;
+  totalSortieAmount: number;
   cratesCanTake: number;
 }
 
@@ -90,11 +91,17 @@ const ClientInfoDisplay: React.FC<{
         )}
 
         {/* Caution Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-lg p-4 border border-gray-200">
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{clientStats.totalCautionPaid.toLocaleString()} DH</div>
               <div className="text-xs text-gray-600">{t('loans.clientInfo.cautionPaid', 'Caution payée')}</div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">{clientStats.totalSortieAmount.toLocaleString()} DH</div>
+              <div className="text-xs text-gray-600">{t('loans.clientInfo.totalSortie', 'Total sortie')}</div>
             </div>
           </div>
           <div className="bg-white rounded-lg p-4 border border-gray-200">
@@ -113,7 +120,7 @@ const ClientInfoDisplay: React.FC<{
                       : 'bg-gradient-to-r from-blue-500 to-blue-600'
                   }`}
                   style={{ 
-                    width: `${Math.min((clientStats.cratesCanTake / 1000) * 100, 100)}%` 
+                    width: `${Math.min(Math.max((clientStats.cratesCanTake / 1000) * 100, 0), 100)}%` 
                   }}
                 ></div>
               </div>
@@ -481,6 +488,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
         totalEmptyCratesNeeded: 0,
         reservedRooms: [],
         totalCautionPaid: 0,
+        totalSortieAmount: 0,
         cratesCanTake: 0
       };
     }
@@ -507,6 +515,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
       totalEmptyCratesNeeded: 0,
       reservedRooms: [],
       totalCautionPaid: 0,
+      totalSortieAmount: 0,
       cratesCanTake: 0
     });
 
@@ -516,6 +525,11 @@ export const EmptyCrateLoansPage: React.FC = () => {
       stats.totalCautionPaid = cautionRecords
         .filter((record: any) => record.type === 'deposit' && record.status === 'completed')
         .reduce((sum: number, record: any) => sum + (record.amount || 0), 0);
+      
+      // Calculate total sortie amount (all completed records)
+      stats.totalSortieAmount = cautionRecords
+        .filter((record: any) => record.status === 'completed')
+        .reduce((sum: number, record: any) => sum + (record.amount || 0), 0);
     }
     
     // Calculate how many crates the client can take based on their caution amount
@@ -524,6 +538,15 @@ export const EmptyCrateLoansPage: React.FC = () => {
     } else {
       stats.cratesCanTake = 0;
     }
+
+    // Debug logging
+    console.log('Client Stats Debug:', {
+      totalCautionPaid: stats.totalCautionPaid,
+      totalSortieAmount: stats.totalSortieAmount,
+      depositPerCrate,
+      cratesCanTake: stats.cratesCanTake,
+      cautionRecords: cautionRecords?.length || 0
+    });
 
     return stats;
   }, [clientReservations, rooms, cautionRecords, depositPerCrate]);
