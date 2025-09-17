@@ -200,6 +200,25 @@
     "views": {
       "table": "Tableau",
       "cards": "Cartes"
+    },
+    "filterByName": "Filtrer par nom de client",
+    "searchPlaceholder": "Rechercher un client...",
+    "filterByClient": "Filtrer par client",
+    "allClients": "Tous les clients",
+    "searchByName": "Rechercher par nom",
+    "sortBy": "Trier par",
+    "sortByDate": "Date",
+    "sortByClient": "Client",
+    "sortByCrates": "Caisses",
+    "sortByCumulative": "Cumulatif",
+    "sortOrder": "Ordre",
+    "cumulative": "Cumulatif",
+    "cumulativeTable": {
+      "title": "Tableau cumulatif des prêts",
+      "totalCrates": "Total caisses",
+      "loanCount": "Nombre de prêts",
+      "firstLoan": "Premier prêt",
+      "lastLoan": "Dernier prêt"
     }
   },
   "settings": {

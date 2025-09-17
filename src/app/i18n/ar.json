@@ -162,6 +162,72 @@
       "closedReservations": "الحجوزات المغلقة",
       "noReservations": "هذا العميل ليس لديه حجوزات نشطة",
       "goToReservations": "الذهاب إلى الحجوزات"
+    },
+    "crateType": "نوع الصندوق",
+    "crates": "الصناديق",
+    "stockAvailable": "المخزون المتاح",
+    "stockDescription": "الصناديق الفارغة المتاحة لهذا النوع",
+    "date": "التاريخ",
+    "ticket": "تذكرة",
+    "markReturned": "تحديد كمعاد",
+    "editLoanInfo": "تعديل معلومات الإعارة",
+    "confirmReturnTitle": "تأكيد الإرجاع",
+    "confirmReturnMessage": "هل أنت متأكد من أن الصناديق قد رجعت إلى المخزن؟",
+    "confirmReturn": "تأكيد الإرجاع",
+    "status_open": "مفتوح",
+    "status_returned": "مغلق",
+    "empty": "لا توجد إعارات",
+    "errorLoading": "خطأ في التحميل",
+    "ticketTitle": "تذكرة إعارة (صناديق فارغة)",
+    "emptyCratesTitle": "الصناديق الفارغة",
+    "availableEmptyCrates": "متاحة",
+    "totalConfigured": "المجموع",
+    "crateTypes": {
+      "wood": "خشب",
+      "plastic": "بلاستيك"
+    },
+    "colors": {
+      "red": "أحمر",
+      "blue": "أزرق",
+      "green": "أخضر",
+      "yellow": "أصفر",
+      "orange": "برتقالي",
+      "purple": "بنفسجي",
+      "pink": "وردي",
+      "gray": "رمادي",
+      "black": "أسود",
+      "white": "أبيض",
+      "brown": "بني",
+      "cyan": "سماوي",
+      "lime": "ليموني",
+      "indigo": "نيلي",
+      "teal": "تركوازي"
+    },
+    "errors": {
+      "printError": "خطأ في الطباعة. حاول النقر على زر الطباعة في النافذة التي فتحت."
+    },
+    "views": {
+      "table": "جدول",
+      "cards": "بطاقات"
+    },
+    "filterByName": "تصفية حسب اسم العميل",
+    "searchPlaceholder": "البحث عن عميل...",
+    "filterByClient": "تصفية حسب العميل",
+    "allClients": "جميع العملاء",
+    "searchByName": "البحث بالاسم",
+    "sortBy": "ترتيب حسب",
+    "sortByDate": "التاريخ",
+    "sortByClient": "العميل",
+    "sortByCrates": "الصناديق",
+    "sortByCumulative": "التراكمي",
+    "sortOrder": "الترتيب",
+    "cumulative": "التراكمي",
+    "cumulativeTable": {
+      "title": "جدول الإعارات التراكمي",
+      "totalCrates": "إجمالي الصناديق",
+      "loanCount": "عدد الإعارات",
+      "firstLoan": "أول إعارة",
+      "lastLoan": "آخر إعارة"
     }
   },
   "settings": {

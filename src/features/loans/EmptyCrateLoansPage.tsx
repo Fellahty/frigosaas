@@ -350,6 +350,11 @@ export const EmptyCrateLoansPage: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [loanToDelete, setLoanToDelete] = React.useState<LoanItem | null>(null);
   const [viewType, setViewType] = React.useState<'table' | 'cards'>('table');
+  const [nameFilter, setNameFilter] = React.useState('');
+  const [clientFilter, setClientFilter] = React.useState('');
+  const [sortBy, setSortBy] = React.useState<'date' | 'client' | 'crates' | 'cumulative'>('date');
+  const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('asc');
+  const [showCumulativeTable, setShowCumulativeTable] = React.useState(false);
   const [form, setForm] = React.useState<{ 
     clientId: string; 
     crates: number; 
@@ -596,6 +601,122 @@ export const EmptyCrateLoansPage: React.FC = () => {
     
     return Math.max(0, totalEmptyCrates - totalLoaned);
   }, [totalEmptyCrates, loans]);
+
+  // Filter loans by client name and client selection
+  const filteredLoans = React.useMemo(() => {
+    if (!loans) return [];
+    
+    let filtered = loans;
+    
+    // Filter by name search
+    if (nameFilter.trim()) {
+      filtered = filtered.filter(loan => 
+        loan.clientName.toLowerCase().includes(nameFilter.toLowerCase())
+      );
+    }
+    
+    // Filter by selected client
+    if (clientFilter) {
+      filtered = filtered.filter(loan => loan.clientId === clientFilter);
+    }
+    
+    return filtered;
+  }, [loans, nameFilter, clientFilter]);
+
+  // Add cumulative data to each loan
+  const loansWithCumulative = React.useMemo(() => {
+    if (!filteredLoans) return [];
+    
+    // Group loans by client and sort by date
+    const clientLoans = new Map<string, LoanItem[]>();
+    filteredLoans.forEach(loan => {
+      if (!clientLoans.has(loan.clientName)) {
+        clientLoans.set(loan.clientName, []);
+      }
+      clientLoans.get(loan.clientName)!.push(loan);
+    });
+
+    // Sort each client's loans by date and calculate cumulative
+    const result: (LoanItem & { cumulativeCrates: number })[] = [];
+    
+    clientLoans.forEach(clientLoanList => {
+      // Sort by creation date
+      const sortedLoans = clientLoanList.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      
+      let cumulative = 0;
+      sortedLoans.forEach(loan => {
+        cumulative += loan.crates;
+        result.push({
+          ...loan,
+          cumulativeCrates: cumulative
+        });
+      });
+    });
+
+    // Sort results based on selected criteria
+    return result.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'date':
+          comparison = a.createdAt.getTime() - b.createdAt.getTime();
+          break;
+        case 'client':
+          comparison = a.clientName.localeCompare(b.clientName);
+          break;
+        case 'crates':
+          comparison = a.crates - b.crates;
+          break;
+        case 'cumulative':
+          comparison = a.cumulativeCrates - b.cumulativeCrates;
+          break;
+        default:
+          comparison = a.createdAt.getTime() - b.createdAt.getTime();
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredLoans, sortBy, sortOrder]);
+
+  // Calculate cumulative data for each client
+  const cumulativeData = React.useMemo(() => {
+    if (!loans) return [];
+    
+    const clientTotals = new Map<string, {
+      clientName: string;
+      totalCrates: number;
+      firstLoanDate: Date;
+      lastLoanDate: Date;
+      loanCount: number;
+    }>();
+
+    loans.forEach(loan => {
+      const key = loan.clientName;
+      if (!clientTotals.has(key)) {
+        clientTotals.set(key, {
+          clientName: loan.clientName,
+          totalCrates: 0,
+          firstLoanDate: loan.createdAt,
+          lastLoanDate: loan.createdAt,
+          loanCount: 0
+        });
+      }
+      
+      const clientData = clientTotals.get(key)!;
+      clientData.totalCrates += loan.crates;
+      clientData.loanCount += 1;
+      
+      if (loan.createdAt < clientData.firstLoanDate) {
+        clientData.firstLoanDate = loan.createdAt;
+      }
+      if (loan.createdAt > clientData.lastLoanDate) {
+        clientData.lastLoanDate = loan.createdAt;
+      }
+    });
+
+    return Array.from(clientTotals.values())
+      .sort((a, b) => b.totalCrates - a.totalCrates);
+  }, [loans]);
 
 
   const addLoan = useMutation({
@@ -1162,6 +1283,20 @@ export const EmptyCrateLoansPage: React.FC = () => {
           </div>
           
           <button 
+            onClick={() => setShowCumulativeTable(!showCumulativeTable)} 
+            className={`inline-flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:bg-gray-100 transition-all duration-200 font-medium text-xs sm:text-sm ${
+              showCumulativeTable 
+                ? 'bg-gray-200 text-gray-900' 
+                : 'bg-gray-100 text-gray-700 hover:text-gray-900'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            {showCumulativeTable ? 'Masquer cumulatif' : 'Voir cumulatif'}
+          </button>
+          
+          <button 
             onClick={() => setIsAdding((v) => !v)} 
             className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-3 rounded-lg sm:rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-xs sm:text-sm md:text-base"
           >
@@ -1241,6 +1376,257 @@ export const EmptyCrateLoansPage: React.FC = () => {
           </div>
         </div>
       </Card>
+
+      {/* Filter and Cumulative Table Section */}
+      <div className="space-y-4">
+        {/* Modern Filter Section - Mobile Optimized */}
+        <Card className="bg-white border-0 shadow-sm rounded-xl">
+          <div className="p-3 sm:p-4 md:p-6">
+            <div className="space-y-3 sm:space-y-4">
+              {/* Mobile-First Filter Controls */}
+              <div className="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+                {/* Client Select Filter - Full width on mobile */}
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700">
+                    {t('loans.filterByClient', 'Client')}
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={clientFilter}
+                      onChange={(e) => setClientFilter(e.target.value)}
+                      className="block w-full pl-3 pr-8 py-2 sm:py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                    >
+                      <option value="">{t('loans.allClients', 'Tous les clients')}</option>
+                      {(clientOptions || []).map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Name Search Filter - Full width on mobile */}
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700">
+                    {t('loans.searchByName', 'Rechercher')}
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                    <input
+                      type="text"
+                      value={nameFilter}
+                      onChange={(e) => setNameFilter(e.target.value)}
+                      placeholder={t('loans.searchPlaceholder', 'Rechercher...')}
+                      className="block w-full pl-9 sm:pl-10 pr-8 sm:pr-10 py-2 sm:py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    {nameFilter && (
+                      <button
+                        onClick={() => setNameFilter('')}
+                        className="absolute inset-y-0 right-0 pr-2 sm:pr-3 flex items-center hover:text-gray-600"
+                      >
+                        <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sort By - Full width on mobile */}
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700">
+                    {t('loans.sortBy', 'Trier par')}
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as any)}
+                      className="block w-full pl-3 pr-8 sm:pr-10 py-2 sm:py-2.5 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                    >
+                      <option value="date">{t('loans.sortByDate', 'Date')}</option>
+                      <option value="client">{t('loans.sortByClient', 'Client')}</option>
+                      <option value="crates">{t('loans.sortByCrates', 'Caisses')}</option>
+                      <option value="cumulative">{t('loans.sortByCumulative', 'Cumulatif')}</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sort Order - Compact on mobile */}
+                <div className="space-y-1.5 sm:space-y-2">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700">
+                    {t('loans.sortOrder', 'Ordre')}
+                  </label>
+                  <div className="flex gap-1 sm:gap-2">
+                    <button
+                      onClick={() => setSortOrder('asc')}
+                      className={`flex-1 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
+                        sortOrder === 'asc'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      title="Ascendant"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                        <span className="hidden sm:inline">↑</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setSortOrder('desc')}
+                      className={`flex-1 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
+                        sortOrder === 'desc'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      title="Descendant"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                        <span className="hidden sm:inline">↓</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile-Optimized Results Summary */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs sm:text-sm text-gray-600">
+                    <span className="font-medium">{loansWithCumulative.length}</span> {loansWithCumulative.length === 1 ? 'prêt' : 'prêts'}
+                    {(nameFilter || clientFilter) && (
+                      <span className="ml-1 text-blue-600">
+                        (filtré)
+                      </span>
+                    )}
+                  </div>
+                  {(nameFilter || clientFilter) && (
+                    <button
+                      onClick={() => {
+                        setNameFilter('');
+                        setClientFilter('');
+                      }}
+                      className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded-md hover:bg-blue-50 transition-colors"
+                    >
+                      Effacer
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Cumulative Table */}
+        {showCumulativeTable && (
+          <Card className="bg-white border-0 shadow-sm rounded-xl">
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {t('loans.cumulativeTable.title', 'Tableau cumulatif des prêts')}
+                </h3>
+                <div className="text-sm text-gray-600">
+                  {cumulativeData.length} {cumulativeData.length === 1 ? 'client' : 'clients'}
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHead>
+                    <TableRow className="border-b border-gray-200">
+                      <TableHeader className="text-left py-3 px-4 font-semibold text-gray-900 text-sm">
+                        {t('billing.client', 'Client')}
+                      </TableHeader>
+                      <TableHeader className="text-center py-3 px-4 font-semibold text-gray-900 text-sm">
+                        {t('loans.cumulativeTable.totalCrates', 'Total caisses')}
+                      </TableHeader>
+                      <TableHeader className="text-center py-3 px-4 font-semibold text-gray-900 text-sm">
+                        {t('loans.cumulativeTable.loanCount', 'Nombre de prêts')}
+                      </TableHeader>
+                      <TableHeader className="text-center py-3 px-4 font-semibold text-gray-900 text-sm">
+                        {t('loans.cumulativeTable.firstLoan', 'Premier prêt')}
+                      </TableHeader>
+                      <TableHeader className="text-center py-3 px-4 font-semibold text-gray-900 text-sm">
+                        {t('loans.cumulativeTable.lastLoan', 'Dernier prêt')}
+                      </TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {cumulativeData.length > 0 ? (
+                      cumulativeData.map((client, index) => (
+                        <TableRow key={client.clientName} className="hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                          <TableCell className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                <span className="text-sm font-semibold text-blue-600">
+                                  {client.clientName.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="font-medium text-gray-900">
+                                {client.clientName}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-4 text-center">
+                            <div className="text-lg font-bold text-blue-600">
+                              {client.totalCrates}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-4 text-center">
+                            <div className="text-sm font-medium text-gray-600">
+                              {client.loanCount}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-4 text-center">
+                            <div className="text-sm text-gray-600">
+                              {client.firstLoanDate.toLocaleDateString(i18n.language)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-4 text-center">
+                            <div className="text-sm text-gray-600">
+                              {client.lastLoanDate.toLocaleDateString(i18n.language)}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                          <div className="flex flex-col items-center gap-2">
+                            <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <span className="text-sm font-medium">Aucun prêt enregistré</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
 
       {isAdding && (
         <Card>
@@ -1385,47 +1771,67 @@ export const EmptyCrateLoansPage: React.FC = () => {
             <Table>
             <TableHead>
               <TableRow className="border-b border-gray-100">
-                <TableHeader className="text-left py-3 px-3 sm:py-4 sm:px-4 md:px-6 font-semibold text-gray-900 text-xs sm:text-sm">
+                <TableHeader className="text-left py-2 px-2 sm:py-3 sm:px-3 md:px-4 lg:px-6 font-semibold text-gray-900 text-xs sm:text-sm">
                   {t('billing.client', 'Client')}
                 </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
                   {t('loans.crates', 'Caisses')}
                 </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
-                  {t('loans.crateType', 'Type de caisse')}
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden sm:table-cell">
+                  {t('loans.cumulative', 'Cumulatif')}
                 </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden sm:table-cell">
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden md:table-cell">
+                  {t('loans.crateType', 'Type')}
+                </TableHeader>
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden lg:table-cell">
                   {t('clients.created', 'Créé le')}
                 </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
                   {t('billing.status', 'Statut')}
                 </TableHeader>
-                <TableHeader className="text-center py-3 px-1 sm:py-4 sm:px-2 md:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
                   {t('billing.actions', 'Actions')}
                 </TableHeader>
               </TableRow>
             </TableHead>
             <TableBody>
-            {Array.isArray(loans) && loans.length > 0 ? (
-              loans.map((l) => (
+            {Array.isArray(loansWithCumulative) && loansWithCumulative.length > 0 ? (
+              loansWithCumulative.map((l) => (
                 <TableRow key={l.id} className="hover:bg-gray-50/50 border-b border-gray-100 last:border-b-0 transition-colors">
-                  <TableCell className="py-3 px-3 sm:py-4 sm:px-4 md:px-6">
-                    <div className="font-medium text-xs sm:text-sm md:text-base text-gray-900">
+                  <TableCell className="py-2 px-2 sm:py-3 sm:px-3 md:px-4 lg:px-6">
+                    <div className="font-medium text-xs sm:text-sm text-gray-900">
                       {l.clientName || '-'}
                     </div>
+                    {/* Mobile: Show cumulative and date info below client name */}
+                    <div className="sm:hidden mt-1 space-y-1">
+                      <div className="text-xs text-blue-600 font-semibold">
+                        Cumulatif: {l.cumulativeCrates}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {l.createdAt.toLocaleDateString(i18n.language)}
+                      </div>
+                    </div>
                   </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center">
-                    <div className="text-xs sm:text-sm md:text-base font-semibold text-gray-900">
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center">
+                    <div className="text-xs sm:text-sm font-semibold text-gray-900">
                       {l.crates}
                     </div>
                   </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center">
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center hidden sm:table-cell">
+                    <div className="text-xs sm:text-sm font-bold text-blue-600">
+                      {l.cumulativeCrates}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      total
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center hidden md:table-cell">
                     <div className="flex flex-col items-center gap-1">
                       <div className="text-xs sm:text-sm font-medium text-gray-900">
                         {l.crateTypeName || 'N/A'}
                       </div>
                       <div className="flex items-center gap-1">
-                        <div className={`w-3 h-3 rounded-full ${
+                        <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${
                           l.crateColor === 'blue' ? 'bg-blue-500' :
                           l.crateColor === 'green' ? 'bg-green-500' :
                           l.crateColor === 'red' ? 'bg-red-500' :
@@ -1439,13 +1845,13 @@ export const EmptyCrateLoansPage: React.FC = () => {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center hidden sm:table-cell">
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center hidden lg:table-cell">
                     <div className="text-xs sm:text-sm text-gray-600">
                       {l.createdAt.toLocaleDateString(i18n.language)}
                     </div>
                   </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4 text-center">
-                    <span className={`inline-flex items-center px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-medium ${
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-xs font-medium ${
                       l.status === 'open' 
                         ? 'bg-yellow-100 text-yellow-700' 
                         : 'bg-green-100 text-green-700'
@@ -1453,36 +1859,42 @@ export const EmptyCrateLoansPage: React.FC = () => {
                       {l.status === 'open' ? 'Ouvert' : 'Retourné'}
                     </span>
                   </TableCell>
-                  <TableCell className="py-3 px-1 sm:py-4 sm:px-2 md:px-4">
-                    <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2">
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4">
+                    <div className="flex items-center gap-1 sm:gap-1.5">
                       <button 
                         onClick={() => handlePrintTicket(l)} 
-                        className="px-1.5 py-1 sm:px-2 sm:py-1 md:px-3 md:py-1.5 rounded-md sm:rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium transition-colors"
+                        className="px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium transition-colors"
+                        title="Imprimer ticket"
                       >
-                        <span className="hidden sm:inline">Ticket</span>
-                        <span className="sm:hidden">T</span>
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
                       </button>
                       {l.status === 'open' && (
                         <>
                           <button 
                             onClick={() => handleEditLoan(l)} 
-                            className="px-1.5 py-1 sm:px-2 sm:py-1 md:px-3 md:py-1.5 rounded-md sm:rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors"
+                            className="px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors"
+                            title="Modifier"
                           >
-                            <span className="hidden sm:inline">Modifier</span>
-                            <span className="sm:hidden">M</span>
+                            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
                           </button>
                           <button 
                             onClick={() => handleMarkReturned(l)} 
-                            className="px-1.5 py-1 sm:px-2 sm:py-1 md:px-3 md:py-1.5 rounded-md sm:rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium transition-colors"
+                            className="px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-md bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium transition-colors"
+                            title="Retourner"
                           >
-                            <span className="hidden sm:inline">Retourner</span>
-                            <span className="sm:hidden">R</span>
+                            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
                           </button>
                         </>
                       )}
                       <button 
                         onClick={() => handleDeleteLoan(l)} 
-                        className="px-1.5 py-1 sm:px-2 sm:py-1 md:px-3 md:py-1.5 rounded-md sm:rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors"
+                        className="px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors"
                         title="Supprimer"
                       >
                         <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1511,9 +1923,9 @@ export const EmptyCrateLoansPage: React.FC = () => {
         </Card>
       ) : (
         <div className="w-full">
-          {Array.isArray(loans) && loans.length > 0 ? (
+          {Array.isArray(loansWithCumulative) && loansWithCumulative.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8 justify-items-center px-4 sm:px-0">
-              {loans.map((loan) => (
+              {loansWithCumulative.map((loan) => (
                 <div key={loan.id} className="w-full max-w-xs sm:max-w-sm">
                   <LoanCard loan={loan} />
                 </div>
