@@ -466,12 +466,12 @@ export const ReservationsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-gray-900">{t('sidebar.reservations', 'Réservations')}</h1>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
+        <div className="flex-1">
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('sidebar.reservations', 'Réservations')}</h1>
             {isOffline && (
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 w-fit">
                 <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
                   <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
@@ -480,7 +480,7 @@ export const ReservationsPage: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">
             {t('reservations.subtitle', 'Gérez les réservations de vos clients')}
             {lastSync && (
               <span className="text-xs text-gray-500 ml-2">
@@ -489,32 +489,33 @@ export const ReservationsPage: React.FC = () => {
             )}
           </p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           <button
             onClick={() => refetch()}
             disabled={isLoading}
-            className="px-3 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+            className="p-2 sm:px-3 sm:py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50 rounded-md hover:bg-gray-100 transition-colors"
             title="Actualiser les données"
           >
-            <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24">
+            <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
           <button
             onClick={() => setIsCreating(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center gap-2"
+            className="bg-blue-600 text-white px-3 py-2 sm:px-4 rounded-md hover:bg-blue-700 flex items-center gap-2 text-sm sm:text-base transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Créer une réservation
+            <span className="hidden sm:inline">Créer une réservation</span>
+            <span className="sm:hidden">Créer</span>
           </button>
         </div>
       </div>
 
       {/* Modern Search */}
-      <div className="flex justify-center">
-        <div className="relative">
+      <div className="flex justify-center px-4 sm:px-0">
+        <div className="relative w-full max-w-md sm:max-w-lg">
           {/* Search Icon Button */}
           <button
             onClick={() => {
@@ -525,7 +526,7 @@ export const ReservationsPage: React.FC = () => {
                 setIsSearchOpen(true);
               }
             }}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-full transition-all duration-300 ${
+            className={`flex items-center justify-center space-x-2 px-4 py-3 sm:px-6 rounded-full transition-all duration-300 w-full sm:w-auto ${
               isSearchOpen || searchTerm
                 ? 'bg-blue-600 text-white shadow-lg transform scale-105' 
                 : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 hover:shadow-md'
@@ -543,7 +544,7 @@ export const ReservationsPage: React.FC = () => {
           </button>
 
           {/* Search Input - Animated */}
-          <div className={`absolute top-0 left-0 transition-all duration-300 ease-in-out ${
+          <div className={`absolute top-0 left-0 transition-all duration-300 ease-in-out w-full ${
             isSearchOpen || searchTerm ? 'opacity-100 scale-100 translate-x-0' : 'opacity-0 scale-95 -translate-x-4 pointer-events-none'
           }`}>
             <div className="relative">
@@ -557,7 +558,7 @@ export const ReservationsPage: React.FC = () => {
                     setTimeout(() => setIsSearchOpen(false), 200);
                   }
                 }}
-                className="w-80 px-4 py-3 pr-12 bg-white border-2 border-blue-600 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                className="w-full px-4 py-3 pr-12 bg-white border-2 border-blue-600 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all duration-200 text-base"
                 autoFocus={isSearchOpen}
               />
               <button
@@ -565,7 +566,7 @@ export const ReservationsPage: React.FC = () => {
                   setSearchTerm('');
                   setIsSearchOpen(false);
                 }}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -577,36 +578,36 @@ export const ReservationsPage: React.FC = () => {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{kpis.pending}</div>
-            <div className="text-sm text-gray-600">Demandes en attente</div>
+            <div className="text-xl sm:text-2xl font-bold text-blue-600">{kpis.pending}</div>
+            <div className="text-xs sm:text-sm text-gray-600">Demandes en attente</div>
           </div>
         </Card>
-        <Card>
+        <Card className="p-3 sm:p-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{kpis.approved}</div>
-            <div className="text-sm text-gray-600">Approuvées</div>
+            <div className="text-xl sm:text-2xl font-bold text-green-600">{kpis.approved}</div>
+            <div className="text-xs sm:text-sm text-gray-600">Approuvées</div>
           </div>
         </Card>
-        <Card>
+        <Card className="p-3 sm:p-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600">{kpis.totalReserved}</div>
-            <div className="text-sm text-gray-600">Caisses réservées</div>
+            <div className="text-xl sm:text-2xl font-bold text-purple-600">{kpis.totalReserved}</div>
+            <div className="text-xs sm:text-sm text-gray-600">Caisses réservées</div>
           </div>
         </Card>
-        <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
+        <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200 p-3 sm:p-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-teal-600">{kpis.totalRoomsCrates.toLocaleString()}</div>
-            <div className="text-sm text-teal-700 font-medium">Capacité totale salles</div>
+            <div className="text-lg sm:text-2xl font-bold text-teal-600">{kpis.totalRoomsCrates.toLocaleString()}</div>
+            <div className="text-xs sm:text-sm text-teal-700 font-medium">Capacité totale salles</div>
             <div className="text-xs text-teal-600 mt-1">{kpis.numberOfRooms} salle{kpis.numberOfRooms > 1 ? 's' : ''}</div>
           </div>
         </Card>
-        <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+        <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200 p-3 sm:p-4 col-span-2 sm:col-span-1">
           <div className="text-center">
-            <div className="text-2xl font-bold text-indigo-600">{kpis.totalEmptyCrates.toLocaleString()}</div>
-            <div className="text-sm text-indigo-700 font-medium">Total caisses vides</div>
+            <div className="text-lg sm:text-2xl font-bold text-indigo-600">{kpis.totalEmptyCrates.toLocaleString()}</div>
+            <div className="text-xs sm:text-sm text-indigo-700 font-medium">Total caisses vides</div>
             <div className="text-xs text-indigo-600 mt-1">Disponibles sur le site</div>
           </div>
         </Card>
@@ -614,7 +615,7 @@ export const ReservationsPage: React.FC = () => {
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex space-x-2 sm:space-x-8 overflow-x-auto scrollbar-hide">
           {[
             { key: 'approved', label: 'Approuvées', count: reservations.filter(r => r.status === 'APPROVED').length },
             { key: 'requests', label: 'Demandes', count: reservations.filter(r => r.status === 'REQUESTED').length },
@@ -624,20 +625,22 @@ export const ReservationsPage: React.FC = () => {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as any)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-3 px-2 sm:py-2 sm:px-1 border-b-2 font-medium text-sm whitespace-nowrap flex-shrink-0 ${
                 activeTab === tab.key
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              {tab.label} ({tab.count})
+              <span className="hidden sm:inline">{tab.label} ({tab.count})</span>
+              <span className="sm:hidden">{tab.label}</span>
+              <span className="sm:hidden ml-1 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full text-xs">{tab.count}</span>
             </button>
           ))}
         </nav>
       </div>
 
-      {/* Table */}
-      <Card>
+      {/* Table - Desktop View */}
+      <Card className="hidden lg:block">
         <Table>
           <TableHead>
             <TableRow>
@@ -772,10 +775,152 @@ export const ReservationsPage: React.FC = () => {
         </Table>
       </Card>
 
+      {/* Mobile Card View */}
+      <div className="lg:hidden space-y-4">
+        {isLoading ? (
+          <Card className="p-8">
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          </Card>
+        ) : filteredReservations.length === 0 ? (
+          <Card className="p-8 text-center text-gray-500">
+            Aucune réservation trouvée
+          </Card>
+        ) : (
+          filteredReservations.map((reservation) => {
+            const isOverCapacity = reservation.reservedCrates > (reservation.totalRoomCapacity || 0);
+            return (
+              <Card key={reservation.id} className={`p-4 ${isOverCapacity ? 'bg-red-50 border-l-4 border-red-400' : ''}`}>
+                <div className="space-y-4">
+                  {/* Header with client name and status */}
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate">{reservation.clientName}</h3>
+                      <div className="mt-1">{getStatusBadge(reservation.status)}</div>
+                    </div>
+                    <div className="flex items-center space-x-2 ml-2">
+                      {getCapacityIcon(reservation.capacityOk)}
+                    </div>
+                  </div>
+
+                  {/* Crate information */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">{reservation.reservedCrates}</div>
+                      <div className="text-sm text-blue-700">Caisses réservées</div>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg">
+                      <div className="text-2xl font-bold text-orange-600">{reservation.emptyCratesNeeded || 0}</div>
+                      <div className="text-sm text-orange-700">Caisses vides</div>
+                    </div>
+                  </div>
+
+                  {/* Rooms */}
+                  <div>
+                    <div className="text-sm font-medium text-gray-700 mb-2">Salles assignées</div>
+                    <div className="flex flex-wrap gap-1">
+                      {reservation.roomNames && reservation.roomNames.length > 0 ? (
+                        reservation.roomNames.map((roomName, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                          >
+                            {roomName}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 text-sm">Aucune salle</span>
+                      )}
+                    </div>
+                    {reservation.totalRoomCapacity && reservation.totalRoomCapacity > 0 && (
+                      <div className={`text-sm font-semibold mt-2 ${isOverCapacity ? 'text-red-600' : 'text-gray-900'}`}>
+                        Capacité: {reservation.totalRoomCapacity.toLocaleString()}
+                        {isOverCapacity && (
+                          <span className="ml-2 text-xs text-red-500">
+                            ⚠️ Dépassement
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col space-y-2 pt-2 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        setSelectedReservation(reservation);
+                        setIsDetailOpen(true);
+                      }}
+                      className="w-full flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-800 text-sm font-medium px-4 py-2 rounded-md hover:bg-blue-50 transition-colors border border-blue-200"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      <span>Voir les détails</span>
+                    </button>
+                    
+                    {reservation.status === 'REQUESTED' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleStatusChange(reservation.id, 'APPROVED')}
+                          disabled={updateReservationStatus.isPending}
+                          className="flex items-center justify-center space-x-1 text-green-600 hover:text-green-800 disabled:text-green-400 text-sm font-medium px-3 py-2 rounded-md hover:bg-green-50 disabled:bg-green-25 border border-green-200 hover:border-green-300 transition-all duration-200 disabled:cursor-not-allowed"
+                        >
+                          {updateReservationStatus.isPending ? (
+                            <>
+                              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span>...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              <span>Approuver</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleStatusChange(reservation.id, 'REFUSED', 'Refusé par l\'admin')}
+                          disabled={updateReservationStatus.isPending}
+                          className="flex items-center justify-center space-x-1 text-red-600 hover:text-red-800 disabled:text-red-400 text-sm font-medium px-3 py-2 rounded-md hover:bg-red-50 disabled:bg-red-25 border border-red-200 hover:border-red-300 transition-all duration-200 disabled:cursor-not-allowed"
+                        >
+                          {updateReservationStatus.isPending ? (
+                            <>
+                              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span>...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              <span>Refuser</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
       {/* Create Reservation Modal */}
       {isCreating && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 rounded-t-2xl">
               <div className="flex items-center justify-between">
@@ -802,7 +947,7 @@ export const ReservationsPage: React.FC = () => {
             </div>
 
             {/* Form Content */}
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               {/* Client Selection */}
               <div className="space-y-2">
                 <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
@@ -937,7 +1082,7 @@ export const ReservationsPage: React.FC = () => {
                 )}
 
                 {/* Room Selection Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
                   {rooms
                     .sort((a: any, b: any) => {
                       const nameA = (a.room || a.name || '').toLowerCase();
@@ -974,7 +1119,7 @@ export const ReservationsPage: React.FC = () => {
                     </label>
                   ))}
                   {rooms.length === 0 && (
-                    <div className="col-span-2 text-center py-4 text-gray-500 text-sm">
+                    <div className="col-span-1 text-center py-4 text-gray-500 text-sm">
                       Aucune salle disponible
                     </div>
                   )}
@@ -984,17 +1129,17 @@ export const ReservationsPage: React.FC = () => {
             </div>
 
             {/* Footer Actions */}
-            <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end space-x-3">
+            <div className="bg-gray-50 px-4 sm:px-6 py-4 rounded-b-2xl flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
               <button
                 onClick={() => setIsCreating(false)}
-                className="px-6 py-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-xl transition-all duration-200 font-medium"
+                className="w-full sm:w-auto px-6 py-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-xl transition-all duration-200 font-medium"
               >
                 Annuler
               </button>
               <button
                 onClick={handleCreateReservation}
                 disabled={!form.clientId || !form.reservedCrates || createReservation.isLoading}
-                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
                 {createReservation.isLoading ? (
                   <div className="flex items-center space-x-2">
@@ -1020,8 +1165,8 @@ export const ReservationsPage: React.FC = () => {
 
       {/* Detail Panel */}
       {isDetailOpen && selectedReservation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Détail de la réservation</h3>
               <button
@@ -1033,7 +1178,7 @@ export const ReservationsPage: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <h4 className="font-medium mb-2">Informations</h4>
                 <div className="space-y-2 text-sm">
@@ -1046,11 +1191,11 @@ export const ReservationsPage: React.FC = () => {
                 <h4 className="font-medium mb-2">Caisse</h4>
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div className="bg-red-50 p-3 rounded">
-                    <div className="text-2xl font-bold text-red-600">{selectedReservation.reservedCrates}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-red-600">{selectedReservation.reservedCrates}</div>
                     <div className="text-xs text-gray-600">Nombre de caisses à rentrer</div>
                   </div>
                   <div className="bg-green-50 p-3 rounded">
-                    <div className="text-2xl font-bold text-green-600">{selectedReservation.reservedCrates}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-green-600">{selectedReservation.reservedCrates}</div>
                     <div className="text-xs text-gray-600">Caisses vides nécessaires</div>
                   </div>
                 </div>

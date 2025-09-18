@@ -304,7 +304,7 @@ export const PartialPaymentModal: React.FC<PartialPaymentModalProps> = ({ isOpen
           <div class="receipt-container">
             <div class="header">
               <div class="subtitle">Systeme de Gestion</div>
-              <div class="company">Entrepôt frigorifique LYAZAMI</div>
+              <div class="company">Domaine LYAZAMI</div>
               <div class="title">RECU DE PAIEMENT PARTIEL</div>
               <div class="receipt-number">N° ${form.reference}</div>
             </div>

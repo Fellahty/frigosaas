@@ -1,55 +1,23 @@
 import React from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, getDocs, addDoc, Timestamp, query, where, updateDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { collection, addDoc, Timestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
+import { 
+  useLoansPageData,
+  type LoanItem,
+  type ClientStats,
+  type CrateType
+} from '../../lib/hooks/useLoansData';
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
 import { Spinner } from '../../components/Spinner';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { EnhancedSelect } from '../../components/EnhancedSelect';
 import QRCode from 'qrcode';
 
-type LoanStatus = 'open' | 'returned';
-type CrateType = 'wood' | 'plastic';
-type CrateColor = 'blue' | 'green' | 'red' | 'yellow' | 'white' | 'black' | 'gray' | 'brown';
-
-interface CrateTypeConfig {
-  id: string;
-  name: string;
-  type: CrateType;
-  color: CrateColor;
-  customName?: string;
-  depositAmount: number;
-  quantity: number;
-  isActive: boolean;
-  createdAt: Date;
-}
-
-interface LoanItem {
-  id: string;
-  ticketId: string;
-  clientId: string | null;
-  clientName: string;
-  crates: number;
-  crateTypeId: string;
-  crateTypeName: string;
-  crateType: CrateType;
-  crateColor: CrateColor;
-  status: LoanStatus;
-  createdAt: Date;
-}
-
-interface ClientOption { id: string; name: string }
-
-interface ClientStats {
-  totalEmptyCratesNeeded: number;
-  reservedRooms: string[];
-  totalCautionPaid: number;
-  totalSortieAmount: number;
-  cratesCanTake: number;
-}
 
 // Component for displaying client information
 const ClientInfoDisplay: React.FC<{ 
@@ -60,110 +28,114 @@ const ClientInfoDisplay: React.FC<{
   
   return (
     <div className="md:col-span-2 lg:col-span-3">
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 shadow-sm">
-        <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          {t('loans.clientInfo.title', 'Informations du client')}
-        </h4>
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3 sm:p-4 shadow-sm">
+        {/* Compact Header */}
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm sm:text-base font-semibold text-blue-900 flex items-center">
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {t('loans.clientInfo.title', 'Info Client')}
+          </h4>
+          {/* Mobile: Show key info in header */}
+          <div className="sm:hidden flex items-center gap-2">
+            <span className="text-xs font-bold text-green-600">{clientStats.cratesCanTake}</span>
+            <span className="text-xs text-gray-500">caisses</span>
+          </div>
+        </div>
         
-        {/* Room Reservations */}
+        {/* Room Reservations - Compact */}
         {clientStats.reservedRooms.length > 0 && (
-          <div className="mb-6">
-            <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mb-3">
+            <div className="flex items-center gap-1 mb-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
-              {t('loans.clientInfo.reservedRooms', 'Chambres réservées')}
-            </h5>
-            <div className="flex flex-wrap gap-2">
-              {clientStats.reservedRooms.map((room, index) => (
+              <span className="text-xs font-medium text-gray-700">{t('loans.clientInfo.reservedRooms', 'Chambres')}</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {clientStats.reservedRooms.slice(0, 3).map((room, index) => (
                 <span
                   key={index}
-                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200"
+                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
                 >
                   {room}
                 </span>
               ))}
+              {clientStats.reservedRooms.length > 3 && (
+                <span className="text-xs text-gray-500">+{clientStats.reservedRooms.length - 3}</span>
+              )}
             </div>
           </div>
         )}
 
-        {/* Caution Information */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{clientStats.totalCautionPaid.toLocaleString()} DH</div>
-              <div className="text-xs text-gray-600">{t('loans.clientInfo.cautionPaid', 'Caution payée')}</div>
+        {/* Compact Stats Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          {/* Caution Paid */}
+          <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200 text-center">
+            <div className="text-sm sm:text-lg font-bold text-green-600">{clientStats.totalCautionPaid.toLocaleString()}</div>
+            <div className="text-xs text-gray-600">{t('loans.clientInfo.cautionPaid', 'Caution')}</div>
+          </div>
+          
+          {/* Total Sortie */}
+          <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200 text-center">
+            <div className="text-sm sm:text-lg font-bold text-purple-600">{clientStats.totalSortieAmount.toLocaleString()}</div>
+            <div className="text-xs text-gray-600">{t('loans.clientInfo.totalSortie', 'Sortie')}</div>
+          </div>
+          
+          {/* Crates Can Take - Desktop */}
+          <div className="hidden sm:block bg-white rounded-lg p-3 border border-gray-200 text-center">
+            <div className={`text-lg font-bold ${clientStats.cratesCanTake > 1000 ? 'text-red-600' : 'text-blue-600'}`}>
+              {clientStats.cratesCanTake}
+            </div>
+            <div className="text-xs text-gray-600 mb-2">{t('loans.clientInfo.cratesCanTake', 'Disponibles')}</div>
+            
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div 
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  clientStats.cratesCanTake > 1000 
+                    ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                    : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                }`}
+                style={{ 
+                  width: `${Math.min(Math.max((clientStats.cratesCanTake / 1000) * 100, 0), 100)}%` 
+                }}
+              ></div>
+            </div>
+            
+            {/* Progress Label */}
+            <div className="text-xs text-gray-500 mt-1">
+              {clientStats.cratesCanTake > 1000 ? (
+                <span className="text-red-600 font-medium">Limite!</span>
+              ) : (
+                <span>{clientStats.cratesCanTake}/1000</span>
+              )}
             </div>
           </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">{clientStats.totalSortieAmount.toLocaleString()} DH</div>
-              <div className="text-xs text-gray-600">{t('loans.clientInfo.totalSortie', 'Total sortie')}</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="text-center">
-              <div className={`text-2xl font-bold ${clientStats.cratesCanTake > 1000 ? 'text-red-600' : 'text-blue-600'}`}>
-                {clientStats.cratesCanTake}
-              </div>
-              <div className="text-xs text-gray-600 mb-3">{t('loans.clientInfo.cratesCanTake', 'Caisses pouvant être prises')}</div>
-              
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    clientStats.cratesCanTake > 1000 
-                      ? 'bg-gradient-to-r from-red-500 to-red-600' 
-                      : 'bg-gradient-to-r from-blue-500 to-blue-600'
-                  }`}
-                  style={{ 
-                    width: `${Math.min(Math.max((clientStats.cratesCanTake / 1000) * 100, 0), 100)}%` 
-                  }}
-                ></div>
-              </div>
-              
-              {/* Progress Label */}
-              <div className="text-xs text-gray-500 mt-2">
-                {clientStats.cratesCanTake > 1000 ? (
-                  <span className="text-red-600 font-medium">
-                    {t('loans.clientInfo.overLimit', 'Limite dépassée!')}
-                  </span>
-                ) : (
-                  <span>
-                    {clientStats.cratesCanTake}/1000 {t('loans.clientInfo.limit', 'limite')}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Crate Information */}
-        <div className="grid grid-cols-1 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{clientStats.totalEmptyCratesNeeded}</div>
-            <div className="text-xs text-green-700">{t('loans.clientInfo.emptyCratesNeeded', 'Caisses vides nécessaires')}</div>
+          
+          {/* Empty Crates Needed */}
+          <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200 text-center">
+            <div className="text-sm sm:text-lg font-bold text-green-600">{clientStats.totalEmptyCratesNeeded}</div>
+            <div className="text-xs text-gray-600">{t('loans.clientInfo.emptyCratesNeeded', 'Nécessaires')}</div>
           </div>
         </div>
         
-        {/* Action button when no reservations */}
+        {/* Action button when no reservations - Compact */}
         {clientStats.totalEmptyCratesNeeded === 0 && (
-          <div className="mt-6 pt-4 border-t border-blue-200">
+          <div className="mt-3 pt-3 border-t border-blue-200">
             <div className="text-center">
-              <p className="text-sm text-blue-700 mb-3">
-                {t('loans.clientInfo.noReservations', 'Ce client n\'a aucune réservation active')}
+              <p className="text-xs text-blue-700 mb-2">
+                {t('loans.clientInfo.noReservations', 'Aucune réservation active')}
               </p>
               <button
                 onClick={onNavigateToReservations}
-                className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+                className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-xs hover:bg-blue-700 transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
-                {t('loans.clientInfo.goToReservations', 'Aller aux réservations')}
+                {t('loans.clientInfo.goToReservations', 'Réservations')}
               </button>
             </div>
           </div>
@@ -181,7 +153,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
 
   // Helper function to translate crate types
   const translateCrateType = (type: CrateType): string => {
-    return t(`loans.crateTypes.${type}`, type);
+    return t(`loans.crateTypes.${type}`, type) as string;
   };
 
   // Helper function to translate colors
@@ -329,18 +301,6 @@ export const EmptyCrateLoansPage: React.FC = () => {
     </div>
   );
 
-  // Get site settings for company name
-  const { data: siteSettings } = useQuery({
-    queryKey: ['site-settings', tenantId],
-    queryFn: async (): Promise<{ name: string }> => {
-      const docRef = doc(db, 'tenants', tenantId, 'settings', 'site');
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
-        return { name: 'Frigo SaaS' };
-      }
-      return docSnap.data() as { name: string };
-    },
-  });
 
   const [isAdding, setIsAdding] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
@@ -355,136 +315,53 @@ export const EmptyCrateLoansPage: React.FC = () => {
   const [sortBy, setSortBy] = React.useState<'date' | 'client' | 'crates' | 'cumulative'>('date');
   const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('asc');
   const [showCumulativeTable, setShowCumulativeTable] = React.useState(false);
+  const [isAddingTruck, setIsAddingTruck] = React.useState(false);
+  const [editingTruckId, setEditingTruckId] = React.useState<string | null>(null);
+  const [truckForm, setTruckForm] = React.useState({
+    number: '',
+    color: '',
+    photoUrl: '',
+  });
+  const [isAddingDriver, setIsAddingDriver] = React.useState(false);
+  const [editingDriverId, setEditingDriverId] = React.useState<string | null>(null);
+  const [driverForm, setDriverForm] = React.useState({
+    name: '',
+    phone: '',
+    licenseNumber: '',
+  });
   const [form, setForm] = React.useState<{ 
     clientId: string; 
     crates: number; 
     crateTypeId: string;
     customDate: string;
+    truckId: string;
+    driverId: string;
   }>({
     clientId: '',
     crates: 1,
     crateTypeId: '',
     customDate: new Date().toISOString().split('T')[0], // Default to today
+    truckId: '',
+    driverId: '',
   });
 
 
-  const { data: clientOptions } = useQuery({
-    queryKey: ['clients', tenantId, 'for-loans'],
-    queryFn: async (): Promise<ClientOption[]> => {
-      const q = query(collection(db, 'tenants', tenantId, 'clients'));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => ({ id: d.id, name: (d.data() as any).name || '—' }));
-    },
-  });
-
-  // Fetch crate types
-  const { data: crateTypes } = useQuery({
-    queryKey: ['crate-types', tenantId],
-    queryFn: async (): Promise<CrateTypeConfig[]> => {
-      const q = query(collection(db, 'tenants', tenantId, 'crate-types'), where('isActive', '==', true));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          name: data.name || '',
-          type: data.type || 'plastic',
-          color: data.color || 'blue',
-          customName: data.customName || '',
-          depositAmount: Number(data.depositAmount) || 0,
-          quantity: Number(data.quantity) || 0,
-          isActive: data.isActive || true,
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-        };
-      });
-    },
-  });
-
-  // Get rooms information
-  const { data: rooms } = useQuery({
-    queryKey: ['rooms', tenantId],
-    queryFn: async () => {
-      const q = query(collection(db, 'tenants', tenantId, 'rooms'));
-      const snap = await getDocs(q);
-      return snap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    },
-  });
-
-  // Get client reservation information
-  const { data: clientReservations } = useQuery({
-    queryKey: ['client-reservations', tenantId, form.clientId],
-    queryFn: async () => {
-      if (!form.clientId) return null;
-      const q = query(
-        collection(db, 'tenants', tenantId, 'reservations'),
-        where('clientId', '==', form.clientId),
-        where('status', 'in', ['APPROVED', 'CLOSED'])
-      );
-      const snap = await getDocs(q);
-      return snap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    },
-    enabled: !!form.clientId,
-  });
-
-  // Get deposit per crate from pricing settings
-  const { data: depositPerCrate = 50 } = useQuery({
-    queryKey: ['deposit-per-crate', tenantId],
-    queryFn: async () => {
-      if (!tenantId) return 50;
-      try {
-        const pricingRef = doc(db, `tenants/${tenantId}/settings/pricing`);
-        const pricingDoc = await getDoc(pricingRef);
-        if (pricingDoc.exists()) {
-          const data = pricingDoc.data();
-          return data?.caution_par_caisse || 50;
-        }
-        return 50;
-      } catch (error) {
-        console.error('Error fetching deposit per crate:', error);
-        return 50;
-      }
-    },
-    enabled: !!tenantId,
-  });
-
-  // Get client caution records from operations
-  const { data: cautionRecords } = useQuery({
-    queryKey: ['caution-records', tenantId, form.clientId],
-    queryFn: async () => {
-      if (!form.clientId) return [];
-      const q = query(
-        collection(db, 'caution_records'),
-        where('tenantId', '==', tenantId),
-        where('clientId', '==', form.clientId)
-      );
-      const snap = await getDocs(q);
-      return snap.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          clientId: data.clientId || '',
-          clientName: data.clientName || '',
-          amount: data.amount || 0,
-          type: data.type || 'deposit',
-          method: data.method || 'cash',
-          reference: data.reference || '',
-          reason: data.reason || '',
-          status: data.status || 'completed',
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-          updatedAt: data.updatedAt?.toDate?.() || new Date(),
-          processedBy: data.processedBy || '',
-          notes: data.notes || ''
-        };
-      });
-    },
-    enabled: !!form.clientId,
-  });
+  // Use the new combined data fetching hook
+  const {
+    loans,
+    clients: clientOptions,
+    trucks,
+    drivers,
+    crateTypes,
+    rooms,
+    clientReservations,
+    depositPerCrate,
+    cautionRecords,
+    siteSettings,
+    isLoading,
+    hasError,
+    refetchAll
+  } = useLoansPageData(form.clientId);
 
   // Calculate client statistics
   const clientStats = React.useMemo(() => {
@@ -507,9 +384,9 @@ export const EmptyCrateLoansPage: React.FC = () => {
         reservation.selectedRooms.forEach((roomId: string) => {
           const room = rooms?.find((r: any) => r.id === roomId);
           if (room) {
-            const roomName = room.room || room.name || `Chambre ${roomId}`;
-            if (!acc.reservedRooms.includes(roomName)) {
-              acc.reservedRooms.push(roomName);
+            const roomName = (room as any).room || (room as any).name || `Chambre ${roomId}`;
+            if (!(acc.reservedRooms as string[]).includes(roomName)) {
+              (acc.reservedRooms as string[]).push(roomName);
             }
           }
         });
@@ -558,32 +435,6 @@ export const EmptyCrateLoansPage: React.FC = () => {
 
 
 
-  const { data: loans, isLoading, error } = useQuery({
-    queryKey: ['empty-crate-loans', tenantId],
-    queryFn: async (): Promise<LoanItem[]> => {
-      const q = query(collection(db, 'empty_crate_loans'), where('tenantId', '==', tenantId));
-      const snap = await getDocs(q);
-      const list = snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          ticketId: data.ticketId || '',
-          clientId: data.clientId || null,
-          clientName: data.clientName || '',
-          crates: Number(data.crates) || 0,
-          crateTypeId: data.crateTypeId || '',
-          crateTypeName: data.crateTypeName || '',
-          crateType: data.crateType || 'plastic',
-          crateColor: data.crateColor || 'blue',
-          status: (data.status as LoanStatus) || 'open',
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-        };
-      });
-      // newest first
-      return list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    },
-    refetchInterval: 15000,
-  });
 
   // Calculer le total des caisses vides à partir des types de caisses
   const totalEmptyCrates = React.useMemo(() => {
@@ -719,10 +570,82 @@ export const EmptyCrateLoansPage: React.FC = () => {
   }, [loans]);
 
 
+  const addTruck = useMutation({
+    mutationFn: async (payload: typeof truckForm) => {
+      const docRef = await addDoc(collection(db, 'trucks'), {
+        tenantId,
+        ...payload,
+        isActive: true,
+        createdAt: Timestamp.fromDate(new Date()),
+      });
+      return docRef.id;
+    },
+    onSuccess: async (truckId) => {
+      await queryClient.invalidateQueries({ queryKey: ['trucks', tenantId] });
+      setIsAddingTruck(false);
+      setTruckForm({ number: '', color: '', photoUrl: '' });
+      // Auto-select the newly created truck
+      setForm(prev => ({ ...prev, truckId }));
+    },
+  });
+
+  const updateTruck = useMutation({
+    mutationFn: async (payload: { id: string } & typeof truckForm) => {
+      await updateDoc(doc(db, 'trucks', payload.id), {
+        number: payload.number,
+        color: payload.color,
+        photoUrl: payload.photoUrl,
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['trucks', tenantId] });
+      setIsAddingTruck(false);
+      setEditingTruckId(null);
+      setTruckForm({ number: '', color: '', photoUrl: '' });
+    },
+  });
+
+  const addDriver = useMutation({
+    mutationFn: async (payload: typeof driverForm) => {
+      const docRef = await addDoc(collection(db, 'drivers'), {
+        tenantId,
+        ...payload,
+        isActive: true,
+        createdAt: Timestamp.fromDate(new Date()),
+      });
+      return docRef.id;
+    },
+    onSuccess: async (driverId) => {
+      await queryClient.invalidateQueries({ queryKey: ['drivers', tenantId] });
+      setIsAddingDriver(false);
+      setDriverForm({ name: '', phone: '', licenseNumber: '' });
+      // Auto-select the newly created driver
+      setForm(prev => ({ ...prev, driverId }));
+    },
+  });
+
+  const updateDriver = useMutation({
+    mutationFn: async (payload: { id: string } & typeof driverForm) => {
+      await updateDoc(doc(db, 'drivers', payload.id), {
+        name: payload.name,
+        phone: payload.phone,
+        licenseNumber: payload.licenseNumber,
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['drivers', tenantId] });
+      setIsAddingDriver(false);
+      setEditingDriverId(null);
+      setDriverForm({ name: '', phone: '', licenseNumber: '' });
+    },
+  });
+
   const addLoan = useMutation({
     mutationFn: async (payload: typeof form) => {
       const client = (clientOptions || []).find((c) => c.id === payload.clientId);
       const crateType = (crateTypes || []).find((c) => c.id === payload.crateTypeId);
+      const selectedTruck = trucks?.find(t => t.id === payload.truckId);
+      const selectedDriver = drivers?.find(d => d.id === payload.driverId);
       const ticketId = `${tenantId}-${Date.now()}`;
       await addDoc(collection(db, 'empty_crate_loans'), {
         tenantId,
@@ -734,6 +657,11 @@ export const EmptyCrateLoansPage: React.FC = () => {
         crateTypeName: crateType?.name || '',
         crateType: crateType?.type || 'plastic',
         crateColor: crateType?.color || 'blue',
+        truckId: payload.truckId || null,
+        truckNumber: selectedTruck?.number || '',
+        driverId: payload.driverId || null,
+        driverName: selectedDriver?.name || '',
+        driverPhone: selectedDriver?.phone || '',
         status: 'open',
         createdAt: Timestamp.fromDate(new Date(payload.customDate)),
       });
@@ -745,7 +673,9 @@ export const EmptyCrateLoansPage: React.FC = () => {
         clientId: '', 
         crates: 1, 
         crateTypeId: '',
-        customDate: new Date().toISOString().split('T')[0]
+        customDate: new Date().toISOString().split('T')[0],
+        truckId: '',
+        driverId: ''
       });
     },
   });
@@ -754,6 +684,8 @@ export const EmptyCrateLoansPage: React.FC = () => {
     mutationFn: async (payload: { id: string; updates: typeof form }) => {
       const client = (clientOptions || []).find((c) => c.id === payload.updates.clientId);
       const crateType = (crateTypes || []).find((c) => c.id === payload.updates.crateTypeId);
+      const selectedTruck = trucks?.find(t => t.id === payload.updates.truckId);
+      const selectedDriver = drivers?.find(d => d.id === payload.updates.driverId);
       await updateDoc(doc(db, 'empty_crate_loans', payload.id), {
         clientId: payload.updates.clientId || null,
         clientName: client?.name || '',
@@ -762,6 +694,11 @@ export const EmptyCrateLoansPage: React.FC = () => {
         crateTypeName: crateType?.name || '',
         crateType: crateType?.type || 'plastic',
         crateColor: crateType?.color || 'blue',
+        truckId: payload.updates.truckId || null,
+        truckNumber: selectedTruck?.number || '',
+        driverId: payload.updates.driverId || null,
+        driverName: selectedDriver?.name || '',
+        driverPhone: selectedDriver?.phone || '',
         createdAt: Timestamp.fromDate(new Date(payload.updates.customDate)),
       });
     },
@@ -798,6 +735,8 @@ export const EmptyCrateLoansPage: React.FC = () => {
       crates: item.crates,
       crateTypeId: item.crateTypeId || '',
       customDate: item.createdAt.toISOString().split('T')[0],
+      truckId: item.truckId || '',
+      driverId: item.driverId || '',
     });
     setIsEditing(true);
   };
@@ -819,6 +758,8 @@ export const EmptyCrateLoansPage: React.FC = () => {
       crates: 1,
       crateTypeId: '',
       customDate: new Date().toISOString().split('T')[0],
+      truckId: '',
+      driverId: '',
     });
   };
 
@@ -873,7 +814,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
     return `Êtes-vous sûr de vouloir supprimer définitivement ce prêt ?\n\nClient: ${item.clientName}\nCaisses: ${item.crates}\n\nCette action est irréversible.`;
   };
 
-  // Handle print ticket for thermal POS-80 printer
+  // Handle print ticket for thermal POS-80 printer - configured for 2 copies
   const handlePrintTicket = (item: LoanItem) => {
     const currentDate = item.createdAt;
     const qrUrl = `${window.location.origin}/loan?ticket=${item.ticketId}`;
@@ -907,49 +848,57 @@ export const EmptyCrateLoansPage: React.FC = () => {
               size: 80mm auto; 
               margin: 0; 
             }
+            @media print {
+              body { 
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+            }
             body { 
               font-family: 'Courier New', monospace; 
-              font-size: 10px; 
+              font-size: 12px; 
               margin: 0; 
               padding: 0; 
               background: white;
+              line-height: 1.2;
             }
             .ticket { 
               width: 80mm; 
               margin: 0 auto; 
               padding: 2mm; 
-              border: 1px solid #000;
+              border: 2px solid #000;
             }
             .header { 
               text-align: center; 
-              border-bottom: 1px solid #000; 
-              padding-bottom: 3mm; 
-              margin-bottom: 3mm; 
+              border-bottom: 2px solid #000; 
+              padding-bottom: 2mm; 
+              margin-bottom: 2mm; 
             }
             .title { 
-              font-size: 14px; 
+              font-size: 16px; 
               font-weight: bold; 
               margin-bottom: 1mm; 
               letter-spacing: 1px; 
             }
             .subtitle { 
-              font-size: 12px; 
+              font-size: 14px; 
               font-weight: bold; 
               margin-bottom: 1mm; 
             }
             .ticket-number { 
-              font-size: 10px; 
-              color: #666; 
-              margin-bottom: 2mm; 
+              font-size: 12px; 
+              color: #000; 
+              margin-bottom: 1mm; 
+              font-weight: bold;
             }
             .section { 
-              margin: 2mm 0; 
+              margin: 1.5mm 0; 
               border: 1px solid #000; 
               padding: 2mm; 
             }
             .section-title { 
               font-weight: bold; 
-              font-size: 10px; 
+              font-size: 12px; 
               margin-bottom: 1mm; 
               text-decoration: underline; 
               text-transform: uppercase; 
@@ -959,7 +908,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
               justify-content: space-between; 
               margin: 1mm 0; 
               padding: 0.5mm 0; 
-              font-size: 9px; 
+              font-size: 11px; 
             }
             .label { 
               font-weight: bold; 
@@ -973,41 +922,47 @@ export const EmptyCrateLoansPage: React.FC = () => {
             .highlight { 
               background-color: #000; 
               color: white; 
-              padding: 1mm 2mm; 
+              padding: 2mm 3mm; 
               font-weight: bold; 
               text-align: center; 
-              margin: 1mm 0; 
+              margin: 2mm 0; 
+              font-size: 14px;
             }
             .qr-section { 
               text-align: center; 
               margin: 2mm 0; 
               padding: 2mm; 
-              border: 1px dashed #000; 
+              border: 2px dashed #000; 
             }
             .qr-label { 
               text-align: center; 
-              font-size: 8px; 
+              font-size: 10px; 
               margin-bottom: 1mm; 
+              font-weight: bold;
             }
             .qr-code { 
               text-align: center; 
               font-family: monospace; 
-              font-size: 10px; 
+              font-size: 12px; 
               font-weight: bold; 
             }
             .footer { 
               text-align: center; 
               margin: 2mm 0; 
-              font-size: 8px; 
+              font-size: 10px; 
+              font-weight: bold;
             }
         </style>
       </head>
       <body>
         <div class="ticket">
           <div class="header">
-            <div class="title">${siteSettings?.name || 'Entrepôt frigorifique LYAZAMI'}</div>
+            <div class="title">${siteSettings?.name || 'Domaine LYAZAMI'}</div>
             <div class="subtitle">TICKET DE PRÊT CAISSES VIDES</div>
             <div class="ticket-number">N° ${item.ticketId}</div>
+            <div style="font-size: 10px; color: #666; margin-top: 1mm; font-style: italic;">
+              * Imprimer 2 exemplaires - 1 pour Frigo, 1 pour Chauffeur *
+            </div>
           </div>
           
           <div class="section">
@@ -1031,10 +986,30 @@ export const EmptyCrateLoansPage: React.FC = () => {
           </div>
           
           <div class="section">
+            <div class="section-title">Transport</div>
+            ${item.truckNumber ? `
+            <div class="row">
+              <span class="label">Matricule:</span>
+              <span class="value">${item.truckNumber}</span>
+            </div>
+            ` : ''}
+            ${item.driverName ? `
+            <div class="row">
+              <span class="label">Chauffeur:</span>
+              <span class="value">${item.driverName}</span>
+            </div>
+            ` : ''}
+          </div>
+          
+          <div class="section">
             <div class="section-title">Prêt</div>
             <div class="row">
               <span class="label">Caisses vides:</span>
               <span class="value">${item.crates}</span>
+            </div>
+            <div class="row">
+              <span class="label">Type:</span>
+              <span class="value">${item.crateTypeName}</span>
             </div>
           </div>
           
@@ -1050,9 +1025,25 @@ export const EmptyCrateLoansPage: React.FC = () => {
             </div>
           </div>
           
+          <div class="section">
+            <div class="section-title">Signatures</div>
+            <div style="margin: 2mm 0;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 5mm;">
+                <div style="text-align: center; width: 45%;">
+                  <div style="border-bottom: 1px solid #000; height: 10mm; margin-bottom: 1mm;"></div>
+                  <div style="font-size: 8px; font-weight: bold;">Signature Frigo</div>
+                </div>
+                <div style="text-align: center; width: 45%;">
+                  <div style="border-bottom: 1px solid #000; height: 10mm; margin-bottom: 1mm;"></div>
+                  <div style="font-size: 8px; font-weight: bold;">Signature Camion</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <div class="footer">═══════════════════════════════</div>
           <div class="footer">Merci pour votre confiance</div>
-          <div class="footer">${siteSettings?.name || 'Entrepôt frigorifique LYAZAMI'} - Gestion Frigorifique</div>
+          <div class="footer">${siteSettings?.name || 'Domaine LYAZAMI'} - Gestion Frigorifique</div>
         </div>
       </body>
     </html>
@@ -1071,7 +1062,6 @@ export const EmptyCrateLoansPage: React.FC = () => {
         
         if (qrElement) {
           console.log('Generating QR code in print window...');
-          // Create a canvas element
           const canvas = printWindow.document.createElement('canvas');
           qrElement.appendChild(canvas);
           
@@ -1083,7 +1073,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
               light: '#FFFFFF'
             }
           }).then(() => {
-            console.log('QR code généré avec succès dans print window');
+            console.log('QR code généré avec succès');
           }).catch((error) => {
             console.error('Erreur génération QR code:', error);
             qrElement.innerHTML = '<div style="font-size: 8px; color: #666;">QR: ' + qrUrl + '</div>';
@@ -1095,8 +1085,9 @@ export const EmptyCrateLoansPage: React.FC = () => {
         // Print after QR code is generated (or failed)
         setTimeout(() => {
           try {
+            // Configure print for 2 copies
             printWindow.print();
-            console.log('Print dialog opened successfully');
+            console.log('Print dialog opened successfully - configured for 2 copies');
           } catch (error) {
             console.error('Erreur lors de l\'impression:', error);
             alert(t('loans.errors.printError'));
@@ -1232,79 +1223,117 @@ export const EmptyCrateLoansPage: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (hasError) {
     return (
       <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
         <p className="font-medium">{t('loans.errorLoading', 'Erreur de chargement')}</p>
+        <button 
+          onClick={() => refetchAll()} 
+          className="mt-2 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
+        >
+          {t('common.retry')}
+        </button>
       </div>
     );
   }
 
   return (
     <div className="space-y-4 sm:space-y-6 text-sm md:text-base">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <div className="flex-1">
-          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2 tracking-tight">
-            {t('loans.title', 'Sortie Caisses Vides')}
-          </h1>
-          <p className="text-xs sm:text-sm md:text-base text-gray-600 font-medium">
-            {t('loans.subtitle', 'Gestion des prêts de caisses vides')}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* View Toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewType('table')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                viewType === 'table'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              {t('loans.views.table')}
-            </button>
-            <button
-              onClick={() => setViewType('cards')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                viewType === 'cards'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              {t('loans.views.cards')}
-            </button>
+      {/* Mobile-Optimized Header */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-col gap-4">
+          {/* Title Section */}
+          <div className="text-center sm:text-left">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 tracking-tight">
+              {t('loans.title', 'Sortie Caisses Vides')}
+            </h1>
+            <p className="text-sm text-gray-600">
+              {t('loans.subtitle', 'Gestion des prêts de caisses vides')}
+            </p>
           </div>
           
-          <button 
-            onClick={() => setShowCumulativeTable(!showCumulativeTable)} 
-            className={`inline-flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:bg-gray-100 transition-all duration-200 font-medium text-xs sm:text-sm ${
-              showCumulativeTable 
-                ? 'bg-gray-200 text-gray-900' 
-                : 'bg-gray-100 text-gray-700 hover:text-gray-900'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            {showCumulativeTable ? 'Masquer cumulatif' : 'Voir cumulatif'}
-          </button>
+          {/* Mobile Stats */}
+          <div className="grid grid-cols-3 gap-2 sm:hidden">
+            <div className="bg-blue-50 rounded-lg p-3 text-center">
+              <div className="text-lg font-bold text-blue-600">{loansWithCumulative?.length || 0}</div>
+              <div className="text-xs text-blue-600">Total</div>
+            </div>
+            <div className="bg-green-50 rounded-lg p-3 text-center">
+              <div className="text-lg font-bold text-green-600">
+                {loansWithCumulative?.filter(l => l.status === 'open').length || 0}
+              </div>
+              <div className="text-xs text-green-600">Ouverts</div>
+            </div>
+            <div className="bg-orange-50 rounded-lg p-3 text-center">
+              <div className="text-lg font-bold text-orange-600">
+                {loansWithCumulative?.filter(l => l.status === 'returned').length || 0}
+              </div>
+              <div className="text-xs text-orange-600">Retournés</div>
+            </div>
+          </div>
           
-          <button 
-            onClick={() => setIsAdding((v) => !v)} 
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-3 rounded-lg sm:rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-xs sm:text-sm md:text-base"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5">
-              <path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75V11h5.75a.75.75 0 010 1.5H12.75v5.75a.75.75 0 01-1.5 0V12.5H5.5a.75.75 0 010-1.5h5.75V5.25A.75.75 0 0112 4.5z" clipRule="evenodd" />
-            </svg>
-            {t('loans.add', 'Nouveau prêt')}
-          </button>
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Mobile: Stack buttons vertically, Desktop: horizontal */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+              {/* View Toggle - Mobile optimized */}
+              <div className="flex bg-gray-100 rounded-lg p-1 w-full sm:w-auto">
+                <button
+                  onClick={() => setViewType('table')}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 flex-1 sm:flex-none ${
+                    viewType === 'table'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="hidden sm:inline">{t('loans.views.table')}</span>
+                </button>
+                <button
+                  onClick={() => setViewType('cards')}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 flex-1 sm:flex-none ${
+                    viewType === 'cards'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  <span className="hidden sm:inline">{t('loans.views.cards')}</span>
+                </button>
+              </div>
+              
+              {/* Cumulative Toggle - Mobile optimized */}
+              <button 
+                onClick={() => setShowCumulativeTable(!showCumulativeTable)} 
+                className={`inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-all duration-200 font-medium text-sm w-full sm:w-auto ${
+                  showCumulativeTable 
+                    ? 'bg-gray-200 text-gray-900' 
+                    : 'bg-gray-100 text-gray-700 hover:text-gray-900'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span className="hidden sm:inline">{showCumulativeTable ? 'Masquer cumulatif' : 'Voir cumulatif'}</span>
+                <span className="sm:hidden">{showCumulativeTable ? 'Masquer' : 'Cumulatif'}</span>
+              </button>
+            </div>
+            
+            {/* Add Button - Prominent on mobile */}
+            <button 
+              onClick={() => setIsAdding((v) => !v)} 
+              className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl font-semibold text-sm w-full sm:w-auto"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                <path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75V11h5.75a.75.75 0 010 1.5H12.75v5.75a.75.75 0 01-1.5 0V12.5H5.5a.75.75 0 010-1.5h5.75V5.25A.75.75 0 0112 4.5z" clipRule="evenodd" />
+              </svg>
+              {t('loans.add', 'Nouveau prêt')}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1377,10 +1406,11 @@ export const EmptyCrateLoansPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Filter and Cumulative Table Section */}
-      <div className="space-y-4">
-        {/* Modern Filter Section - Mobile Optimized */}
-        <Card className="bg-white border-0 shadow-sm rounded-xl">
+      {/* Filter and Cumulative Table Section - Hidden during add/edit */}
+      {!isAdding && !isEditing && (
+        <div className="space-y-4">
+          {/* Modern Filter Section - Mobile Optimized */}
+          <Card className="bg-white border-0 shadow-sm rounded-xl">
           <div className="p-3 sm:p-4 md:p-6">
             <div className="space-y-3 sm:space-y-4">
               {/* Mobile-First Filter Controls */}
@@ -1426,7 +1456,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
                       type="text"
                       value={nameFilter}
                       onChange={(e) => setNameFilter(e.target.value)}
-                      placeholder={t('loans.searchPlaceholder', 'Rechercher...')}
+                      placeholder={t('loans.searchPlaceholder', 'Rechercher...') as string}
                       className="block w-full pl-9 sm:pl-10 pr-8 sm:pr-10 py-2 sm:py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     {nameFilter && (
@@ -1572,7 +1602,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
                   </TableHead>
                   <TableBody>
                     {cumulativeData.length > 0 ? (
-                      cumulativeData.map((client, index) => (
+                      cumulativeData.map((client) => (
                         <TableRow key={client.clientName} className="hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
                           <TableCell className="py-3 px-4">
                             <div className="flex items-center gap-2">
@@ -1626,7 +1656,8 @@ export const EmptyCrateLoansPage: React.FC = () => {
             </div>
           </Card>
         )}
-      </div>
+        </div>
+      )}
 
       {isAdding && (
         <Card>
@@ -1702,6 +1733,78 @@ export const EmptyCrateLoansPage: React.FC = () => {
                 className="w-full border rounded-md px-3 py-2" 
               />
             </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.truck', 'Camion')}</label>
+              <EnhancedSelect
+                value={form.truckId}
+                onChange={(value) => setForm((f) => ({ ...f, truckId: value }))}
+                placeholder={t('reception.selectTruck', 'Sélectionner un camion')}
+                options={trucks?.map(truck => ({
+                  id: truck.id,
+                  value: truck.id,
+                  label: `${truck.number} ${truck.color ? `(${truck.color})` : ''}`,
+                  icon: '🚛'
+                })) || []}
+                editOptions={trucks?.map(truck => ({
+                  id: truck.id,
+                  value: truck.id,
+                  label: truck.number,
+                  icon: '🚛'
+                })) || []}
+                addLabel={t('reception.addTruck', 'Ajouter un camion')}
+                editLabel={t('reception.editTruck', 'Éditer')}
+                onAdd={() => setIsAddingTruck(true)}
+                onEdit={(truckId) => {
+                  const truck = trucks?.find(t => t.id === truckId);
+                  if (truck) {
+                    setTruckForm({
+                      number: truck.number,
+                      color: truck.color || '',
+                      photoUrl: truck.photoUrl || ''
+                    });
+                    setEditingTruckId(truckId);
+                    setIsAddingTruck(true);
+                  }
+                }}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.driver', 'Chauffeur')}</label>
+              <EnhancedSelect
+                value={form.driverId}
+                onChange={(value) => setForm((f) => ({ ...f, driverId: value }))}
+                placeholder={t('reception.selectDriver', 'Sélectionner un chauffeur')}
+                options={drivers?.map(driver => ({
+                  id: driver.id,
+                  value: driver.id,
+                  label: `${driver.name} (${driver.licenseNumber})`,
+                  icon: '👨‍💼'
+                })) || []}
+                editOptions={drivers?.map(driver => ({
+                  id: driver.id,
+                  value: driver.id,
+                  label: driver.name,
+                  icon: '👨‍💼'
+                })) || []}
+                addLabel={t('reception.addDriver', 'Ajouter un chauffeur')}
+                editLabel={t('reception.editDriver', 'Éditer')}
+                onAdd={() => setIsAddingDriver(true)}
+                onEdit={(driverId) => {
+                  const driver = drivers?.find(d => d.id === driverId);
+                  if (driver) {
+                    setDriverForm({
+                      name: driver.name,
+                      phone: driver.phone || '',
+                      licenseNumber: driver.licenseNumber || ''
+                    });
+                    setEditingDriverId(driverId);
+                    setIsAddingDriver(true);
+                  }
+                }}
+              />
+            </div>
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button onClick={() => addLoan.mutate(form)} disabled={!form.clientId || form.crates <=0 || addLoan.isLoading} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60">
@@ -1754,6 +1857,78 @@ export const EmptyCrateLoansPage: React.FC = () => {
                 className="w-full border rounded-md px-3 py-2" 
               />
             </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.truck', 'Camion')}</label>
+              <EnhancedSelect
+                value={form.truckId}
+                onChange={(value) => setForm((f) => ({ ...f, truckId: value }))}
+                placeholder={t('reception.selectTruck', 'Sélectionner un camion')}
+                options={trucks?.map(truck => ({
+                  id: truck.id,
+                  value: truck.id,
+                  label: `${truck.number} ${truck.color ? `(${truck.color})` : ''}`,
+                  icon: '🚛'
+                })) || []}
+                editOptions={trucks?.map(truck => ({
+                  id: truck.id,
+                  value: truck.id,
+                  label: truck.number,
+                  icon: '🚛'
+                })) || []}
+                addLabel={t('reception.addTruck', 'Ajouter un camion')}
+                editLabel={t('reception.editTruck', 'Éditer')}
+                onAdd={() => setIsAddingTruck(true)}
+                onEdit={(truckId) => {
+                  const truck = trucks?.find(t => t.id === truckId);
+                  if (truck) {
+                    setTruckForm({
+                      number: truck.number,
+                      color: truck.color || '',
+                      photoUrl: truck.photoUrl || ''
+                    });
+                    setEditingTruckId(truckId);
+                    setIsAddingTruck(true);
+                  }
+                }}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.driver', 'Chauffeur')}</label>
+              <EnhancedSelect
+                value={form.driverId}
+                onChange={(value) => setForm((f) => ({ ...f, driverId: value }))}
+                placeholder={t('reception.selectDriver', 'Sélectionner un chauffeur')}
+                options={drivers?.map(driver => ({
+                  id: driver.id,
+                  value: driver.id,
+                  label: `${driver.name} (${driver.licenseNumber})`,
+                  icon: '👨‍💼'
+                })) || []}
+                editOptions={drivers?.map(driver => ({
+                  id: driver.id,
+                  value: driver.id,
+                  label: driver.name,
+                  icon: '👨‍💼'
+                })) || []}
+                addLabel={t('reception.addDriver', 'Ajouter un chauffeur')}
+                editLabel={t('reception.editDriver', 'Éditer')}
+                onAdd={() => setIsAddingDriver(true)}
+                onEdit={(driverId) => {
+                  const driver = drivers?.find(d => d.id === driverId);
+                  if (driver) {
+                    setDriverForm({
+                      name: driver.name,
+                      phone: driver.phone || '',
+                      licenseNumber: driver.licenseNumber || ''
+                    });
+                    setEditingDriverId(driverId);
+                    setIsAddingDriver(true);
+                  }
+                }}
+              />
+            </div>
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button onClick={handleSaveEdit} disabled={!form.clientId || form.crates <=0 || editLoan.isLoading} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60">
@@ -1786,8 +1961,17 @@ export const EmptyCrateLoansPage: React.FC = () => {
                 <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden lg:table-cell">
                   {t('clients.created', 'Créé le')}
                 </TableHeader>
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden md:table-cell">
+                  {t('reception.truck', 'Matricule Camion')}
+                </TableHeader>
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm hidden lg:table-cell">
+                  {t('reception.driver', 'Chauffeur')}
+                </TableHeader>
                 <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
                   {t('billing.status', 'Statut')}
+                </TableHeader>
+                <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
+                  {t('loans.print', 'Imprimer')}
                 </TableHeader>
                 <TableHeader className="text-center py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 font-semibold text-gray-900 text-xs sm:text-sm">
                   {t('billing.actions', 'Actions')}
@@ -1802,7 +1986,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
                     <div className="font-medium text-xs sm:text-sm text-gray-900">
                       {l.clientName || '-'}
                     </div>
-                    {/* Mobile: Show cumulative and date info below client name */}
+                    {/* Mobile: Show cumulative, date, truck, and driver info below client name */}
                     <div className="sm:hidden mt-1 space-y-1">
                       <div className="text-xs text-blue-600 font-semibold">
                         Cumulatif: {l.cumulativeCrates}
@@ -1810,6 +1994,16 @@ export const EmptyCrateLoansPage: React.FC = () => {
                       <div className="text-xs text-gray-500">
                         {l.createdAt.toLocaleDateString(i18n.language)}
                       </div>
+                      {l.truckNumber && (
+                        <div className="text-xs text-gray-600">
+                          Camion: {l.truckNumber}
+                        </div>
+                      )}
+                      {l.driverName && (
+                        <div className="text-xs text-gray-600">
+                          Chauffeur: {l.driverName}
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center">
@@ -1850,6 +2044,38 @@ export const EmptyCrateLoansPage: React.FC = () => {
                       {l.createdAt.toLocaleDateString(i18n.language)}
                     </div>
                   </TableCell>
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center hidden md:table-cell">
+                    <div className="text-xs sm:text-sm text-gray-600">
+                      {l.truckNumber ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="font-medium text-gray-900">
+                            {l.truckNumber}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Matricule
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center hidden lg:table-cell">
+                    <div className="text-xs sm:text-sm text-gray-600">
+                      {l.driverName ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="font-medium text-gray-900">
+                            {l.driverName}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Chauffeur
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center">
                     <span className={`inline-flex items-center px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full text-xs font-medium ${
                       l.status === 'open' 
@@ -1859,17 +2085,20 @@ export const EmptyCrateLoansPage: React.FC = () => {
                       {l.status === 'open' ? 'Ouvert' : 'Retourné'}
                     </span>
                   </TableCell>
+                  <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4 text-center">
+                    <button 
+                      onClick={() => handlePrintTicket(l)} 
+                      className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-md bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-medium transition-colors w-full sm:w-auto"
+                      title="Imprimer ticket"
+                    >
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mx-auto sm:mx-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      <span className="hidden sm:inline ml-1">Imprimer</span>
+                    </button>
+                  </TableCell>
                   <TableCell className="py-2 px-1 sm:py-3 sm:px-2 md:px-3 lg:px-4">
                     <div className="flex items-center gap-1 sm:gap-1.5">
-                      <button 
-                        onClick={() => handlePrintTicket(l)} 
-                        className="px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium transition-colors"
-                        title="Imprimer ticket"
-                      >
-                        <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                      </button>
                       {l.status === 'open' && (
                         <>
                           <button 
@@ -1907,7 +2136,7 @@ export const EmptyCrateLoansPage: React.FC = () => {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-gray-500">
+                <TableCell colSpan={9} className="text-center py-12 text-gray-500">
                   <div className="flex flex-col items-center gap-2">
                     <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -1973,6 +2202,180 @@ export const EmptyCrateLoansPage: React.FC = () => {
         type="danger"
         isLoading={deleteLoan.isLoading}
       />
+
+      {/* Add Truck Modal */}
+      {isAddingTruck && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">
+                  {editingTruckId ? t('reception.editTruck', 'Éditer le camion') : t('reception.addTruck', 'Ajouter un camion')}
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsAddingTruck(false);
+                    setEditingTruckId(null);
+                    setTruckForm({ number: '', color: '', photoUrl: '' });
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('reception.truckNumber', 'Matricule du camion')} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={truckForm.number}
+                    onChange={(e) => setTruckForm((f) => ({ ...f, number: e.target.value }))}
+                    className="w-full border rounded-md px-3 py-2"
+                    placeholder={t('reception.truckNumberPlaceholder', 'Ex: TR-2025-001') as string}
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.truckColor', 'Couleur')}</label>
+                  <input
+                    type="text"
+                    value={truckForm.color}
+                    onChange={(e) => setTruckForm((f) => ({ ...f, color: e.target.value }))}
+                    className="w-full border rounded-md px-3 py-2"
+                    placeholder={t('reception.truckColorPlaceholder', 'Ex: Rouge, Bleu, Blanc...') as string}
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-6 flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    if (editingTruckId) {
+                      // Update existing truck
+                      updateTruck.mutate({ id: editingTruckId, ...truckForm });
+                    } else {
+                      // Add new truck
+                      addTruck.mutate(truckForm);
+                    }
+                  }}
+                  disabled={!truckForm.number || addTruck.isLoading || updateTruck.isLoading}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60"
+                >
+                  {addTruck.isLoading || updateTruck.isLoading ? t('common.loading') : (editingTruckId ? t('common.update') : t('common.save'))}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsAddingTruck(false);
+                    setEditingTruckId(null);
+                    setTruckForm({ number: '', color: '', photoUrl: '' });
+                  }}
+                  className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200"
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Driver Modal */}
+      {isAddingDriver && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">
+                  {editingDriverId ? t('reception.editDriver', 'Éditer le chauffeur') : t('reception.addDriver', 'Ajouter un chauffeur')}
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsAddingDriver(false);
+                    setEditingDriverId(null);
+                    setDriverForm({ name: '', phone: '', licenseNumber: '' });
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('reception.driverName', 'Nom du chauffeur')} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={driverForm.name}
+                    onChange={(e) => setDriverForm((f) => ({ ...f, name: e.target.value }))}
+                    className="w-full border rounded-md px-3 py-2"
+                    placeholder={t('reception.driverNamePlaceholder', 'Ex: Ahmed Benali') as string}
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.driverPhone', 'Téléphone')}</label>
+                  <input
+                    type="tel"
+                    value={driverForm.phone}
+                    onChange={(e) => setDriverForm((f) => ({ ...f, phone: e.target.value }))}
+                    className="w-full border rounded-md px-3 py-2"
+                    placeholder={t('reception.driverPhonePlaceholder', 'Ex: +213 123 456 789') as string}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('reception.driverLicense', 'Numéro de permis')} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={driverForm.licenseNumber}
+                    onChange={(e) => setDriverForm((f) => ({ ...f, licenseNumber: e.target.value }))}
+                    className="w-full border rounded-md px-3 py-2"
+                    placeholder={t('reception.driverLicensePlaceholder', 'Ex: DL-2025-001') as string}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-6 flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    if (editingDriverId) {
+                      // Update existing driver
+                      updateDriver.mutate({ id: editingDriverId, ...driverForm });
+                    } else {
+                      // Add new driver
+                      addDriver.mutate(driverForm);
+                    }
+                  }}
+                  disabled={!driverForm.name || !driverForm.licenseNumber || addDriver.isLoading || updateDriver.isLoading}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60"
+                >
+                  {addDriver.isLoading || updateDriver.isLoading ? t('common.loading') : (editingDriverId ? t('common.update') : t('common.save'))}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsAddingDriver(false);
+                    setEditingDriverId(null);
+                    setDriverForm({ name: '', phone: '', licenseNumber: '' });
+                  }}
+                  className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200"
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

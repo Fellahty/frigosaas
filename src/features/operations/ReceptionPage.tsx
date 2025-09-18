@@ -101,7 +101,7 @@ const printTicketInCurrentWindow = (reception: Reception, ticketNumber: string, 
   const printContent = `
     <div style="font-family: 'Courier New', monospace; font-size: 10px; width: 80mm; margin: 0 auto; padding: 2mm; border: 1px solid #000;">
       <div style="text-align: center; border-bottom: 1px solid #000; padding-bottom: 3mm; margin-bottom: 3mm;">
-        <div style="font-size: 14px; font-weight: bold; margin-bottom: 1mm; letter-spacing: 1px;">Entrepôt frigorifique LYAZAMI</div>
+        <div style="font-size: 14px; font-weight: bold; margin-bottom: 1mm; letter-spacing: 1px;">Domaine LYAZAMI</div>
         <div style="font-size: 12px; font-weight: bold; margin-bottom: 1mm;">TICKET DE RÉCEPTION</div>
         <div style="font-size: 10px; color: #666; margin-bottom: 2mm;">N° ${ticketNumber}</div>
       </div>
@@ -218,7 +218,7 @@ const printTicketInCurrentWindow = (reception: Reception, ticketNumber: string, 
       </div>
       
       <div style="text-align: center; margin-top: 3mm; font-size: 8px; color: #666; border-top: 1px solid #000; padding-top: 2mm;">
-        <div> Entrepôt frigorifique LYAZAMI</div>
+        <div> Domaine LYAZAMI</div>
         <div>${currentDate.toLocaleDateString('fr-FR')} ${currentDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
       </div>
       
@@ -1010,7 +1010,7 @@ export const ReceptionPage: React.FC = () => {
         <body>
           <div class="ticket">
             <div class="header">
-              <div class="company-name">Entrepôt frigorifique LYAZAMI</div>
+              <div class="company-name">Domaine LYAZAMI</div>
               <div class="ticket-title">TICKET DE RÉCEPTION</div>
               <div class="ticket-number">N° ${ticketNumber}</div>
             </div>
@@ -1117,7 +1117,7 @@ export const ReceptionPage: React.FC = () => {
             </div>
 
             <div class="footer">
-              <div>Entrepôt frigorifique LYAZAMI</div>
+              <div>Domaine LYAZAMI</div>
               <div>${currentDate.toLocaleDateString('fr-FR')} ${currentDate.toLocaleTimeString('fr-FR', { 
                 hour: '2-digit', 
                 minute: '2-digit'
