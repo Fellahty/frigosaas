@@ -19,10 +19,12 @@ import { ReceptionViewPage } from '../features/operations/ReceptionViewPage';
 import { ClientOperationsPage } from '../features/operations/ClientOperationsPage';
 import { OperationsOverviewPage } from '../features/operations/OperationsOverviewPage';
 import CautionManagement from '../features/operations/CautionManagement';
+import PalletScannerPage from '../features/operations/PalletScannerPage';
 import { ReservationsPage } from '../features/reservations/ReservationsPage';
 import { ClientReservationsPage } from '../features/reservations/ClientReservationsPage';
 import SensorsPage from '../features/sensors/SensorsPage';
 import ClientSensorsPage from '../features/sensors/ClientSensorsPage';
+import { HygienePage } from '../features/hygiene/HygienePage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { useAuth } from '../lib/hooks/useAuth';
 
@@ -262,6 +264,22 @@ export const router = createBrowserRouter([
         element: (
           <Layout>
             <CautionManagement />
+          </Layout>
+        ),
+      },
+      {
+        path: 'pallet-scanner',
+        element: (
+          <Layout>
+            <PalletScannerPage />
+          </Layout>
+        ),
+      },
+      {
+        path: 'hygiene',
+        element: (
+          <Layout>
+            <HygienePage />
           </Layout>
         ),
       },

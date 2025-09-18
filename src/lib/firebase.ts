@@ -22,8 +22,18 @@ export const storage = getStorage(app);
 
 // Enable offline persistence
 let isOfflineEnabled = false;
+let persistencePromise: Promise<void> | null = null;
+
 export const enableOfflinePersistence = async () => {
-  if (isOfflineEnabled) return;
+  if (isOfflineEnabled) {
+    console.log('Offline persistence already enabled, skipping...');
+    return;
+  }
+
+  if (persistencePromise) {
+    console.log('Persistence already being enabled, waiting...');
+    return persistencePromise;
+  }
   
   // Safety checks
   if (typeof window === 'undefined') {
@@ -36,24 +46,31 @@ export const enableOfflinePersistence = async () => {
     return;
   }
   
-  try {
-    // Enable offline persistence
-    await import('firebase/firestore').then(({ enableIndexedDbPersistence }) => {
-      enableIndexedDbPersistence(db).catch((err) => {
-        if (err.code === 'failed-precondition') {
-          console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-        } else if (err.code === 'unimplemented') {
-          console.warn('The current browser does not support all features required for persistence');
-        } else {
-          console.warn('Failed to enable offline persistence:', err);
-        }
-      });
-    });
-    isOfflineEnabled = true;
-    console.log('✅ Firestore offline persistence enabled');
-  } catch (error) {
-    console.warn('Failed to enable offline persistence:', error);
-  }
+  persistencePromise = (async () => {
+    try {
+      // Import and enable persistence
+      const { enableIndexedDbPersistence } = await import('firebase/firestore');
+      
+      await enableIndexedDbPersistence(db);
+      isOfflineEnabled = true;
+      console.log('✅ Firestore offline persistence enabled');
+    } catch (error: any) {
+      if (error.code === 'failed-precondition') {
+        console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+      } else if (error.code === 'unimplemented') {
+        console.warn('The current browser does not support all features required for persistence');
+      } else if (error.message?.includes('already been started')) {
+        console.warn('Firestore already started, persistence already enabled');
+        isOfflineEnabled = true;
+      } else {
+        console.warn('Failed to enable offline persistence:', error);
+      }
+    } finally {
+      persistencePromise = null;
+    }
+  })();
+
+  return persistencePromise;
 };
 
 // Network management

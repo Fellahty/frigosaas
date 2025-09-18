@@ -535,8 +535,8 @@ export const ReceptionPage: React.FC = () => {
     },
   });
 
-  // Generate pallet collection tickets
-  const generatePalletTickets = () => {
+  // Generate pallet collection tickets with 8-section format
+  const generatePalletTickets = async () => {
     if (!selectedReception) return;
 
     const { pallets } = palletCalculation;
@@ -559,7 +559,15 @@ export const ReceptionPage: React.FC = () => {
       });
     });
 
-    // Generate A4/8 tickets (8 tickets per A4 page)
+    // Save pallet collection data to Firebase before printing
+    try {
+      await savePalletCollection.mutateAsync();
+    } catch (error) {
+      console.error('Error saving pallet collection data:', error);
+      // Continue with printing even if save fails
+    }
+
+    // Generate A4/8 tickets (8 tickets per A4 page) with 8-section format
     const ticketsPerPage = 8;
     const pages = Math.ceil(tickets.length / ticketsPerPage);
     
@@ -586,66 +594,149 @@ export const ReceptionPage: React.FC = () => {
           isFull: ticket.isFull
         });
         
+        // Generate QR Code using the qrcode library
+        const generateQRCode = async (data: string) => {
+          try {
+            const qrDataURL = await QRCode.toDataURL(data, {
+              width: 200,
+              margin: 1,
+              color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+              }
+            });
+            return `<img src="${qrDataURL}" style="width: 100%; height: 100%; object-fit: contain;" />`;
+          } catch (error) {
+            console.error('QR Code generation failed:', error);
+            // Fallback to simple pattern
+            return generateQRPattern(data);
+          }
+        };
+
+        // Generate working barcode-style pattern
+        const generateBarcodePattern = (data: string) => {
+          let pattern = '';
+          let hash = 0;
+          
+          // Create hash from data
+          for (let i = 0; i < data.length; i++) {
+            hash = ((hash << 5) - hash + data.charCodeAt(i)) & 0xffffffff;
+          }
+          
+          // Generate barcode-like pattern (vertical bars)
+          for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 20; j++) {
+              const index = (i * 20 + j) % 32;
+              const isBlack = (hash >> index) & 1;
+              pattern += isBlack ? '█' : '░';
+            }
+            pattern += '<br/>';
+          }
+          return pattern;
+        };
+
+        // Generate QR-like pattern for pallet reference
+        const generateQRPattern = (data: string) => {
+          const size = 9;
+          let pattern = '';
+          let hash = 0;
+          
+          // Create hash from data
+          for (let i = 0; i < data.length; i++) {
+            hash = ((hash << 5) - hash + data.charCodeAt(i)) & 0xffffffff;
+          }
+          
+          for (let i = 0; i < size; i++) {
+            for (let j = 0; j < size; j++) {
+              let isBlack = false;
+              
+              // Corner markers (QR code style)
+              if ((i < 3 && j < 3) || (i < 3 && j >= size - 3) || (i >= size - 3 && j < 3)) {
+                if (i === 0 || i === 2 || j === 0 || j === 2) {
+                  isBlack = true;
+                }
+                if (i === 1 && j === 1) {
+                  isBlack = true;
+                }
+              } else {
+                // Data area - use hash to determine pattern
+                const index = (i * size + j) % 32;
+                isBlack = (hash >> index) & 1;
+              }
+              
+              pattern += isBlack ? '█' : '░';
+            }
+            pattern += '<br/>';
+          }
+          return pattern;
+        };
+
+
         printContent += `
-          <div style="border: 2px solid #333; padding: 8mm; display: flex; flex-direction: column; justify-content: space-between; background: white;">
+          <div style="border: 1px solid #333333; border-radius: 3px; padding: 0.6mm; background: #ffffff; font-family: 'Arial', sans-serif; height: 100%; display: flex; flex-direction: column; justify-content: center;">
             <!-- Header -->
-            <div style="text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 3mm; margin-bottom: 3mm;">
-              <h2 style="margin: 0; font-size: 14pt; font-weight: bold; color: #333;">TICKET COLLECTE PALETTE</h2>
-              <p style="margin: 2mm 0 0 0; font-size: 10pt; color: #666;">Palette #${ticket.palletNumber} ${ticket.isFull ? '(Complète)' : '(Partielle)'}</p>
-              <p style="margin: 1mm 0 0 0; font-size: 8pt; color: #888; font-family: monospace;">${ticket.reference}</p>
-            </div>
-            
-            <!-- QR Code Placeholder -->
-            <div style="text-align: center; margin: 3mm 0;">
-              <div style="width: 40mm; height: 40mm; border: 1px solid #ccc; margin: 0 auto; display: flex; align-items: center; justify-content: center; background: #f9f9f9;">
-                <div style="font-size: 8pt; color: #666; text-align: center;">
-                  QR CODE<br/>
-                  <small>${qrData.substring(0, 20)}...</small>
-                </div>
+            <div style="text-align: center; margin-bottom: 0.4mm; border-bottom: 1px solid #cccccc; padding-bottom: 0.3mm;">
+              <div style="color: #000000; font-size: 11pt; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 0.4mm;">DOMAINE LYAZAMI</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9pt; color: #333333;">
+                <div style="font-weight: 700; background: #f0f0f0; color: #000000; padding: 1px 3px; border-radius: 2px;">#${ticket.palletNumber}</div>
+                <div style="background: #e0e0e0; color: #000000; padding: 1px 3px; border-radius: 2px; font-size: 8pt; font-weight: 600;">${ticket.isFull ? 'Complète' : 'Partielle'}</div>
+                <div style="font-family: monospace; font-size: 8pt; font-weight: 600; color: #666666;">${ticket.reference}</div>
               </div>
             </div>
             
-            <!-- Details Table -->
-            <div style="font-size: 9pt;">
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Date:</td>
-                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.arrivalTime.toLocaleDateString('fr-FR')}</td>
-                </tr>
-                <tr>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Client:</td>
-                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.clientName}</td>
-                </tr>
-                <tr>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Culture:</td>
-                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.productName}</td>
-                </tr>
-                <tr>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Variété:</td>
-                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.productVariety || 'N/A'}</td>
-                </tr>
-                <tr>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Palette #:</td>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; color: #e67e22;">${ticket.palletNumber}</td>
-                </tr>
-                <tr>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Référence:</td>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-family: monospace; font-size: 8pt; color: #666;">${ticket.reference}</td>
-                </tr>
-                <tr>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Caisses:</td>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; color: #27ae60;">${ticket.crateCount}</td>
-                </tr>
-                <tr>
-                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Chambre:</td>
-                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.roomName || 'Non assignée'}</td>
-                </tr>
-              </table>
+            <!-- Main Content - Centered Layout -->
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8mm;">
+              <!-- Data Table - Centered -->
+              <div style="display: flex; flex-direction: column; gap: 0.7mm; width: 100%; max-width: 60mm;">
+                <!-- Row 1: DATE -->
+                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.5mm; border-radius: 2px; border: 1px solid #e9ecef;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">DATE</div>
+                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.arrivalTime.getDate()}/${ticket.reception.arrivalTime.getMonth() + 1}/${ticket.reception.arrivalTime.getFullYear()}</div>
+                </div>
+                
+                <!-- Row 2: CARRE -->
+                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.5mm; border-radius: 2px; border: 1px solid #e9ecef;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">CARRE</div>
+                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.clientName}</div>
+                </div>
+                
+                <!-- Row 3: VARIETE -->
+                <div style="display: flex; align-items: center; background: #fff3cd; padding: 0.5mm; border-radius: 2px; border: 1px solid #ffeaa7;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">VARIETE</div>
+                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.productVariety || 'GOLD'}</div>
+                </div>
+                
+                <!-- Row 4: PALETTE -->
+                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.5mm; border-radius: 2px; border: 1px solid #e9ecef;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">PALETTE</div>
+                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.palletNumber}</div>
+                </div>
+                
+                <!-- Row 5: CAISSES -->
+                <div style="display: flex; align-items: center; background: #fff3cd; padding: 0.5mm; border-radius: 2px; border: 1px solid #ffeaa7;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">CAISSES</div>
+                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.crateCount}</div>
+                </div>
+                
+                <!-- Row 6: CHAMBRE -->
+                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.5mm; border-radius: 2px; border: 1px solid #e9ecef;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">CHAMBRE</div>
+                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.roomName || '3'}</div>
+                </div>
+              </div>
+              
+              <!-- Barcode - Centered -->
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #000000; border-radius: 3px; padding: 0.5mm; background: #ffffff; width: 100%; max-width: 50mm;">
+                <div class="barcode-container" data-reference="${ticket.reference}" style="width: 100%; height: 8mm; border: 1px solid #000000; border-radius: 2px; display: flex; align-items: center; justify-content: center; background: #ffffff; margin-bottom: 0.3mm; padding: 0.2mm;">
+                  <div style="color: #000000; font-size: 10px; text-align: center; font-family: monospace; font-weight: bold; letter-spacing: 3px;">${ticket.reference}</div>
+                </div>
+                <div style="font-size: 6pt; color: #000000; text-align: center; font-weight: 700; font-family: monospace;">REF: ${ticket.reference}</div>
+              </div>
             </div>
             
             <!-- Footer -->
-            <div style="text-align: center; margin-top: 3mm; padding-top: 2mm; border-top: 1px solid #ccc; font-size: 8pt; color: #666;">
-              <p style="margin: 0;">Ticket généré le ${new Date().toLocaleString('fr-FR')}</p>
+            <div style="text-align: center; margin-top: 0.3mm; padding-top: 0.2mm; border-top: 1px solid #000000; font-size: 7pt; color: #000000; font-weight: 600;">
+              <p style="margin: 0;">Domaine Lyazami • ${new Date().toLocaleDateString('fr-FR')}</p>
             </div>
           </div>
         `;
@@ -670,6 +761,7 @@ export const ReceptionPage: React.FC = () => {
         <html>
         <head>
           <title>Tickets Collecte Palette</title>
+          <script src="https://cdn.jsdelivr.net/npm/bwip-js@4.0.0/dist/bwip-js.min.js"></script>
           <style>
             @media print {
               @page {
@@ -686,10 +778,70 @@ export const ReceptionPage: React.FC = () => {
               margin: 0;
               padding: 0;
             }
+            .barcode-container {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              width: 100%;
+              height: 8mm;
+              background: white;
+              border: 1px solid #333;
+              border-radius: 2px;
+            }
+            .barcode-container canvas {
+              max-width: 100%;
+              max-height: 100%;
+              width: auto;
+              height: auto;
+            }
           </style>
         </head>
         <body>
           ${printContent}
+          <script>
+            // Generate barcodes using bwip-js library
+            function generateBarcodes() {
+              const barcodeContainers = document.querySelectorAll('.barcode-container');
+              barcodeContainers.forEach((container, index) => {
+                const reference = container.getAttribute('data-reference');
+                if (reference) {
+                  // Show reference as fallback
+                  container.innerHTML = '<div style="color: #000000; font-size: 10px; text-align: center; font-family: monospace; font-weight: bold; letter-spacing: 3px;">' + reference + '</div>';
+                  
+                  // Try to generate barcode if library is available
+                  if (typeof bwipjs !== 'undefined') {
+                    try {
+                      // Clear container
+                      container.innerHTML = '';
+                      
+                      // Create canvas for barcode
+                      const canvas = document.createElement('canvas');
+                      container.appendChild(canvas);
+                      
+                      // Generate barcode
+                      bwipjs.toCanvas(canvas, {
+                        bcid: 'code128',        // Barcode type
+                        text: reference,        // Text to encode
+                        scale: 1,              // Smaller scale factor
+                        height: 15,            // Smaller bar height
+                        includetext: false,    // Don't show text below barcode
+                        textxalign: 'center',  // Center text
+                      });
+                    } catch (e) {
+                      console.error('Barcode generation failed:', e);
+                      // Fallback to text
+                      container.innerHTML = '<div style="color: #000000; font-size: 10px; text-align: center; font-family: monospace; font-weight: bold; letter-spacing: 3px;">' + reference + '</div>';
+                    }
+                  }
+                }
+              });
+            }
+            
+            // Generate barcodes when page loads
+            window.addEventListener('load', generateBarcodes);
+            setTimeout(generateBarcodes, 500);
+            setTimeout(generateBarcodes, 1000);
+          </script>
         </body>
         </html>
       `);
@@ -3009,8 +3161,8 @@ export const ReceptionPage: React.FC = () => {
                 </button>
                 
                 <button
-                  onClick={() => {
-                    generatePalletTickets();
+                  onClick={async () => {
+                    await generatePalletTickets();
                     setShowPalletModal(false);
                   }}
                   className="flex-1 px-4 py-3 text-white bg-orange-600 hover:bg-orange-700 rounded-lg font-medium transition-colors transform hover:scale-105 active:scale-95"

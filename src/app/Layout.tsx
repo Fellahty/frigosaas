@@ -80,17 +80,25 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="hidden md:flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200/50">
+          <div className="hidden md:flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200/50 flex-shrink-0">
             <div className="flex flex-col">
               <h1 className="text-xl font-light text-gray-900 tracking-tight">Domaine</h1>
               <h2 className="text-2xl font-semibold text-gray-800 tracking-wide">LYAZAMI</h2>
             </div>
-            <LangSwitcher />
+            <div className="flex items-center space-x-2">
+              <LangSwitcher />
+              {/* Scroll indicator */}
+              <div className="text-xs text-gray-400 hidden lg:block">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                </svg>
+              </div>
+            </div>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4">
-            <ul className="space-y-2">
+          {/* Navigation - Scrollable */}
+          <nav className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-500 relative scroll-smooth">
+            <ul className="space-y-2 pb-6">
               {/* Dashboard */}
               <li>
                 <Link
@@ -148,7 +156,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <button
                   onClick={() => toggleSection('operations')}
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
-                    isSectionActive(['/loans', '/reception', '/operations-overview', '/caution-management'])
+                    isSectionActive(['/loans', '/reception', '/operations-overview', '/caution-management', '/pallet-scanner'])
                       ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
                       : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
                   }`}
@@ -230,6 +238,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         {t('sidebar.deposits', 'Cautions')}
                       </Link>
                     </li>
+                    <li>
+                      <Link
+                        to="/pallet-scanner"
+                        className={`flex items-center px-4 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium ${
+                          isActive('/pallet-scanner')
+                            ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 shadow-sm border border-green-200'
+                            : 'text-gray-600 hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 hover:shadow-sm'
+                        }`}
+                      >
+                        <svg className="w-3 h-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                        </svg>
+                        {t('sidebar.palletScanner', 'Scanner Palette')}
+                      </Link>
+                    </li>
                   </ul>
                 )}
               </li>
@@ -295,6 +318,23 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 )}
               </li>
 
+              {/* Hygiène */}
+              <li>
+                <Link
+                  to="/hygiene"
+                  className={`flex items-center px-4 py-3 rounded-xl transition-all duration-200 text-base font-medium ${
+                    isActive('/hygiene')
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:shadow-sm'
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {t('sidebar.hygiene', 'Hygiène')}
+                </Link>
+              </li>
+
               {/* Capteurs */}
               <li>
                 <Link
@@ -353,10 +393,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </li>
 
             </ul>
+            {/* Gradient fade at bottom to indicate more content */}
+            <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
+            {/* Gradient fade at top to indicate content above when scrolled */}
+            <div className="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-white to-transparent pointer-events-none"></div>
           </nav>
 
-          {/* Footer */}
-          <div className="p-6 border-t border-gray-200">
+          {/* Footer - Fixed at bottom */}
+          <div className="p-6 border-t border-gray-200 flex-shrink-0 bg-white">
             {/* User Info with Sync Status */}
             {user && (
               <div className="mb-4 p-3 bg-gray-50 rounded-lg">
