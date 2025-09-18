@@ -344,6 +344,7 @@ export const ReceptionPage: React.FC = () => {
   const [showPalletModal, setShowPalletModal] = React.useState(false);
   const [selectedReception, setSelectedReception] = React.useState<any>(null);
   const [cratesPerPallet, setCratesPerPallet] = React.useState(42);
+  const [customPalletCrates, setCustomPalletCrates] = React.useState<{[key: number]: number}>({});
 
   // Fetch crate types from database
   const { data: crateTypes = [] } = useQuery({
