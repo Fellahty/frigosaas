@@ -549,10 +549,10 @@ export const ReceptionPage: React.FC = () => {
       reception: any;
     }> = [];
     
-    // Generate tickets for all pallets
-    pallets.forEach(pallet => {
+    // Generate tickets for all pallets with sequential numbering
+    pallets.forEach((pallet, index) => {
       tickets.push({
-        palletNumber: pallet.number,
+        palletNumber: index + 1, // Sequential numbering starting from 1
         crateCount: pallet.crates,
         isFull: pallet.isFull,
         reference: pallet.reference,
@@ -579,7 +579,7 @@ export const ReceptionPage: React.FC = () => {
       
       printContent += `
         <div style="page-break-after: ${page < pages - 1 ? 'always' : 'avoid'}; width: 210mm; height: 297mm; padding: 10mm; font-family: Arial, sans-serif;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr 1fr; gap: 9mm; height: 100%;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr 1fr; gap: 11mm; height: 100%;">
       `;
       
       pageTickets.forEach((ticket) => {
@@ -736,7 +736,7 @@ export const ReceptionPage: React.FC = () => {
             </div>
             
             <!-- Footer -->
-            <div style="text-align: center; margin-top: 0.3mm; padding-top: 0.2mm; border-top: 1px solid #000000; font-size: 7pt; color: #000000; font-weight: 600;">
+            <div style="text-align: center; margin-top: 2.5mm; padding-top: 0.8mm; padding-bottom: 0.5mm; border-top: 1px solid #000000; font-size: 7pt; color: #000000; font-weight: 600;">
               <p style="margin: 0;">Domaine Lyazami • ${new Date().toLocaleDateString('fr-FR')}</p>
             </div>
           </div>

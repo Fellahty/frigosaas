@@ -5,6 +5,8 @@ import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Card } from '../../components/Card';
 import { Spinner } from '../../components/Spinner';
+// @ts-ignore
+import Quagga from 'quagga';
 
 interface PalletInfo {
   id: string;
@@ -36,7 +38,7 @@ interface ReceptionInfo {
 
 const PalletScannerPage: React.FC = () => {
   const { t } = useTranslation();
-  const { tenantId: hookTenantId } = useTenantId();
+  const hookTenantId = useTenantId();
   const tenantId = hookTenantId || 'YAZAMI'; // Fallback to hardcoded value
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState<string>('');
@@ -44,37 +46,80 @@ const PalletScannerPage: React.FC = () => {
   const [receptionInfo, setReceptionInfo] = useState<ReceptionInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLDivElement>(null);
 
   // Start camera for barcode scanning
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
+      setIsScanning(true);
+      setError('');
       
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setIsScanning(true);
-        setError('');
-      }
+      // Initialize QuaggaJS
+      Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: videoRef.current,
+          constraints: {
+            width: { min: 640 },
+            height: { min: 480 },
+            facingMode: "environment",
+            aspectRatio: { min: 1, max: 2 }
+          },
+        },
+        locator: {
+          patchSize: "medium",
+          halfSample: true,
+        },
+        numOfWorkers: 2,
+        frequency: 10,
+        decoder: {
+          readers: [
+            "code_128_reader",
+            "ean_reader",
+            "ean_8_reader",
+            "code_39_reader",
+            "code_39_vin_reader",
+            "codabar_reader",
+            "upc_reader",
+            "upc_e_reader",
+            "i2of5_reader"
+          ],
+        },
+        locate: true,
+      }, (err: any) => {
+        if (err) {
+          console.error('QuaggaJS initialization error:', err);
+          setError('Erreur lors de l\'initialisation du scanner. Veuillez réessayer.');
+          setIsScanning(false);
+          return;
+        }
+        console.log("QuaggaJS initialization finished. Ready to start");
+        Quagga.start();
+      });
+
+      // Listen for successful barcode detection
+      Quagga.onDetected((result: any) => {
+        const code = result.codeResult.code;
+        console.log('Barcode detected:', code);
+        setScannedCode(code);
+        stopCamera();
+        searchPallet(code);
+      });
+
     } catch (err) {
       console.error('Error accessing camera:', err);
       setError('Impossible d\'accéder à la caméra. Veuillez autoriser l\'accès à la caméra.');
+      setIsScanning(false);
     }
   };
 
   // Stop camera
   const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+    try {
+      Quagga.stop();
+    } catch (err) {
+      console.log('QuaggaJS was not running');
     }
     setIsScanning(false);
   };
@@ -132,7 +177,7 @@ const PalletScannerPage: React.FC = () => {
         console.log('Checking collection:', docSnapshot.id, 'pallets:', data.pallets?.length);
         
         if (data.pallets && Array.isArray(data.pallets)) {
-          const matchingPallet = data.pallets.find(p => p.reference === reference);
+          const matchingPallet = data.pallets.find((p: { reference: string }) => p.reference === reference);
           if (matchingPallet) {
             console.log('Found matching pallet:', matchingPallet);
             foundPallet = { ...data, id: docSnapshot.id };
@@ -208,33 +253,33 @@ const PalletScannerPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
           {t('scanner.title', 'Scanner de Palette')}
         </h1>
-        <p className="text-gray-600">
+        <p className="text-sm md:text-base text-gray-600">
           {t('scanner.description', 'Scannez le code-barres d\'une palette pour voir ses informations')}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
         {/* Scanner Section */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <Card className="p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">
             {t('scanner.scanSection', 'Scanner')}
           </h2>
           
           {!isScanning ? (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="text-center py-6 md:py-8">
+              <div className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 md:w-8 md:h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1 1v2a1 1 0 001 1z" />
                 </svg>
               </div>
               <button
                 onClick={startCamera}
-                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                className="px-4 md:px-6 py-2 md:py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm md:text-base"
               >
                 {t('scanner.startCamera', 'Démarrer la caméra')}
               </button>
@@ -242,25 +287,27 @@ const PalletScannerPage: React.FC = () => {
           ) : (
             <div className="space-y-4">
               <div className="relative">
-                <video
+                <div
                   ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-64 bg-gray-900 rounded-lg"
+                  className="w-full h-48 md:h-64 bg-gray-900 rounded-lg"
+                  style={{ position: 'relative' }}
                 />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-48 h-32 border-2 border-green-500 rounded-lg bg-transparent">
-                    <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-green-500"></div>
-                    <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-green-500"></div>
-                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-green-500"></div>
-                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-green-500"></div>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-32 h-24 md:w-48 md:h-32 border-2 border-green-500 rounded-lg bg-transparent">
+                    <div className="absolute top-0 left-0 w-4 h-4 md:w-6 md:h-6 border-t-2 border-l-2 border-green-500"></div>
+                    <div className="absolute top-0 right-0 w-4 h-4 md:w-6 md:h-6 border-t-2 border-r-2 border-green-500"></div>
+                    <div className="absolute bottom-0 left-0 w-4 h-4 md:w-6 md:h-6 border-b-2 border-l-2 border-green-500"></div>
+                    <div className="absolute bottom-0 right-0 w-4 h-4 md:w-6 md:h-6 border-b-2 border-r-2 border-green-500"></div>
                   </div>
+                </div>
+                <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white px-2 py-1 rounded text-xs">
+                  {String(t('scanner.pointCamera', 'Pointez la caméra vers le code-barres'))}
                 </div>
               </div>
               
               <button
                 onClick={stopCamera}
-                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm md:text-base"
               >
                 {t('scanner.stopCamera', 'Arrêter la caméra')}
               </button>
@@ -268,22 +315,22 @@ const PalletScannerPage: React.FC = () => {
           )}
 
           {/* Manual Input */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">
+          <div className="mt-4 md:mt-6 pt-4 md:pt-6 border-t border-gray-200">
+            <h3 className="text-base md:text-lg font-medium text-gray-900 mb-3">
               {t('scanner.manualInput', 'Saisie manuelle')}
             </h3>
-            <form onSubmit={handleSubmit} className="flex gap-2">
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={scannedCode}
                 onChange={handleManualInput}
-                placeholder={t('scanner.enterCode', 'Entrez le code de la palette')}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder={String(t('scanner.enterCode', 'Entrez le code de la palette'))}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm md:text-base"
               />
               <button
                 type="submit"
                 disabled={loading || !scannedCode.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm md:text-base whitespace-nowrap"
               >
                 {loading ? <Spinner size="sm" /> : t('scanner.search', 'Rechercher')}
               </button>
@@ -292,8 +339,8 @@ const PalletScannerPage: React.FC = () => {
         </Card>
 
         {/* Results Section */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <Card className="p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">
             {t('scanner.results', 'Résultats')}
           </h2>
 
@@ -315,7 +362,7 @@ const PalletScannerPage: React.FC = () => {
                 <h3 className="font-semibold text-gray-900 mb-2">
                   {t('scanner.palletInfo', 'Informations de la palette')}
                 </h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-gray-600">Référence:</span>
                     <span className="ml-2 font-medium">{scannedCode}</span>
@@ -350,7 +397,7 @@ const PalletScannerPage: React.FC = () => {
                 <h3 className="font-semibold text-gray-900 mb-2">
                   {t('scanner.palletDetails', 'Détails de la palette')}
                 </h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-gray-600">Caisses:</span>
                     <span className="ml-2 font-medium">
@@ -375,7 +422,7 @@ const PalletScannerPage: React.FC = () => {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-4">
+              <div className="flex flex-col sm:flex-row gap-2 pt-4">
                 <button
                   onClick={() => {
                     setPalletInfo(null);
@@ -383,13 +430,13 @@ const PalletScannerPage: React.FC = () => {
                     setScannedCode('');
                     setError('');
                   }}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm md:text-base"
                 >
                   {t('scanner.clear', 'Effacer')}
                 </button>
                 <button
                   onClick={() => searchPallet(scannedCode)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm md:text-base"
                 >
                   {t('scanner.refresh', 'Actualiser')}
                 </button>
