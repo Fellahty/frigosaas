@@ -595,7 +595,14 @@
     "complete": "complété",
     "crateType": "Type de caisse",
     "selectCrateType": "Sélectionner un type de caisse",
-    "selectClientFirst": "Sélectionnez d'abord un client"
+    "selectClientFirst": "Sélectionnez d'abord un client",
+    "resetToDefault": "Réinitialiser",
+    "crates": "Caisses",
+    "personnalisé": "Personnalisé",
+    "complète": "Complète",
+    "partielle": "Partielle",
+    "savePalletData": "Sauvegarder",
+    "saved": "Sauvegardé"
   },
   "billing": {
     "title": "Facturation",
