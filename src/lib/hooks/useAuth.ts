@@ -16,16 +16,25 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('useAuth: Checking for stored user...');
     // Check if user is stored in localStorage
     const storedUser = localStorage.getItem('user');
+    console.log('useAuth: storedUser exists:', !!storedUser);
+    
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(storedUser);
+        console.log('useAuth: parsed user:', parsedUser);
+        setUser(parsedUser);
       } catch (error) {
+        console.error('useAuth: Error parsing stored user:', error);
         localStorage.removeItem('user');
       }
+    } else {
+      console.log('useAuth: No stored user found');
     }
     setLoading(false);
+    console.log('useAuth: Loading set to false');
   }, []);
 
   const login = async (username: string, password: string) => {

@@ -313,6 +313,7 @@ export const ReceptionPage: React.FC = () => {
     totalCrates: 0,
     crateType: '',
     notes: '',
+    arrivalTime: new Date(),
   });
   const [truckForm, setTruckForm] = React.useState({
     number: '',
@@ -578,7 +579,7 @@ export const ReceptionPage: React.FC = () => {
       
       printContent += `
         <div style="page-break-after: ${page < pages - 1 ? 'always' : 'avoid'}; width: 210mm; height: 297mm; padding: 10mm; font-family: Arial, sans-serif;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr 1fr; gap: 5mm; height: 100%;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr 1fr; gap: 9mm; height: 100%;">
       `;
       
       pageTickets.forEach((ticket) => {
@@ -1245,7 +1246,7 @@ export const ReceptionPage: React.FC = () => {
         crateType: payload.crateType,
         notes: payload.notes,
         status: 'pending',
-        arrivalTime: Timestamp.fromDate(new Date()),
+        arrivalTime: Timestamp.fromDate(payload.arrivalTime),
       };
 
       if (editingReceptionId) {
@@ -1276,6 +1277,7 @@ export const ReceptionPage: React.FC = () => {
         totalCrates: 0,
         crateType: '',
         notes: '',
+        arrivalTime: new Date(),
       });
     },
   });
@@ -1437,6 +1439,7 @@ export const ReceptionPage: React.FC = () => {
       totalCrates: reception.totalCrates,
       crateType: (reception as any).crateType || '',
       notes: reception.notes || '',
+      arrivalTime: reception.arrivalTime,
     });
     setIsAdding(true);
   };
@@ -1861,163 +1864,165 @@ export const ReceptionPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Filter Section */}
-      <Card className="bg-white border-0 shadow-sm rounded-xl">
-        <div className="p-4 sm:p-6">
-          <div className="space-y-4">
-            {/* Mobile-First Filter Controls */}
-            <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
-              {/* Client Select Filter - Full width on mobile */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  {t('reception.filterByClient', 'Client')}
-                </label>
-                <div className="relative">
-                  <select
-                    value={clientFilter}
-                    onChange={(e) => setClientFilter(e.target.value)}
-                    className="block w-full pl-4 pr-10 py-3 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none touch-manipulation"
-                  >
-                    <option value="">{t('reception.allClients', 'Tous les clients')}</option>
-                    {(clients || []).map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
-                    <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+      {/* Filter Section - Hidden when adding/editing */}
+      {!isAdding && (
+        <Card className="bg-white border-0 shadow-sm rounded-xl">
+          <div className="p-4 sm:p-6">
+            <div className="space-y-4">
+              {/* Mobile-First Filter Controls */}
+              <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+                {/* Client Select Filter - Full width on mobile */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('reception.filterByClient', 'Client')}
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={clientFilter}
+                      onChange={(e) => setClientFilter(e.target.value)}
+                      className="block w-full pl-4 pr-10 py-3 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none touch-manipulation"
+                    >
+                      <option value="">{t('reception.allClients', 'Tous les clients')}</option>
+                      {(clients || []).map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Name Search Filter - Full width on mobile */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('reception.searchByName', 'Rechercher')}
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                    <input
+                      type="text"
+                      value={nameFilter}
+                      onChange={(e) => setNameFilter(e.target.value)}
+                      placeholder={t('reception.searchPlaceholder', 'Rechercher...') as string}
+                      className="block w-full pl-10 pr-10 py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
+                    />
+                    {nameFilter && (
+                      <button
+                        onClick={() => setNameFilter('')}
+                        className="absolute inset-y-0 right-0 pr-2 sm:pr-3 flex items-center hover:text-gray-600"
+                      >
+                        <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sort By - Full width on mobile */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('reception.sortBy', 'Trier par')}
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as any)}
+                      className="block w-full pl-4 pr-10 py-3 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none touch-manipulation"
+                    >
+                      <option value="date">{t('reception.sortByDate', 'Date')}</option>
+                      <option value="client">{t('reception.sortByClient', 'Client')}</option>
+                      <option value="crates">{t('reception.sortByCrates', 'Caisses')}</option>
+                      <option value="truck">{t('reception.sortByTruck', 'Camion')}</option>
+                      <option value="cumulative">{t('reception.sortByCumulative', 'Cumulatif')}</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sort Order - Touch-friendly buttons */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('reception.sortOrder', 'Ordre')}
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setSortOrder('asc')}
+                      className={`px-4 py-3 text-sm font-medium rounded-lg transition-colors touch-manipulation ${
+                        sortOrder === 'asc'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300'
+                      }`}
+                      title="Ascendant"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                        <span>↑</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setSortOrder('desc')}
+                      className={`px-4 py-3 text-sm font-medium rounded-lg transition-colors touch-manipulation ${
+                        sortOrder === 'desc'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300'
+                      }`}
+                      title="Descendant"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                        <span>↓</span>
+                      </div>
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Name Search Filter - Full width on mobile */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  {t('reception.searchByName', 'Rechercher')}
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+              {/* Mobile-Optimized Results Summary */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs sm:text-sm text-gray-600">
+                    <span className="font-medium">{filteredAndSortedReceptions.length}</span> {filteredAndSortedReceptions.length === 1 ? 'réception' : 'réceptions'}
+                    {(nameFilter || clientFilter) && (
+                      <span className="ml-1 text-blue-600">
+                        (filtré)
+                      </span>
+                    )}
                   </div>
-                  <input
-                    type="text"
-                    value={nameFilter}
-                    onChange={(e) => setNameFilter(e.target.value)}
-                    placeholder={t('reception.searchPlaceholder', 'Rechercher...') as string}
-                    className="block w-full pl-10 pr-10 py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
-                  />
-                  {nameFilter && (
+                  {(nameFilter || clientFilter) && (
                     <button
-                      onClick={() => setNameFilter('')}
-                      className="absolute inset-y-0 right-0 pr-2 sm:pr-3 flex items-center hover:text-gray-600"
+                      onClick={() => {
+                        setNameFilter('');
+                        setClientFilter('');
+                      }}
+                      className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded-md hover:bg-blue-50 transition-colors"
                     >
-                      <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      Effacer
                     </button>
                   )}
                 </div>
               </div>
-
-              {/* Sort By - Full width on mobile */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  {t('reception.sortBy', 'Trier par')}
-                </label>
-                <div className="relative">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
-                    className="block w-full pl-4 pr-10 py-3 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none touch-manipulation"
-                  >
-                    <option value="date">{t('reception.sortByDate', 'Date')}</option>
-                    <option value="client">{t('reception.sortByClient', 'Client')}</option>
-                    <option value="crates">{t('reception.sortByCrates', 'Caisses')}</option>
-                    <option value="truck">{t('reception.sortByTruck', 'Camion')}</option>
-                    <option value="cumulative">{t('reception.sortByCumulative', 'Cumulatif')}</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
-                    <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sort Order - Touch-friendly buttons */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  {t('reception.sortOrder', 'Ordre')}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setSortOrder('asc')}
-                    className={`px-4 py-3 text-sm font-medium rounded-lg transition-colors touch-manipulation ${
-                      sortOrder === 'asc'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300'
-                    }`}
-                    title="Ascendant"
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                      </svg>
-                      <span>↑</span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setSortOrder('desc')}
-                    className={`px-4 py-3 text-sm font-medium rounded-lg transition-colors touch-manipulation ${
-                      sortOrder === 'desc'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300'
-                    }`}
-                    title="Descendant"
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                      <span>↓</span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile-Optimized Results Summary */}
-            <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between">
-                <div className="text-xs sm:text-sm text-gray-600">
-                  <span className="font-medium">{filteredAndSortedReceptions.length}</span> {filteredAndSortedReceptions.length === 1 ? 'réception' : 'réceptions'}
-                  {(nameFilter || clientFilter) && (
-                    <span className="ml-1 text-blue-600">
-                      (filtré)
-                    </span>
-                  )}
-                </div>
-                {(nameFilter || clientFilter) && (
-                  <button
-                    onClick={() => {
-                      setNameFilter('');
-                      setClientFilter('');
-                    }}
-                    className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded-md hover:bg-blue-50 transition-colors"
-                  >
-                    Effacer
-                  </button>
-                )}
-              </div>
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* Add Reception Form */}
       {isAdding && (
@@ -2216,6 +2221,52 @@ export const ReceptionPage: React.FC = () => {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('reception.arrivalDate', 'Date d\'arrivée')} <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={form.arrivalTime.toISOString().split('T')[0]}
+                onChange={(e) => {
+                  const selectedDate = new Date(e.target.value);
+                  const currentTime = form.arrivalTime;
+                  const newDateTime = new Date(
+                    selectedDate.getFullYear(),
+                    selectedDate.getMonth(),
+                    selectedDate.getDate(),
+                    currentTime.getHours(),
+                    currentTime.getMinutes()
+                  );
+                  setForm((f) => ({ ...f, arrivalTime: newDateTime }));
+                }}
+                className="w-full border rounded-md px-3 py-2"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('reception.arrivalTime', 'Heure d\'arrivée')} <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="time"
+                value={form.arrivalTime.toTimeString().slice(0, 5)}
+                onChange={(e) => {
+                  const [hours, minutes] = e.target.value.split(':').map(Number);
+                  const currentDate = form.arrivalTime;
+                  const newDateTime = new Date(
+                    currentDate.getFullYear(),
+                    currentDate.getMonth(),
+                    currentDate.getDate(),
+                    hours,
+                    minutes
+                  );
+                  setForm((f) => ({ ...f, arrivalTime: newDateTime }));
+                }}
+                className="w-full border rounded-md px-3 py-2"
+                required
+              />
+            </div>
             <div className="md:col-span-2 lg:col-span-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.notes', 'Notes')}</label>
               <textarea
@@ -2248,6 +2299,7 @@ export const ReceptionPage: React.FC = () => {
                   totalCrates: 0,
                   crateType: '',
                   notes: '',
+                  arrivalTime: new Date(),
                 });
               }}
               className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200"

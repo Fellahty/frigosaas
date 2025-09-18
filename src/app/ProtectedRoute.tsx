@@ -5,7 +5,10 @@ import { useAuth } from '../lib/hooks/useAuth';
 export const ProtectedRoute: React.FC = () => {
   const { user, loading } = useAuth();
 
+  console.log('ProtectedRoute: loading:', loading, 'user:', user);
+
   if (loading) {
+    console.log('ProtectedRoute: Showing loading screen');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -17,8 +20,10 @@ export const ProtectedRoute: React.FC = () => {
   }
 
   if (!user) {
+    console.log('ProtectedRoute: No user, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
+  console.log('ProtectedRoute: User authenticated, rendering outlet');
   return <Outlet />;
 };

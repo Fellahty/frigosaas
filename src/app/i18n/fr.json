@@ -560,6 +560,7 @@
     "status_pending": "En attente",
     "status_in_progress": "En cours",
     "status_completed": "Terminé",
+    "arrivalDate": "Date d'arrivée",
     "arrivalTime": "Heure d'arrivée",
     "noReceptions": "Aucune réception",
     "actions": "Actions",

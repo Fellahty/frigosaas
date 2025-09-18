@@ -565,6 +565,7 @@
     "status_pending": "في الانتظار",
     "status_in_progress": "قيد التنفيذ",
     "status_completed": "مكتمل",
+    "arrivalDate": "تاريخ الوصول",
     "arrivalTime": "وقت الوصول",
     "noReceptions": "لا توجد استقبالات",
     "actions": "الإجراءات",

@@ -36,7 +36,8 @@ interface ReceptionInfo {
 
 const PalletScannerPage: React.FC = () => {
   const { t } = useTranslation();
-  const { tenantId } = useTenantId();
+  const { tenantId: hookTenantId } = useTenantId();
+  const tenantId = hookTenantId || 'YAZAMI'; // Fallback to hardcoded value
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState<string>('');
   const [palletInfo, setPalletInfo] = useState<PalletInfo | null>(null);
@@ -187,14 +188,19 @@ const PalletScannerPage: React.FC = () => {
     };
   }, []);
 
+  // Debug logging
+  console.log('PalletScannerPage render - tenantId:', tenantId);
+
   // Show loading if tenantId is not available
   if (!tenantId) {
+    console.log('TenantId not available, showing loading...');
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <Spinner size="lg" />
             <p className="mt-4 text-gray-600">Chargement des données...</p>
+            <p className="mt-2 text-sm text-gray-500">En attente de l'ID du tenant...</p>
           </div>
         </div>
       </div>
