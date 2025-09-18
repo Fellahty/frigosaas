@@ -102,7 +102,7 @@ const printTicketInCurrentWindow = (reception: Reception, ticketNumber: string, 
     <div style="font-family: 'Courier New', monospace; font-size: 10px; width: 80mm; margin: 0 auto; padding: 2mm; border: 1px solid #000;">
       <div style="text-align: center; border-bottom: 1px solid #000; padding-bottom: 3mm; margin-bottom: 3mm;">
         <div style="font-size: 14px; font-weight: bold; margin-bottom: 1mm; letter-spacing: 1px;">Domaine LYAZAMI</div>
-        <div style="font-size: 12px; font-weight: bold; margin-bottom: 1mm;">TICKET DE RÉCEPTION</div>
+        <div style="font-size: 12px; font-weight: bold; margin-bottom: 1mm;">BON DE SORTIE</div>
         <div style="font-size: 10px; color: #666; margin-bottom: 2mm;">N° ${ticketNumber}</div>
       </div>
       
@@ -304,8 +304,6 @@ export const ReceptionPage: React.FC = () => {
   const [isAddingDriver, setIsAddingDriver] = React.useState(false);
   const [isAddingProduct, setIsAddingProduct] = React.useState(false);
   const [editingTruckId, setEditingTruckId] = React.useState<string | null>(null);
-  const [editingDriverId, setEditingDriverId] = React.useState<string | null>(null);
-  const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({
     clientId: '',
     truckId: '',
@@ -313,6 +311,7 @@ export const ReceptionPage: React.FC = () => {
     productId: '',
     roomId: '',
     totalCrates: 0,
+    crateType: '',
     notes: '',
   });
   const [truckForm, setTruckForm] = React.useState({
@@ -334,6 +333,255 @@ export const ReceptionPage: React.FC = () => {
   const [isUploadingImage, setIsUploadingImage] = React.useState(false);
   const [editingReceptionId, setEditingReceptionId] = React.useState<string | null>(null);
   const [deletingReceptionId, setDeletingReceptionId] = React.useState<string | null>(null);
+  
+  // Filter states
+  const [clientFilter, setClientFilter] = React.useState<string>('');
+  const [nameFilter, setNameFilter] = React.useState<string>('');
+  const [sortBy, setSortBy] = React.useState<'date' | 'client' | 'crates' | 'truck' | 'cumulative'>('date');
+  const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('desc');
+  
+  // Pallet modal states
+  const [showPalletModal, setShowPalletModal] = React.useState(false);
+  const [selectedReception, setSelectedReception] = React.useState<any>(null);
+  const [cratesPerPallet, setCratesPerPallet] = React.useState(42);
+
+  // Fetch crate types from database
+  const { data: crateTypes = [] } = useQuery({
+    queryKey: ['crate-types', tenantId],
+    queryFn: async () => {
+      const q = query(collection(db, 'tenants', tenantId, 'crate-types'), where('isActive', '==', true));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    },
+  });
+
+  // Fetch reservations to filter rooms by client
+  const { data: reservations = [] } = useQuery({
+    queryKey: ['reservations', tenantId],
+    queryFn: async () => {
+      const q = query(collection(db, 'reservations'), where('tenantId', '==', tenantId));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    },
+  });
+
+
+  // Generate unique pallet reference
+  const generatePalletReference = (palletNumber: number) => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const clientCode = selectedReception?.clientName?.substring(0, 3).toUpperCase() || 'CLI';
+    return `PAL-${year}${month}${day}-${clientCode}-${String(palletNumber).padStart(3, '0')}`;
+  };
+
+  // Pallet calculation logic
+  const palletCalculation = React.useMemo(() => {
+    if (!selectedReception) return { fullPallets: 0, remainingCrates: 0, totalPallets: 0, pallets: [] };
+    
+    const totalCrates = selectedReception.totalCrates;
+    const fullPallets = Math.floor(totalCrates / cratesPerPallet);
+    const remainingCrates = totalCrates % cratesPerPallet;
+    const totalPallets = fullPallets + (remainingCrates > 0 ? 1 : 0);
+    
+    // Generate pallet details with unique references
+    const pallets = [];
+    for (let i = 1; i <= fullPallets; i++) {
+      pallets.push({
+        number: i,
+        crates: cratesPerPallet,
+        isFull: true,
+        reference: generatePalletReference(i)
+      });
+    }
+    
+    if (remainingCrates > 0) {
+      pallets.push({
+        number: fullPallets + 1,
+        crates: remainingCrates,
+        isFull: false,
+        reference: generatePalletReference(fullPallets + 1)
+      });
+    }
+    
+    return { fullPallets, remainingCrates, totalPallets, pallets };
+  }, [selectedReception, cratesPerPallet]);
+
+  // Handle pallet modal
+  const handlePalletCollection = (reception: any) => {
+    setSelectedReception(reception);
+    setShowPalletModal(true);
+  };
+
+  // Generate pallet collection tickets
+  const generatePalletTickets = () => {
+    if (!selectedReception) return;
+
+    const { pallets } = palletCalculation;
+    const tickets: Array<{
+      palletNumber: number;
+      crateCount: number;
+      isFull: boolean;
+      reference: string;
+      reception: any;
+    }> = [];
+    
+    // Generate tickets for all pallets
+    pallets.forEach(pallet => {
+      tickets.push({
+        palletNumber: pallet.number,
+        crateCount: pallet.crates,
+        isFull: pallet.isFull,
+        reference: pallet.reference,
+        reception: selectedReception
+      });
+    });
+
+    // Generate A4/8 tickets (8 tickets per A4 page)
+    const ticketsPerPage = 8;
+    const pages = Math.ceil(tickets.length / ticketsPerPage);
+    
+    let printContent = '';
+    
+    for (let page = 0; page < pages; page++) {
+      const pageTickets = tickets.slice(page * ticketsPerPage, (page + 1) * ticketsPerPage);
+      
+      printContent += `
+        <div style="page-break-after: ${page < pages - 1 ? 'always' : 'avoid'}; width: 210mm; height: 297mm; padding: 10mm; font-family: Arial, sans-serif;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr 1fr; gap: 5mm; height: 100%;">
+      `;
+      
+      pageTickets.forEach((ticket) => {
+        const qrData = JSON.stringify({
+          date: ticket.reception.arrivalTime.toISOString(),
+          client: ticket.reception.clientName,
+          culture: ticket.reception.productName,
+          variety: ticket.reception.productVariety,
+          palletNumber: ticket.palletNumber,
+          palletReference: ticket.reference,
+          crateCount: ticket.crateCount,
+          room: ticket.reception.roomName,
+          isFull: ticket.isFull
+        });
+        
+        printContent += `
+          <div style="border: 2px solid #333; padding: 8mm; display: flex; flex-direction: column; justify-content: space-between; background: white;">
+            <!-- Header -->
+            <div style="text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 3mm; margin-bottom: 3mm;">
+              <h2 style="margin: 0; font-size: 14pt; font-weight: bold; color: #333;">TICKET COLLECTE PALETTE</h2>
+              <p style="margin: 2mm 0 0 0; font-size: 10pt; color: #666;">Palette #${ticket.palletNumber} ${ticket.isFull ? '(Complète)' : '(Partielle)'}</p>
+              <p style="margin: 1mm 0 0 0; font-size: 8pt; color: #888; font-family: monospace;">${ticket.reference}</p>
+            </div>
+            
+            <!-- QR Code Placeholder -->
+            <div style="text-align: center; margin: 3mm 0;">
+              <div style="width: 40mm; height: 40mm; border: 1px solid #ccc; margin: 0 auto; display: flex; align-items: center; justify-content: center; background: #f9f9f9;">
+                <div style="font-size: 8pt; color: #666; text-align: center;">
+                  QR CODE<br/>
+                  <small>${qrData.substring(0, 20)}...</small>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Details Table -->
+            <div style="font-size: 9pt;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Date:</td>
+                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.arrivalTime.toLocaleDateString('fr-FR')}</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Client:</td>
+                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.clientName}</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Culture:</td>
+                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.productName}</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Variété:</td>
+                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.productVariety || 'N/A'}</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Palette #:</td>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; color: #e67e22;">${ticket.palletNumber}</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Référence:</td>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-family: monospace; font-size: 8pt; color: #666;">${ticket.reference}</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Caisses:</td>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; color: #27ae60;">${ticket.crateCount}</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 2mm; font-weight: bold; background: #f5f5f5;">Chambre:</td>
+                  <td style="border: 1px solid #ccc; padding: 2mm;">${ticket.reception.roomName || 'Non assignée'}</td>
+                </tr>
+              </table>
+            </div>
+            
+            <!-- Footer -->
+            <div style="text-align: center; margin-top: 3mm; padding-top: 2mm; border-top: 1px solid #ccc; font-size: 8pt; color: #666;">
+              <p style="margin: 0;">Ticket généré le ${new Date().toLocaleString('fr-FR')}</p>
+            </div>
+          </div>
+        `;
+      });
+      
+      // Fill remaining slots with empty divs
+      for (let i = pageTickets.length; i < ticketsPerPage; i++) {
+        printContent += `<div></div>`;
+      }
+      
+      printContent += `
+          </div>
+        </div>
+      `;
+    }
+
+    // Open print window
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Tickets Collecte Palette</title>
+          <style>
+            @media print {
+              @page {
+                size: A4;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+              }
+            }
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 0;
+            }
+          </style>
+        </head>
+        <body>
+          ${printContent}
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
 
   // Upload image to Firebase Storage
   const uploadImage = async (file: File): Promise<string> => {
@@ -567,6 +815,34 @@ export const ReceptionPage: React.FC = () => {
     },
   });
 
+  // Filter rooms by client reservations
+  const filteredRooms = React.useMemo(() => {
+    if (!form.clientId || !reservations.length || !rooms) {
+      return rooms || [];
+    }
+    
+    // Get rooms reserved by the selected client
+    const clientReservations = reservations.filter((reservation: any) => 
+      reservation.clientId === form.clientId && 
+      (reservation.status === 'APPROVED' || reservation.status === 'REQUESTED')
+    );
+    
+    // Extract all room IDs from selectedRooms arrays and remove duplicates
+    const reservedRoomIds = [...new Set(
+      clientReservations.flatMap((reservation: any) => 
+        reservation.selectedRooms || []
+      )
+    )];
+    
+    // If no reservations found for this client, show all rooms
+    if (reservedRoomIds.length === 0) {
+      return rooms;
+    }
+    
+    // Return only rooms that are reserved by this client
+    return rooms.filter(room => reservedRoomIds.includes(room.id));
+  }, [form.clientId, reservations, rooms]);
+
   const { data: receptions, isLoading, error } = useQuery({
     queryKey: ['receptions', tenantId],
     queryFn: async (): Promise<Reception[]> => {
@@ -664,7 +940,7 @@ export const ReceptionPage: React.FC = () => {
       // Get selected client, truck, driver, product, and room details
       const selectedClient = clients?.find(c => c.id === payload.clientId);
       const selectedTruck = trucks?.find(t => t.id === payload.truckId);
-      const selectedDriver = drivers?.find(d => d.id === payload.driverId);
+      const selectedDriver = payload.driverId ? drivers?.find(d => d.id === payload.driverId) : null;
       const selectedProduct = products?.find(p => p.id === payload.productId);
       const selectedRoom = rooms?.find(r => r.id === payload.roomId);
 
@@ -676,7 +952,7 @@ export const ReceptionPage: React.FC = () => {
         clientCompany: selectedClient?.company || '',
         truckId: payload.truckId,
         truckNumber: selectedTruck?.number || '',
-        driverId: payload.driverId,
+        driverId: payload.driverId || '',
         driverName: selectedDriver?.name || '',
         driverPhone: selectedDriver?.phone || '',
         productId: payload.productId,
@@ -685,6 +961,7 @@ export const ReceptionPage: React.FC = () => {
         roomId: payload.roomId,
         roomName: selectedRoom?.room || '',
         totalCrates: payload.totalCrates,
+        crateType: payload.crateType,
         notes: payload.notes,
         status: 'pending',
         arrivalTime: Timestamp.fromDate(new Date()),
@@ -716,43 +993,12 @@ export const ReceptionPage: React.FC = () => {
         productId: '',
         roomId: '',
         totalCrates: 0,
+        crateType: '',
         notes: '',
       });
     },
   });
 
-  const updateReception = useMutation({
-    mutationFn: async ({ id, ...payload }: { id: string } & typeof form) => {
-      const selectedClient = clients?.find(c => c.id === payload.clientId);
-      const selectedTruck = trucks?.find(t => t.id === payload.truckId);
-      const selectedDriver = drivers?.find(d => d.id === payload.driverId);
-      const selectedProduct = products?.find(p => p.id === payload.productId);
-      const selectedRoom = rooms?.find(r => r.id === payload.roomId);
-
-      await updateDoc(doc(db, 'receptions', id), {
-        clientId: payload.clientId,
-        clientName: selectedClient?.name || '',
-        truckId: payload.truckId,
-        truckNumber: selectedTruck?.number || '',
-        driverId: payload.driverId,
-        driverName: selectedDriver?.name || '',
-        driverPhone: selectedDriver?.phone || '',
-        productId: payload.productId,
-        productName: selectedProduct?.name || '',
-        productVariety: selectedProduct?.variety || '',
-        roomId: payload.roomId,
-        roomName: selectedRoom?.room || '',
-        totalCrates: payload.totalCrates,
-        notes: payload.notes,
-        updatedAt: Timestamp.fromDate(new Date()),
-      });
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['receptions', tenantId] });
-      setEditingReceptionId(null);
-      await logUpdate('reception', editingReceptionId!, 'Réception modifiée', 'admin', 'Administrateur');
-    },
-  });
 
   const deleteReception = useMutation({
     mutationFn: async (receptionId: string) => {
@@ -817,6 +1063,86 @@ export const ReceptionPage: React.FC = () => {
     }
   }, [form.clientId, queryClient, tenantId]);
 
+  // Filter and sort receptions with cumulative calculation
+  const filteredAndSortedReceptions = React.useMemo(() => {
+    if (!receptions) return [];
+    
+    let filtered = receptions;
+    
+    // Filter by client
+    if (clientFilter) {
+      filtered = filtered.filter(reception => reception.clientId === clientFilter);
+    }
+    
+    // Filter by name search
+    if (nameFilter.trim()) {
+      filtered = filtered.filter(reception => 
+        reception.clientName.toLowerCase().includes(nameFilter.toLowerCase()) ||
+        reception.truckNumber.toLowerCase().includes(nameFilter.toLowerCase()) ||
+        reception.driverName.toLowerCase().includes(nameFilter.toLowerCase()) ||
+        reception.productName.toLowerCase().includes(nameFilter.toLowerCase())
+      );
+    }
+    
+    // Group receptions by client and calculate cumulative
+    const clientReceptions = new Map<string, (Reception & { cumulativeCrates: number })[]>();
+    filtered.forEach(reception => {
+      if (!clientReceptions.has(reception.clientName)) {
+        clientReceptions.set(reception.clientName, []);
+      }
+      clientReceptions.get(reception.clientName)!.push({
+        ...reception,
+        cumulativeCrates: 0 // Will be calculated below
+      });
+    });
+
+    // Calculate cumulative for each client
+    const result: (Reception & { cumulativeCrates: number })[] = [];
+    
+    clientReceptions.forEach(clientReceptionList => {
+      // Sort by arrival time
+      const sortedReceptions = clientReceptionList.sort((a, b) => a.arrivalTime.getTime() - b.arrivalTime.getTime());
+      
+      let cumulative = 0;
+      sortedReceptions.forEach(reception => {
+        cumulative += reception.totalCrates;
+        result.push({
+          ...reception,
+          cumulativeCrates: cumulative
+        });
+      });
+    });
+    
+    // Sort results based on selected criteria
+    result.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'date':
+          comparison = a.arrivalTime.getTime() - b.arrivalTime.getTime();
+          break;
+        case 'client':
+          comparison = a.clientName.localeCompare(b.clientName);
+          break;
+        case 'crates':
+          comparison = a.totalCrates - b.totalCrates;
+          break;
+        case 'truck':
+          comparison = a.truckNumber.localeCompare(b.truckNumber);
+          break;
+        case 'cumulative':
+          comparison = a.cumulativeCrates - b.cumulativeCrates;
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+    
+    return result;
+  }, [receptions, clientFilter, nameFilter, sortBy, sortOrder]);
+
   // Handle edit reception
   const handleEditReception = (reception: Reception) => {
     console.log('🔧 Editing reception:', reception);
@@ -828,6 +1154,7 @@ export const ReceptionPage: React.FC = () => {
       productId: reception.productId,
       roomId: reception.roomId || '',
       totalCrates: reception.totalCrates,
+      crateType: (reception as any).crateType || '',
       notes: reception.notes || '',
     });
     setIsAdding(true);
@@ -1011,7 +1338,7 @@ export const ReceptionPage: React.FC = () => {
           <div class="ticket">
             <div class="header">
               <div class="company-name">Domaine LYAZAMI</div>
-              <div class="ticket-title">TICKET DE RÉCEPTION</div>
+              <div class="ticket-title">BON DE SORTIE</div>
               <div class="ticket-number">N° ${ticketNumber}</div>
             </div>
 
@@ -1253,6 +1580,164 @@ export const ReceptionPage: React.FC = () => {
         </Card>
       )}
 
+      {/* Filter Section */}
+      <Card className="bg-white border-0 shadow-sm rounded-xl">
+        <div className="p-4 sm:p-6">
+          <div className="space-y-4">
+            {/* Mobile-First Filter Controls */}
+            <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+              {/* Client Select Filter - Full width on mobile */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('reception.filterByClient', 'Client')}
+                </label>
+                <div className="relative">
+                  <select
+                    value={clientFilter}
+                    onChange={(e) => setClientFilter(e.target.value)}
+                    className="block w-full pl-4 pr-10 py-3 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none touch-manipulation"
+                  >
+                    <option value="">{t('reception.allClients', 'Tous les clients')}</option>
+                    {(clients || []).map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
+                    <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Name Search Filter - Full width on mobile */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('reception.searchByName', 'Rechercher')}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={nameFilter}
+                    onChange={(e) => setNameFilter(e.target.value)}
+                    placeholder={t('reception.searchPlaceholder', 'Rechercher...') as string}
+                    className="block w-full pl-10 pr-10 py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
+                  />
+                  {nameFilter && (
+                    <button
+                      onClick={() => setNameFilter('')}
+                      className="absolute inset-y-0 right-0 pr-2 sm:pr-3 flex items-center hover:text-gray-600"
+                    >
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Sort By - Full width on mobile */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('reception.sortBy', 'Trier par')}
+                </label>
+                <div className="relative">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="block w-full pl-4 pr-10 py-3 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none touch-manipulation"
+                  >
+                    <option value="date">{t('reception.sortByDate', 'Date')}</option>
+                    <option value="client">{t('reception.sortByClient', 'Client')}</option>
+                    <option value="crates">{t('reception.sortByCrates', 'Caisses')}</option>
+                    <option value="truck">{t('reception.sortByTruck', 'Camion')}</option>
+                    <option value="cumulative">{t('reception.sortByCumulative', 'Cumulatif')}</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
+                    <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sort Order - Touch-friendly buttons */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('reception.sortOrder', 'Ordre')}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setSortOrder('asc')}
+                    className={`px-4 py-3 text-sm font-medium rounded-lg transition-colors touch-manipulation ${
+                      sortOrder === 'asc'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300'
+                    }`}
+                    title="Ascendant"
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                      <span>↑</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setSortOrder('desc')}
+                    className={`px-4 py-3 text-sm font-medium rounded-lg transition-colors touch-manipulation ${
+                      sortOrder === 'desc'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300'
+                    }`}
+                    title="Descendant"
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                      <span>↓</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile-Optimized Results Summary */}
+            <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="text-xs sm:text-sm text-gray-600">
+                  <span className="font-medium">{filteredAndSortedReceptions.length}</span> {filteredAndSortedReceptions.length === 1 ? 'réception' : 'réceptions'}
+                  {(nameFilter || clientFilter) && (
+                    <span className="ml-1 text-blue-600">
+                      (filtré)
+                    </span>
+                  )}
+                </div>
+                {(nameFilter || clientFilter) && (
+                  <button
+                    onClick={() => {
+                      setNameFilter('');
+                      setClientFilter('');
+                    }}
+                    className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded-md hover:bg-blue-50 transition-colors"
+                  >
+                    Effacer
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Add Reception Form */}
       {isAdding && (
         <Card>
@@ -1311,7 +1796,9 @@ export const ReceptionPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.driver', 'Chauffeur')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('reception.driver', 'Chauffeur')}
+              </label>
               <EnhancedSelect
                 value={form.driverId}
                 onChange={(value) => setForm((f) => ({ ...f, driverId: value }))}
@@ -1339,7 +1826,6 @@ export const ReceptionPage: React.FC = () => {
                       phone: driver.phone || '',
                       licenseNumber: driver.licenseNumber || ''
                     });
-                    setEditingDriverId(driverId);
                     setIsAddingDriver(true);
                   }
                 }}
@@ -1374,19 +1860,25 @@ export const ReceptionPage: React.FC = () => {
                       variety: product.variety,
                       imageUrl: product.imageUrl || ''
                     });
-                    setEditingProductId(productId);
                     setIsAddingProduct(true);
                   }
                 }}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.room', 'Chambre')}</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('reception.room', 'Chambre')}
+                {form.clientId && filteredRooms.length < (rooms?.length || 0) && (
+                  <span className="ml-2 text-xs text-blue-600">
+                    ({filteredRooms.length} chambre{filteredRooms.length > 1 ? 's' : ''} réservée{filteredRooms.length > 1 ? 's' : ''})
+                  </span>
+                )}
+              </label>
               <EnhancedSelect
                 value={form.roomId}
                 onChange={(value) => setForm((f) => ({ ...f, roomId: value }))}
-                placeholder={t('reception.selectRoom', 'Sélectionner une chambre')}
-                options={rooms?.map(room => ({
+                placeholder={form.clientId ? t('reception.selectRoom', 'Sélectionner une chambre') : t('reception.selectClientFirst', 'Sélectionnez d\'abord un client')}
+                options={filteredRooms?.map(room => ({
                   id: room.id,
                   value: room.id,
                   label: `${room.room} (${room.capacityCrates || room.capacity} caisses)`,
@@ -1397,6 +1889,11 @@ export const ReceptionPage: React.FC = () => {
                 onAdd={() => {/* TODO: Add room modal - redirect to settings */}}
                 onEdit={() => {/* TODO: Edit room - redirect to settings */}}
               />
+              {form.clientId && filteredRooms.length === 0 && (
+                <p className="mt-1 text-sm text-amber-600">
+                  ⚠️ Aucune chambre réservée pour ce client
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.totalCrates', 'Nombre de caisses')}</label>
@@ -1408,6 +1905,24 @@ export const ReceptionPage: React.FC = () => {
                 className="w-full border rounded-md px-3 py-2"
                 placeholder="0"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('reception.crateType', 'Type de caisse')} <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.crateType}
+                onChange={(e) => setForm((f) => ({ ...f, crateType: e.target.value }))}
+                className="w-full border rounded-md px-3 py-2"
+                required
+              >
+                <option value="">{t('reception.selectCrateType', 'Sélectionner un type de caisse')}</option>
+                {crateTypes.map((type: any) => (
+                  <option key={type.id} value={type.id}>
+                    {type.customName || type.name} - {t(`loans.crateTypes.${type.type}`, type.type)} - {t(`loans.colors.${type.color}`, type.color)}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="md:col-span-2 lg:col-span-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('reception.notes', 'Notes')}</label>
@@ -1423,7 +1938,7 @@ export const ReceptionPage: React.FC = () => {
           <div className="mt-4 flex items-center gap-3">
             <button
               onClick={() => addReception.mutate(form)}
-              disabled={!form.clientId || !form.truckId || !form.driverId || !form.productId || addReception.isLoading}
+              disabled={!form.clientId || !form.truckId || !form.productId || !form.crateType || addReception.isLoading}
               className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-60"
             >
               {addReception.isLoading ? t('common.loading') : (editingReceptionId ? t('common.update') : t('common.save'))}
@@ -1439,6 +1954,7 @@ export const ReceptionPage: React.FC = () => {
                   productId: '',
                   roomId: '',
                   totalCrates: 0,
+                  crateType: '',
                   notes: '',
                 });
               }}
@@ -1753,16 +2269,16 @@ export const ReceptionPage: React.FC = () => {
       )}
 
 
-      {/* Receptions Table */}
-      <Card>
+      {/* Desktop Table View */}
+      <Card className="hidden lg:block">
         <div className="overflow-x-auto">
           <Table className="min-w-full text-xs">
             <TableHead>
               <TableRow className="bg-gray-50">
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.print', 'Imprimer')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.serial', 'N° Ticket')}</TableHeader>
+                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.exitReceipt', 'Bon de sortie')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.client', 'Client')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.totalCrates', 'Caisses')}</TableHeader>
+                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.cumulative', 'Cumulatif')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.arrivalTime', 'Date/Heure')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.truckNumber', 'Camion')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.driverName', 'Chauffeur')}</TableHeader>
@@ -1772,22 +2288,40 @@ export const ReceptionPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {Array.isArray(receptions) && receptions.length > 0 ? (
-                receptions.map((r) => (
+              {Array.isArray(filteredAndSortedReceptions) && filteredAndSortedReceptions.length > 0 ? (
+                filteredAndSortedReceptions.map((r) => (
                   <TableRow key={r.id} id={`reception-${r.id}`} className="hover:bg-gray-50 border-b border-gray-200">
                     <TableCell className="px-3 py-2 text-center">
-                      <button
-                        onClick={() => handlePrintTicket(r)}
-                        className="inline-flex items-center justify-center w-8 h-8 text-white bg-green-600 hover:bg-green-700 rounded transition-colors"
-                        title={t('reception.print', 'Imprimer') as string}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                      </button>
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-center font-mono text-xs text-gray-600">
-                      {r.serial || 'N/A'}
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handlePrintTicket(r)}
+                          className="group relative inline-flex items-center justify-center w-10 h-10 text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                          title={t('reception.printExitReceipt', 'Imprimer bon de sortie') as string}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                            {t('reception.printExitReceipt', 'Imprimer bon de sortie')}
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => handlePalletCollection(r)}
+                          className="group relative inline-flex items-center justify-center w-10 h-10 text-white bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                          title={t('reception.palletCollection', 'Collecte palette') as string}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                          </svg>
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                            {t('reception.palletCollection', 'Collecte palette')}
+                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                          </div>
+                        </button>
+                      </div>
                     </TableCell>
                     <TableCell className="px-3 py-2 font-medium text-gray-900 truncate max-w-[120px]">
                       <span title={r.clientName}>{r.clientName}</span>
@@ -1796,6 +2330,14 @@ export const ReceptionPage: React.FC = () => {
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {r.totalCrates}
                       </span>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-center">
+                      <div className="text-xs sm:text-sm font-bold text-blue-600">
+                        {r.cumulativeCrates}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        total
+                      </div>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-center text-gray-500 text-xs">
                       {r.arrivalTime.toLocaleDateString('fr-FR', { 
@@ -1866,6 +2408,425 @@ export const ReceptionPage: React.FC = () => {
           </Table>
         </div>
       </Card>
+
+      {/* Mobile Card View */}
+      <div className="lg:hidden space-y-4">
+        {Array.isArray(filteredAndSortedReceptions) && filteredAndSortedReceptions.length > 0 ? (
+          filteredAndSortedReceptions.map((r) => (
+            <Card key={r.id} className="p-4 hover:shadow-md transition-shadow">
+              <div className="space-y-4">
+                {/* Header with client name and print button */}
+                <div className="flex justify-between items-start">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-semibold text-gray-900 truncate">{r.clientName}</h3>
+                    <div className="mt-1 text-sm text-gray-500">
+                      {r.arrivalTime.toLocaleDateString('fr-FR', { 
+                        day: '2-digit', 
+                        month: '2-digit', 
+                        year: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handlePrintTicket(r)}
+                      className="flex-shrink-0 inline-flex items-center justify-center w-12 h-12 text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                      title={t('reception.printExitReceipt', 'Imprimer bon de sortie') as string}
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => handlePalletCollection(r)}
+                      className="flex-shrink-0 inline-flex items-center justify-center w-12 h-12 text-white bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                      title={t('reception.palletCollection', 'Collecte palette') as string}
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Crate information */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">{r.totalCrates}</div>
+                    <div className="text-sm text-blue-700">Caisses</div>
+                  </div>
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">{r.cumulativeCrates}</div>
+                    <div className="text-sm text-green-700">Cumulatif</div>
+                  </div>
+                </div>
+
+                {/* Transport information */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <span className="text-sm font-medium text-gray-600">Camion</span>
+                    <span className="text-sm text-gray-900 font-mono">{r.truckNumber}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <span className="text-sm font-medium text-gray-600">Chauffeur</span>
+                    <span className="text-sm text-gray-900">{r.driverName}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <span className="text-sm font-medium text-gray-600">Produit</span>
+                    <div className="text-sm text-gray-900 text-right">
+                      <div className="font-medium">{r.productName}</div>
+                      {r.productVariety && (
+                        <div className="text-xs text-gray-500">- {r.productVariety}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm font-medium text-gray-600">Chambre</span>
+                    <div className="text-sm text-gray-900">
+                      {r.roomName ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          🏠 {r.roomName}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">Non assignée</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex space-x-2 pt-2 border-t border-gray-200">
+                  <button
+                    onClick={() => handleEditReception(r)}
+                    className="flex-1 flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-800 text-sm font-medium px-4 py-3 rounded-lg hover:bg-blue-50 transition-colors border border-blue-200"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <span>Modifier</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteReception(r)}
+                    className="flex-1 flex items-center justify-center space-x-2 text-red-600 hover:text-red-800 text-sm font-medium px-4 py-3 rounded-lg hover:bg-red-50 transition-colors border border-red-200"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>Supprimer</span>
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ))
+        ) : (
+          <Card className="p-8 text-center text-gray-500">
+            <div className="text-6xl mb-4">📦</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune réception</h3>
+            <p className="text-gray-600">Aucune réception trouvée avec les filtres actuels</p>
+          </Card>
+        )}
+      </div>
+
+      {/* Pallet Collection Modal */}
+      {showPalletModal && selectedReception && (
+        <>
+          <style dangerouslySetInnerHTML={{
+            __html: `
+              @keyframes fadeInUp {
+                from {
+                  opacity: 0;
+                  transform: translateY(20px) scale(0.9);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0) scale(1);
+                }
+              }
+              @keyframes slideInFromTop {
+                from {
+                  opacity: 0;
+                  transform: translateY(-20px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+              @keyframes scaleIn {
+                from {
+                  opacity: 0;
+                  transform: scale(0.8);
+                }
+                to {
+                  opacity: 1;
+                  transform: scale(1);
+                }
+              }
+              .modal-enter {
+                animation: slideInFromTop 0.4s ease-out;
+              }
+              .card-enter {
+                animation: scaleIn 0.3s ease-out;
+              }
+            `
+          }} />
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 modal-enter">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {t('reception.palletCollection', 'Collecte palette')}
+                  </h2>
+                  <p className="text-gray-600 mt-1">
+                    {selectedReception.clientName} - {selectedReception.totalCrates} caisses
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowPalletModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Configuration */}
+              <div className="mb-6 p-6 bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl border border-orange-200">
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    {t('reception.customizePalletSize', 'Personnaliser la taille des palettes')}
+                  </h3>
+                  <div className="flex items-center justify-center gap-6">
+                    <div className="text-center">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {t('reception.cratesPerPallet', 'Caisses par palette')}
+                      </label>
+                      <input
+                        type="number"
+                        value={cratesPerPallet}
+                        onChange={(e) => setCratesPerPallet(parseInt(e.target.value) || 42)}
+                        min="1"
+                        max="42"
+                        className="w-24 px-4 py-3 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-center font-bold text-xl text-orange-700 bg-white shadow-md"
+                      />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600 mb-1">
+                        {palletCalculation.totalPallets}
+                      </div>
+                      <div className="text-sm text-orange-700 font-medium">
+                        {t('reception.totalPallets', 'Palettes')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-4">
+                    {/* Quick preset buttons */}
+                    <div className="flex justify-center gap-2">
+                      <button
+                        onClick={() => setCratesPerPallet(42)}
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                          cratesPerPallet === 42
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
+                        }`}
+                      >
+                        42
+                      </button>
+                      <button
+                        onClick={() => setCratesPerPallet(36)}
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                          cratesPerPallet === 36
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
+                        }`}
+                      >
+                        36
+                      </button>
+                      <button
+                        onClick={() => setCratesPerPallet(30)}
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                          cratesPerPallet === 30
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
+                        }`}
+                      >
+                        30
+                      </button>
+                      <button
+                        onClick={() => setCratesPerPallet(24)}
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                          cratesPerPallet === 24
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
+                        }`}
+                      >
+                        24
+                      </button>
+                    </div>
+                    
+                    {/* Slider for fine-tuning */}
+                    <div className="px-4">
+                      <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+                        <span>1</span>
+                        <span className="font-medium">{t('reception.cratesPerPallet', 'Caisses par palette')}</span>
+                        <span>42</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="42"
+                        value={cratesPerPallet}
+                        onChange={(e) => setCratesPerPallet(parseInt(e.target.value))}
+                        className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer slider"
+                        style={{
+                          background: `linear-gradient(to right, #fb923c 0%, #fb923c ${((cratesPerPallet - 1) / 41) * 100}%, #fed7aa ${((cratesPerPallet - 1) / 41) * 100}%, #fed7aa 100%)`
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pallet Visualization */}
+              <div className="space-y-6">
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg text-center">
+                    <div className="text-3xl font-bold text-blue-600 mb-1">
+                      {palletCalculation.totalPallets}
+                    </div>
+                    <div className="text-sm text-blue-700">
+                      {t('reception.totalPallets', 'Palettes totales')}
+                    </div>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg text-center">
+                    <div className="text-3xl font-bold text-green-600 mb-1">
+                      {palletCalculation.fullPallets}
+                    </div>
+                    <div className="text-sm text-green-700">
+                      {t('reception.fullPallets', 'Palettes complètes')}
+                    </div>
+                  </div>
+                  <div className="bg-orange-50 p-4 rounded-lg text-center">
+                    <div className="text-3xl font-bold text-orange-600 mb-1">
+                      {palletCalculation.remainingCrates}
+                    </div>
+                    <div className="text-sm text-orange-700">
+                      {t('reception.remainingCrates', 'Caisses restantes')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visual Pallet Representation */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {t('reception.palletVisualization', 'Visualisation des palettes')}
+                  </h3>
+                  
+                  {/* Full Pallets */}
+                  {palletCalculation.fullPallets > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-gray-700">
+                        {t('reception.fullPallets', 'Palettes complètes')} ({palletCalculation.fullPallets})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {palletCalculation.pallets.filter(p => p.isFull).map((pallet, i) => (
+                          <div
+                            key={`full-${i}`}
+                            className="w-20 h-20 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex flex-col items-center justify-center text-white font-bold text-xs shadow-lg transform transition-all duration-500 ease-out hover:scale-110 hover:shadow-xl"
+                            style={{
+                              animation: `fadeInUp 0.6s ease-out ${i * 0.1}s both`,
+                              animationFillMode: 'both'
+                            }}
+                            title={pallet.reference}
+                          >
+                            <div className="text-lg">{pallet.crates}</div>
+                            <div className="text-xs opacity-90">#{pallet.number}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Partial Pallet */}
+                  {palletCalculation.remainingCrates > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-gray-700">
+                        {t('reception.partialPallet', 'Palette partielle')} ({palletCalculation.remainingCrates}/{cratesPerPallet})
+                      </div>
+                      <div className="flex gap-3 items-center">
+                        {palletCalculation.pallets.filter(p => !p.isFull).map((pallet, i) => (
+                          <div 
+                            key={`partial-${i}`}
+                            className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex flex-col items-center justify-center text-white font-bold text-xs shadow-lg transform transition-all duration-500 ease-out hover:scale-110 hover:shadow-xl"
+                            style={{
+                              animation: `fadeInUp 0.6s ease-out ${palletCalculation.fullPallets * 0.1 + 0.2}s both`,
+                              animationFillMode: 'both'
+                            }}
+                            title={pallet.reference}
+                          >
+                            <div className="text-lg">{pallet.crates}</div>
+                            <div className="text-xs opacity-90">#{pallet.number}</div>
+                          </div>
+                        ))}
+                        <div className="flex items-center text-gray-500 text-sm font-medium">
+                          {t('reception.outOf', 'sur')} {cratesPerPallet}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Progress Bar */}
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm text-gray-600 mb-2">
+                    <span className="font-medium">{t('reception.totalCrates', 'Total caisses')}</span>
+                    <span className="font-bold text-orange-600">{selectedReception.totalCrates}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-blue-500 via-green-500 to-orange-500 h-4 rounded-full transition-all duration-1000 ease-out relative"
+                      style={{
+                        width: `${Math.min(100, (selectedReception.totalCrates / (palletCalculation.totalPallets * cratesPerPallet)) * 100)}%`
+                      }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-pulse"></div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 text-center">
+                    {Math.round((selectedReception.totalCrates / (palletCalculation.totalPallets * cratesPerPallet)) * 100)}% {t('reception.complete', 'complété')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">
+                <button
+                  onClick={() => setShowPalletModal(false)}
+                  className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+                >
+                  {t('common.close', 'Fermer')}
+                </button>
+                <button
+                  onClick={() => {
+                    generatePalletTickets();
+                    setShowPalletModal(false);
+                  }}
+                  className="flex-1 px-4 py-3 text-white bg-orange-600 hover:bg-orange-700 rounded-lg font-medium transition-colors transform hover:scale-105 active:scale-95"
+                >
+                  {t('reception.generatePalletTicket', 'Générer ticket palette')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        </>
+      )}
     </div>
   );
 };
