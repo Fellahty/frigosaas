@@ -105,19 +105,19 @@ const RoomCard: React.FC<{
   const cumulativeCrates = roomReceptions.reduce((total, reception) => total + reception.totalCrates, 0);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 group relative overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-100/50 shadow-sm hover:shadow-lg transition-all duration-300 group relative overflow-hidden backdrop-blur-sm">
       {/* Room Header */}
-      <div className={`h-14 sm:h-12 ${batteryConfig.color} flex items-center justify-center relative`}>
-        <div className="text-center text-white px-4">
-          <div className="font-bold text-base sm:text-lg tracking-tight">{room.name}</div>
-          <div className="text-xs sm:text-sm opacity-90 font-medium">
+      <div className={`h-12 ${batteryConfig.color} flex items-center justify-center relative`}>
+        <div className="text-center text-white px-3">
+          <div className="font-bold text-sm tracking-tight">{room.name}</div>
+          <div className="text-xs opacity-90 font-medium">
             {room.currentOccupancy}/{room.capacity}
           </div>
         </div>
         
         {/* Status Badge */}
-        <div className="absolute top-2 right-2 sm:top-2 sm:right-3">
-          <div className={`px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs font-bold bg-white ${batteryConfig.statusColor} shadow-sm`}>
+        <div className="absolute top-1.5 right-2">
+          <div className={`px-2 py-0.5 rounded-full text-xs font-medium bg-white/95 ${batteryConfig.statusColor} shadow-sm`}>
             {batteryConfig.status === 'Empty' ? t('dashboard.status.empty') :
              batteryConfig.status === 'Normal' ? t('dashboard.status.normal') :
              batteryConfig.status === 'Critical' ? t('dashboard.status.critical') :
@@ -127,7 +127,7 @@ const RoomCard: React.FC<{
       </div>
 
       {/* Cumulative Entries Display */}
-      <div className="bg-gradient-to-r from-blue-50 to-green-50 px-2 py-1.5 border-b border-gray-100">
+      <div className="bg-gradient-to-r from-blue-50/80 to-green-50/80 px-2 py-1.5 border-b border-gray-100/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
@@ -141,7 +141,7 @@ const RoomCard: React.FC<{
       </div>
       
       {/* Room Content */}
-      <div className="p-3 sm:p-4">
+      <div className="p-3">
         {/* Cumulative Summary */}
         {cumulativeEntries > 0 && (
           <div className="bg-blue-50 rounded-lg p-2 mb-2 border border-blue-100">
@@ -157,21 +157,21 @@ const RoomCard: React.FC<{
         )}
 
         {/* Main Metrics Row */}
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-3">
           {/* Occupancy Percentage */}
-          <div className="text-center flex-1">
-            <div className="text-xl sm:text-2xl font-bold text-gray-800 mb-1">
+          <div className="text-center">
+            <div className="text-lg font-bold text-gray-800 mb-0.5">
               {occupancyPercentage}%
             </div>
-            <div className="text-xs sm:text-sm text-gray-600 font-medium">{t('dashboard.chamber')}</div>
+            <div className="text-xs text-gray-600 font-medium">{t('dashboard.chamber')}</div>
           </div>
           
-          {/* Progress Bar */}
-          <div className="flex-1 mx-2 sm:mx-4">
-            <div className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2 font-medium">{t('dashboard.coldStorage')}</div>
-            <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3 overflow-hidden">
+          {/* Progress Bar - Centered */}
+          <div className="col-span-1 flex flex-col justify-center">
+            <div className="text-xs text-gray-600 mb-1 font-medium text-center">{t('dashboard.coldStorage')}</div>
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
               <div 
-                className={`h-2 sm:h-3 ${batteryConfig.color} rounded-full transition-all duration-1000 ease-out`}
+                className={`h-2 ${batteryConfig.color} rounded-full transition-all duration-1000 ease-out`}
                 style={{ width: `${occupancyPercentage}%` }}
               >
               </div>
@@ -179,21 +179,21 @@ const RoomCard: React.FC<{
           </div>
           
           {/* Available Capacity */}
-          <div className="text-center flex-1">
-            <div className="text-xl sm:text-2xl font-bold text-gray-800 mb-1">
+          <div className="text-center">
+            <div className="text-lg font-bold text-gray-800 mb-0.5">
               {room.capacity - room.currentOccupancy}
             </div>
-            <div className="text-xs sm:text-sm text-gray-600 font-medium">{t('dashboard.available')}</div>
+            <div className="text-xs text-gray-600 font-medium">{t('dashboard.available')}</div>
           </div>
         </div>
 
         {/* Dynamic Content Section based on View Mode */}
-        <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-100">
+        <div className="mt-2 pt-2 border-t border-gray-100/50">
           {viewMode === 'reservations' ? (
             // Reservations View
             <div>
-              <div className="text-xs sm:text-sm text-gray-500 mb-3 flex items-center gap-2 font-medium">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="text-xs text-gray-500 mb-2 flex items-center gap-1.5 font-medium">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
                 {t('dashboard.facilityMap.reservations', 'Réservations')}
@@ -540,10 +540,9 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
             </div>
           </div>
 
-          {/* Desktop Header */}
+          {/* Desktop Header - Removed titles for cleaner design */}
           <div className="hidden sm:block">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t('dashboard.facilityMap.title', 'Carte de l\'installation')}</h1>
-            <p className="text-gray-600 mt-1 font-medium">{t('dashboard.facilityMap.subtitle', 'Gestion des chambres froides')}</p>
+            {/* Titles removed for cleaner Apple-style design */}
           </div>
 
           {/* Simple Mobile Toggle Switch */}
@@ -601,8 +600,8 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
             </div>
 
             {/* Content */}
-            <div className="px-4 py-4 sm:px-6 sm:py-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="px-2 py-3 sm:px-4 sm:py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {group1.map((room) => (
                   <RoomCard 
                     key={room.id} 
@@ -638,8 +637,8 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
             </div>
 
             {/* Content */}
-            <div className="px-4 py-4 sm:px-6 sm:py-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="px-2 py-3 sm:px-4 sm:py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {group2.map((room) => (
                   <RoomCard 
                     key={room.id} 
