@@ -5,7 +5,9 @@ export const LangSwitcher: React.FC = () => {
   const { i18n } = useTranslation();
 
   const changeLanguage = (lng: string) => {
-    i18n.changeLanguage(lng);
+    i18n.changeLanguage(lng).catch((error) => {
+      console.error('Error changing language:', error);
+    });
   };
 
   return (

@@ -9,6 +9,7 @@ import { useUserContext } from '../../lib/hooks/useUserContext';
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
 import { Spinner } from '../../components/Spinner';
+import { formatTimestamp } from '../../lib/dateUtils';
 // Removed generate-password import due to browser compatibility issues
 
 interface Client {
@@ -760,18 +761,10 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                       </span>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-center text-gray-500 text-xs">
-                      {client.createdAt.toDate().toLocaleDateString('fr-FR', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: '2-digit' 
-                      })}
+                      {formatTimestamp(client.createdAt)}
                     </TableCell>
                     <TableCell className="px-3 py-2 text-center text-gray-500 text-xs">
-                      {client.lastVisit ? client.lastVisit.toDate().toLocaleDateString('fr-FR', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: '2-digit' 
-                      }) : '-'}
+                      {formatTimestamp(client.lastVisit)}
                     </TableCell>
                 </TableRow>
               ))

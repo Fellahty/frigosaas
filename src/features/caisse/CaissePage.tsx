@@ -12,6 +12,7 @@ import { CashOutModal } from './CashOutModal';
 import { DayClosureModal } from './DayClosureModal';
 import { UpcomingPayments } from './UpcomingPayments';
 import { useTranslation } from 'react-i18next';
+import { formatTimestampWithTime } from '../../lib/dateUtils';
 
 // Types
 interface CashMovement {
@@ -183,11 +184,12 @@ const CaissePage: React.FC = () => {
 
   // Record payment mutation
   const recordPayment = useMutation({
-    mutationFn: async (data: { clientId: string; invoiceIds: string[]; amount: number; paymentMethod: string; reference: string }) => {
+    mutationFn: async (data: { clientId: string; invoiceIds: string[]; amount: number; paymentMethod: string; reference: string; clientName?: string }) => {
       const movementData = {
         type: 'in' as const,
         reason: 'Paiement client',
         clientId: data.clientId,
+        clientName: data.clientName || 'Client inconnu',
         amount: data.amount,
         paymentMethod: data.paymentMethod,
         reference: data.reference,
@@ -243,14 +245,8 @@ const CaissePage: React.FC = () => {
     }).format(amount);
   };
 
-  const formatDate = (timestamp: Timestamp) => {
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(timestamp.toDate());
+  const formatDate = (timestamp: Timestamp | null | undefined) => {
+    return formatTimestampWithTime(timestamp);
   };
 
   const getPaymentMethodIcon = (method: string) => {

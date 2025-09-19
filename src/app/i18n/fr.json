@@ -13,7 +13,9 @@
     "edit": "Modifier",
     "delete": "Supprimer",
     "back": "Retour",
-    "actions": "Actions"
+    "actions": "Actions",
+    "domain": "Domaine",
+    "companyName": "LYAZAMI"
   },
   "roles": {
     "admin": "Administrateur",
@@ -666,6 +668,7 @@
     "averageTemperature": "Température moyenne",
     "averageHumidity": "Humidité moyenne",
     "alertsCount": "Alertes système",
+    "demo": "Demo",
     "roomCapacity": "Occupation des chambres",
     "alerts": "Alertes",
     "topClients": "Clients actifs",
@@ -676,11 +679,13 @@
     "noRoomsDescription": "Aucune donnée de chambre disponible",
     "facilityMap": {
       "title": "Carte de l'installation",
+      "subtitle": "Gestion des chambres froides",
       "group1Title": "LYAZAMI 1-6",
       "group1Subtitle": "Chambres principales (1-6)",
       "group2Title": "LYAZAMI 7-12",
       "group2Subtitle": "Chambres principales (7-12)",
       "roomsCount": "{{count}} chambre(s)",
+      "roomsMain": "chambres principales",
       "autoLayout": "Disposition automatique",
       "noRoomsAvailable": "Aucune chambre disponible",
       "noRoomsDescription": "Aucune chambre configurée pour cette installation",
@@ -688,7 +693,14 @@
       "noReservations": "Aucune réservation",
       "noReservationsDescription": "Cette chambre n'a pas de clients réservés actuellement.",
       "clickToViewDetails": "Cliquer pour voir les détails",
-      "close": "Fermer"
+      "close": "Fermer",
+      "reservations": "Réservations",
+      "appleEntries": "Entrées Pommiers",
+      "reserved": "Réservé",
+      "entry": "Entrée",
+      "entries": "Entrées",
+      "crates": "caisses",
+      "cumulative": "Cumul"
     },
     "occupancyChart": "Graphique d'occupation",
     "usage": "Utilisation",

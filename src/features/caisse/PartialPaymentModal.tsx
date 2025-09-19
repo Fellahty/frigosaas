@@ -94,6 +94,7 @@ export const PartialPaymentModal: React.FC<PartialPaymentModalProps> = ({ isOpen
         type: 'in' as const,
         reason: 'Paiement partiel client',
         clientId: payment.clientId,
+        clientName: payment.clientName || 'Client inconnu',
         amount: data.amount,
         paymentMethod: data.paymentMethod,
         reference: data.reference,

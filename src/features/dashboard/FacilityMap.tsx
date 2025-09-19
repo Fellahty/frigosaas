@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, getDocs, where, Timestamp, getDoc, doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { RoomSummary } from '../../types/metrics';
+import { safeToDate } from '../../lib/dateUtils';
 
 interface Reservation {
   id: string;
@@ -19,6 +20,27 @@ interface FacilityMapProps {
   rooms?: RoomSummary[];
   receptions?: any[];
   clients?: any[];
+}
+
+interface Reception {
+  id: string;
+  serial: string;
+  clientId: string;
+  clientName: string;
+  truckId: string;
+  truckNumber: string;
+  driverId: string;
+  driverName: string;
+  productId: string;
+  productName: string;
+  productVariety: string;
+  roomId?: string;
+  roomName?: string;
+  totalCrates: number;
+  arrivalTime: any;
+  status: 'pending' | 'in_progress' | 'completed';
+  notes?: string;
+  createdAt: any;
 }
 
 // Helper function to get battery config based on occupancy
@@ -39,8 +61,9 @@ const RoomCard: React.FC<{
   room: RoomSummary; 
   clients: any[]; 
   reservations: Reservation[];
-  viewMode: 'reservations' | 'real-entries' 
-}> = ({ room, clients, reservations, viewMode }) => {
+  viewMode: 'reservations' | 'real-entries';
+  receptions: Reception[];
+}> = ({ room, clients, reservations, viewMode, receptions }) => {
   const { t } = useTranslation();
   
   const occupancyPercentage = Math.round((room.currentOccupancy / room.capacity) * 100);
@@ -49,18 +72,39 @@ const RoomCard: React.FC<{
   
   // Get reservations for this room
   const roomReservations = reservations.filter(reservation => 
-    reservation.selectedRooms.includes(room.id)
+    reservation.selectedRooms && reservation.selectedRooms.includes(room.id)
   );
+  
+  // Get receptions for this room
+  const roomReceptions = receptions.filter(reception => {
+    const matches = reception.roomId === room.id;
+    if (matches) {
+      console.log(`✅ Reception ${reception.id} matches room ${room.id} (${room.name})`);
+    }
+    return matches;
+  });
+  
+  // Debug logging
+  if (receptions.length > 0) {
+    console.log(`Room ${room.id} (${room.name}): Found ${roomReceptions.length} receptions out of ${receptions.length} total`);
+    receptions.forEach(reception => {
+      console.log(`Reception ${reception.id}: roomId=${reception.roomId}, roomName=${reception.roomName}, client=${reception.clientName}`);
+    });
+  }
   
   // Calculate total reserved crates for this room (distributed among selected rooms)
   const totalReservedCrates = roomReservations.reduce((total, reservation) => {
     // Distribute reserved crates among all selected rooms
-    const distributedCrates = reservation.reservedCrates / reservation.selectedRooms.length;
+    const distributedCrates = reservation.reservedCrates / (reservation.selectedRooms?.length || 1);
     return total + distributedCrates;
   }, 0);
   
   // Calculate reservation percentage based on room capacity
   const reservationPercentage = room.capacity > 0 ? Math.round((totalReservedCrates / room.capacity) * 100) : 0;
+  
+  // Calculate cumulative entries for this room
+  const cumulativeEntries = roomReceptions.length;
+  const cumulativeCrates = roomReceptions.reduce((total, reception) => total + reception.totalCrates, 0);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 group relative overflow-hidden">
@@ -84,9 +128,37 @@ const RoomCard: React.FC<{
           </div>
         </div>
       </div>
+
+      {/* Cumulative Entries Display */}
+      <div className="bg-gradient-to-r from-blue-50 to-green-50 px-2 py-1.5 border-b border-gray-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+            <span className="text-xs font-medium text-gray-700">{t('dashboard.facilityMap.cumulative', 'Cumul')}</span>
+          </div>
+          <div className="text-right">
+            <div className="text-xs font-bold text-blue-600">{cumulativeEntries}</div>
+            <div className="text-xs text-gray-500">{cumulativeCrates}</div>
+          </div>
+        </div>
+      </div>
       
       {/* Room Content */}
       <div className="p-3 sm:p-4">
+        {/* Cumulative Summary */}
+        {cumulativeEntries > 0 && (
+          <div className="bg-blue-50 rounded-lg p-2 mb-2 border border-blue-100">
+            <div className="text-center">
+              <div className="text-sm font-bold text-blue-700 mb-0.5">
+                {cumulativeEntries} {cumulativeEntries > 1 ? t('dashboard.facilityMap.entries', 'Entrées') : t('dashboard.facilityMap.entry', 'Entrée')}
+              </div>
+              <div className="text-xs text-blue-600 font-medium">
+                {cumulativeCrates} {t('dashboard.facilityMap.crates', 'caisses')}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main Metrics Row */}
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           {/* Occupancy Percentage */}
@@ -127,7 +199,7 @@ const RoomCard: React.FC<{
                 <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
-                Réservations
+                {t('dashboard.facilityMap.reservations', 'Réservations')}
                 <span className="ml-auto text-blue-600 font-semibold text-xs sm:text-sm flex items-center gap-1">
                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                   {reservationPercentage}%
@@ -137,7 +209,7 @@ const RoomCard: React.FC<{
               {/* Reservation Progress Bar */}
               <div className="mb-3">
                 <div className="flex justify-between text-xs text-gray-600 mb-1">
-                  <span>Réservé</span>
+                  <span>{t('dashboard.facilityMap.reserved', 'Réservé')}</span>
                   <span>{Math.round(totalReservedCrates)}/{room.capacity}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
@@ -152,14 +224,14 @@ const RoomCard: React.FC<{
               {roomReservations.length > 0 ? (
                 <div className="space-y-2">
                   <div className="text-xs text-gray-500 font-medium mb-2">
-                    Clients réservés ({roomReservations.length})
+                    {t('dashboard.facilityMap.clientsReserved', 'Clients réservés')} ({roomReservations.length})
                   </div>
                   <div className="flex flex-wrap gap-1 sm:gap-2">
                     {roomReservations.slice(0, 3).map((reservation: Reservation, index: number) => (
                       <div 
                         key={reservation.id}
                         className="bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold border border-blue-200 shadow-sm"
-                        title={`${reservation.clientName} - ${Math.round(reservation.reservedCrates / reservation.selectedRooms.length)} caisses (${reservation.selectedRooms.length} chambres)`}
+                        title={`${reservation.clientName} - ${Math.round(reservation.reservedCrates / reservation.selectedRooms.length)} ${t('dashboard.facilityMap.crates')} (${reservation.selectedRooms.length} ${t('dashboard.facilityMap.roomsMain')})`}
                       >
                         {reservation.clientName ? reservation.clientName.substring(0, 8) : `C${index + 1}`}
                       </div>
@@ -191,36 +263,46 @@ const RoomCard: React.FC<{
                 <svg className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Entrées de caisse
-                <span className="ml-auto text-green-600 font-semibold text-xs sm:text-sm flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                  {roomClients.length} entrée{roomClients.length > 1 ? 's' : ''}
+                {t('dashboard.facilityMap.appleEntries', 'Entrées Pommiers')}
+                <span className="ml-auto text-green-600 font-semibold text-xs flex items-center gap-1">
+                  <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+                  {roomReceptions.length}
+                  {cumulativeCrates > 0 && (
+                    <span className="ml-1 text-blue-600 text-xs">
+                      ({cumulativeCrates})
+                    </span>
+                  )}
                 </span>
               </div>
               
-              {roomClients.length > 0 ? (
+              {roomReceptions.length > 0 ? (
                 <div className="space-y-2.5">
-                  {roomClients.slice(0, 3).map((client: any, index: number) => {
-                    // Use the entry date from client data, or generate a realistic one
-                    const entryDate = client.entryDate || new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000);
+                  {roomReceptions.slice(0, 3).map((reception: Reception) => {
+                    // Convert Firestore Timestamp to Date safely
+                    const entryDate = safeToDate(reception.createdAt) || new Date();
+                    
+                    // Display client name and product info
+                    const displayName = reception.clientName || 'Client inconnu';
+                    const productInfo = reception.productVariety ? `${reception.productName} (${reception.productVariety})` : reception.productName;
                     
                     return (
-                      <div key={index} className="flex items-center justify-between p-2 bg-green-50 rounded-lg border border-green-100">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <div>
-                            <span className="text-gray-700 font-medium text-xs">Entrée caisse</span>
-                            <div className="text-gray-500 text-xs">
-                              {client.name || `Client ${client.id.substring(0, 8)}`}
+                      <div key={reception.id} className="flex items-center justify-between p-1.5 bg-green-50 rounded-lg border border-green-100">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-gray-700 font-medium text-xs truncate">
+                              {displayName}
+                            </div>
+                            <div className="text-gray-500 text-xs truncate">
+                              {reception.totalCrates} {t('dashboard.facilityMap.crates')}
                             </div>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0 ml-2">
                           <div className="text-gray-500 text-xs font-medium">
                             {entryDate.toLocaleDateString('fr-FR', { 
                               day: '2-digit', 
-                              month: '2-digit',
-                              year: '2-digit'
+                              month: '2-digit'
                             })}
                           </div>
                           <div className="text-gray-400 text-xs">
@@ -233,22 +315,22 @@ const RoomCard: React.FC<{
                       </div>
                     );
                   })}
-                  {roomClients.length > 3 && (
-                    <div className="flex items-center justify-center p-2 bg-gray-50 rounded-lg border border-gray-100">
+                  {roomReceptions.length > 3 && (
+                    <div className="flex items-center justify-center p-1.5 bg-gray-50 rounded-lg border border-gray-100">
                       <span className="text-gray-500 text-xs font-medium">
-                        +{roomClients.length - 3} autres entrées
+                        +{roomReceptions.length - 3} autres
                       </span>
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="text-center py-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-center py-3">
+                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-1">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
-                  <span className="text-xs text-gray-400">Aucune entrée de caisse</span>
+                  <span className="text-xs text-gray-400">Aucune réception</span>
                 </div>
               )}
             </div>
@@ -269,6 +351,54 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'reservations' | 'real-entries'>('reservations');
+
+  // Fetch real apple receptions from Firebase
+  const { data: receptions = [] } = useQuery({
+    queryKey: ['receptions-dashboard', tenantId],
+    queryFn: async (): Promise<Reception[]> => {
+      // Get all receptions for this tenant
+      const q = query(
+        collection(db, 'receptions'),
+        where('tenantId', '==', tenantId)
+      );
+      const snapshot = await getDocs(q);
+      
+      // Filter by date in JavaScript to avoid index requirement
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const allReceptions = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Reception))
+        .filter(reception => {
+          const createdAt = reception.createdAt?.toDate ? reception.createdAt.toDate() : new Date(reception.createdAt);
+          return createdAt >= sevenDaysAgo;
+        });
+
+      console.log('Found apple receptions:', allReceptions.length);
+      console.log('Apple receptions data:', allReceptions);
+      
+      // Log each reception in detail
+      allReceptions.forEach((reception, index) => {
+        console.log(`Reception ${index + 1}:`, {
+          id: reception.id,
+          serial: reception.serial,
+          clientId: reception.clientId,
+          clientName: reception.clientName,
+          productName: reception.productName,
+          productVariety: reception.productVariety,
+          totalCrates: reception.totalCrates,
+          roomName: reception.roomName,
+          createdAt: reception.createdAt,
+          arrivalTime: reception.arrivalTime,
+          status: reception.status
+        });
+      });
+
+      return allReceptions;
+    },
+    enabled: !!tenantId,
+  });
 
   // Fetch reservations data
   const { data: reservations = [] } = useQuery({
@@ -401,8 +531,8 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
                 </h1>
                 <p className="text-sm text-gray-500 font-medium">
                   {activeTab === 'group1' 
-                    ? `${group1.length} chambres principales` 
-                    : `${group2.length} chambres principales`
+                    ? `${group1.length} ${t('dashboard.facilityMap.roomsMain')} principales` 
+                    : `${group2.length} ${t('dashboard.facilityMap.roomsMain')} principales`
                   }
                 </p>
               </div>
@@ -415,8 +545,8 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
 
           {/* Desktop Header */}
           <div className="hidden sm:block">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Carte de l'installation</h1>
-            <p className="text-gray-600 mt-1 font-medium">Gestion des chambres froides</p>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t('dashboard.facilityMap.title', 'Carte de l\'installation')}</h1>
+            <p className="text-gray-600 mt-1 font-medium">{t('dashboard.facilityMap.subtitle', 'Gestion des chambres froides')}</p>
           </div>
 
           {/* Simple Mobile Toggle Switch */}
@@ -430,7 +560,7 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Réservations
+                {t('dashboard.facilityMap.reservations', 'Réservations')}
               </button>
               <button
                 onClick={() => setViewMode('real-entries')}
@@ -440,7 +570,7 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Entrées caisse
+                {t('dashboard.facilityMap.appleEntries', 'Entrées Pommiers')}
               </button>
             </div>
           </div>
@@ -464,11 +594,11 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">LYAZAMI 1-6</h2>
-                  <p className="text-gray-600 text-sm font-medium">Chambres principales (1-6)</p>
+                  <p className="text-gray-600 text-sm font-medium">{t('dashboard.facilityMap.roomsMain', 'chambres principales')} (1-6)</p>
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-blue-600">{group1.length}</div>
-                  <div className="text-sm text-gray-500 font-medium">chambres</div>
+                  <div className="text-sm text-gray-500 font-medium">{t('dashboard.facilityMap.roomsMain', 'chambres principales')}</div>
                 </div>
               </div>
             </div>
@@ -483,6 +613,7 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
                     clients={getClientsForRoom()} 
                     reservations={reservations}
                     viewMode={viewMode}
+                    receptions={receptions}
                   />
                 ))}
               </div>
@@ -500,11 +631,11 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">LYAZAMI 7-12</h2>
-                  <p className="text-gray-600 text-sm font-medium">Chambres principales (7-12)</p>
+                  <p className="text-gray-600 text-sm font-medium">{t('dashboard.facilityMap.roomsMain', 'chambres principales')} (7-12)</p>
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-green-600">{group2.length}</div>
-                  <div className="text-sm text-gray-500 font-medium">chambres</div>
+                  <div className="text-sm text-gray-500 font-medium">{t('dashboard.facilityMap.roomsMain', 'chambres principales')}</div>
                 </div>
               </div>
             </div>
@@ -519,6 +650,7 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
                     clients={getClientsForRoom()} 
                     reservations={reservations}
                     viewMode={viewMode}
+                    receptions={receptions}
                   />
                 ))}
               </div>
@@ -563,7 +695,7 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
               </svg>
             </div>
             <span className="text-xs font-medium">LYAZAMI 1-6</span>
-            <span className="text-xs text-gray-400">{group1.length} chambres</span>
+            <span className="text-xs text-gray-400">{group1.length} {t('dashboard.facilityMap.roomsMain', 'chambres principales')}</span>
           </button>
           
           <button
@@ -582,7 +714,7 @@ const FacilityMap: React.FC<FacilityMapProps> = ({ rooms = [], clients = [] }) =
               </svg>
             </div>
             <span className="text-xs font-medium">LYAZAMI 7-12</span>
-            <span className="text-xs text-gray-400">{group2.length} chambres</span>
+            <span className="text-xs text-gray-400">{group2.length} {t('dashboard.facilityMap.roomsMain', 'chambres principales')}</span>
           </button>
         </div>
       </div>

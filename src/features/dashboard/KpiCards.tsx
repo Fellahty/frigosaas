@@ -71,7 +71,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ kpis }) => {
           {(index === 2 || index === 3) && (
             <div className="absolute -top-1 -right-1 z-20">
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
-                Demo
+                {t('dashboard.demo')}
               </span>
             </div>
           )}

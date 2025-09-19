@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { onSnapshot, doc, collection, query, where, orderBy, limit, QueryConstraint } from 'firebase/firestore';
 import { Unsubscribe } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -73,7 +73,7 @@ export const useOfflineQuery = <T>(
     enabled?: boolean;
     staleTime?: number;
     refetchOnWindowFocus?: boolean;
-  } = {}
+  } = { enabled: true }
 ) => {
   const [data, setData] = useState<T | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,9 +83,19 @@ export const useOfflineQuery = <T>(
 
   const { syncStatus, updateSyncStatus } = useOfflineSync();
 
+  // Memoize options to prevent unnecessary re-renders
+  const stableOptions = useMemo(() => ({
+    enabled: options.enabled ?? true,
+    staleTime: options.staleTime ?? 300000,
+    refetchOnWindowFocus: options.refetchOnWindowFocus ?? false
+  }), [options.enabled, options.staleTime, options.refetchOnWindowFocus]);
+
+  // Memoize the query key to prevent unnecessary re-renders
+  const stableQueryKey = useMemo(() => queryKey.join(','), [queryKey.join(',')]);
+
   // Initial data fetch
   useEffect(() => {
-    if (!options.enabled) return;
+    if (!stableOptions.enabled) return;
 
     const fetchData = async () => {
       try {
@@ -106,11 +116,11 @@ export const useOfflineQuery = <T>(
     };
 
     fetchData();
-  }, [queryKey.join(','), options.enabled]);
+  }, [stableQueryKey, stableOptions.enabled]);
 
   // Real-time subscription with offline support
   useEffect(() => {
-    if (!realtimeQuery || !options.enabled) return;
+    if (!realtimeQuery || !stableOptions.enabled) return;
 
     let unsubscribe: Unsubscribe | null = null;
 
@@ -201,10 +211,10 @@ export const useOfflineQuery = <T>(
         }
       }
     };
-  }, [realtimeQuery, options.enabled]);
+  }, [realtimeQuery, stableOptions.enabled]);
 
   const refetch = useCallback(async () => {
-    if (!options.enabled) return;
+    if (!stableOptions.enabled) return;
     
     try {
       updateSyncStatus({ isSyncing: true });
@@ -221,7 +231,7 @@ export const useOfflineQuery = <T>(
       setError(error);
       updateSyncStatus({ error: error.message, isSyncing: false });
     }
-  }, [queryFn, options.enabled]);
+  }, [queryFn, stableOptions.enabled]);
 
   return {
     data,

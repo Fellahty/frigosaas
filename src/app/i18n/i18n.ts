@@ -19,8 +19,12 @@ i18n
     resources,
     lng: 'fr', // default language
     fallbackLng: 'fr',
+    debug: false, // Set to true for debugging
     interpolation: {
       escapeValue: false, // React already escapes values
+    },
+    react: {
+      useSuspense: false, // Disable suspense for better error handling
     },
   });
 

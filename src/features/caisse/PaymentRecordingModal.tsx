@@ -109,10 +109,15 @@ export const PaymentRecordingModal: React.FC<PaymentRecordingModalProps> = ({ is
   // Record payment mutation
   const recordPayment = useMutation({
     mutationFn: async (data: typeof form) => {
+      // Get client name from the clients list
+      const selectedClient = clients?.find(client => client.id === data.clientId);
+      const clientName = selectedClient?.name || 'Client inconnu';
+      
       const movementData = {
         type: 'in' as const,
         reason: 'Paiement client',
         clientId: data.clientId,
+        clientName: clientName,
         amount: data.amount,
         paymentMethod: data.paymentMethod,
         reference: data.reference,

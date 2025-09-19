@@ -134,7 +134,7 @@ export const ReservationsPage: React.FC = () => {
 
   // Fetch reservations with offline support
   const { data: reservations = [], isLoading, isOffline, lastSync, refetch } = useOfflineQuery(
-    ['reservations', tenantId, rooms],
+    ['reservations', tenantId],
     async (): Promise<Reservation[]> => {
       const q = query(
         collection(db, 'tenants', tenantId, 'reservations'),

@@ -13,7 +13,11 @@
     "edit": "تعديل",
     "delete": "حذف",
     "back": "رجوع",
-    "actions": "الإجراءات"
+    "actions": "الإجراءات",
+    "retry": "إعادة المحاولة",
+    "refresh": "تحديث",
+    "domain": "المنطقة",
+    "companyName": "ليزامي"
   },
   "roles": {
     "admin": "مدير",
@@ -36,7 +40,8 @@
     "management": "الإدارة",
     "frigoSettings": "الإعدادات",
     "system": "النظام",
-    "sensors": "المستشعرات"
+    "sensors": "المستشعرات",
+    "palletScanner": "ماسح البليت"
   },
   "reservations": {
     "subtitle": "إدارة حجوزات عملائك",
@@ -45,6 +50,8 @@
     "allClients": "جميع العملاء",
     "allSeasons": "جميع المواسم",
     "createReservation": "إنشاء حجز",
+    "comingSoon": "قريباً متاح",
+    "description": "ستكون هذه الميزة متاحة في التحديث القادم.",
     "kpis": {
       "pending": "الطلبات المعلقة",
       "active": "النشطة",
@@ -129,11 +136,6 @@
       "comingSoon": "قريباً",
       "description": "هذه الميزة ستكون متاحة في التحديث القادم."
     }
-  },
-  "reservations": {
-    "subtitle": "إدارة حجوزات عملائك",
-    "comingSoon": "قريباً متاح",
-    "description": "ستكون هذه الميزة متاحة في التحديث القادم."
   },
   "loans": {
     "title": "إعارة صناديق فارغة",
@@ -635,6 +637,7 @@
     "averageTemperature": "متوسط درجة الحرارة",
     "averageHumidity": "متوسط الرطوبة",
     "alertsCount": "تنبيهات النظام",
+    "demo": "تجريبي",
     "roomCapacity": "إشغال الغرف",
     "alerts": "التنبيهات",
     "topClients": "العملاء النشطون",
@@ -643,7 +646,7 @@
     "noRecentMoves": "لا توجد عمليات حديثة",
     "noRooms": "لا توجد غرف تبريد",
     "noRoomsDescription": "لا توجد بيانات غرف متاحة",
-    "facilityMap": "مستودع التبريد ليزامي",
+    "facilityMap": "خريطة المنشأة",
     "occupancyChart": "مخطط الإشغال",
     "usage": "الاستخدام",
     "lastVisit": "آخر زيارة",
@@ -656,6 +659,41 @@
     "toRoom": "الغرفة الوجهة",
     "operation": "العملية",
     "timestamp": "التاريخ/الوقت",
+    "chamber": "الغرفة",
+    "coldStorage": "التخزين البارد",
+    "available": "متاح",
+    "crates": "صناديق",
+    "status": {
+      "empty": "فارغ",
+      "normal": "عادي",
+      "warning": "انتباه",
+      "critical": "حرج"
+    },
+    "facilityMap": {
+      "title": "خريطة المنشأة",
+      "subtitle": "إدارة الغرف الباردة",
+      "group1Title": "ليزامي 1-6",
+      "group1Subtitle": "الغرف الرئيسية (1-6)",
+      "group2Title": "ليزامي 7-12",
+      "group2Subtitle": "الغرف الرئيسية (7-12)",
+      "roomsCount": "{{count}} غرفة",
+      "roomsMain": "غرف رئيسية",
+      "autoLayout": "تخطيط تلقائي",
+      "noRoomsAvailable": "لا توجد غرف متاحة",
+      "noRoomsDescription": "لا توجد غرف مُعدة لهذه المنشأة",
+      "clientsReserved": "عملاء محجوزون",
+      "noReservations": "لا توجد حجوزات",
+      "noReservationsDescription": "هذه الغرفة ليس لديها عملاء محجوزون حاليًا.",
+      "clickToViewDetails": "انقر لعرض التفاصيل",
+      "close": "إغلاق",
+      "reservations": "الحجوزات",
+      "appleEntries": "إدخالات التفاح",
+      "reserved": "محجوز",
+      "entry": "إدخال",
+      "entries": "إدخالات",
+      "crates": "صناديق",
+      "cumulative": "المجموع"
+    },
     "stockAndLocations": {
       "title": "المخزون والمواقع",
       "totalReserved": "إجمالي الصناديق المحجوزة",
@@ -669,7 +707,23 @@
       "locationPlaceholder": "مثال: المنطقة أ، الممر 3",
       "add": "إضافة",
       "locationsList": "قائمة المواقع"
-    }
+    },
+    "welcome": "مرحباً",
+    "clientSubtitle": "اطلع على حجوزاتك وعملياتك",
+    "totalReservations": "إجمالي الحجوزات",
+    "activeReservations": "الحجوزات النشطة",
+    "totalOperations": "إجمالي العمليات",
+    "pendingOperations": "عمليات في الانتظار",
+    "recentReservations": "الحجوزات الأخيرة",
+    "noRecentReservations": "لا توجد حجوزات حديثة",
+    "recentOperations": "العمليات الأخيرة",
+    "noRecentOperations": "لا توجد عمليات حديثة",
+    "recentActivity": "النشاط الأخير",
+    "offline": "يعمل بدون اتصال",
+    "online": "متصل",
+    "lastSync": "آخر مزامنة",
+    "error": "خطأ في تحميل لوحة التحكم",
+    "refresh": "تحديث"
   },
   "clients": {
     "title": "إدارة العملاء",
@@ -795,7 +849,23 @@
     "noResults": "لم يتم العثور على نتائج",
     "noResultsDescription": "لا يوجد عملاء يطابقون معايير البحث الخاصة بك",
     "client": "العميل",
-    "activity": "النشاط"
+    "activity": "النشاط",
+    "totalAppleEntries": "إجمالي دخول التفاح",
+    "appleEntries": "دخول التفاح",
+    "retry": "إعادة المحاولة",
+    "loadingError": "خطأ في التحميل",
+    "searchClients": "البحث...",
+    "allClients": "جميع العملاء",
+    "activeClients": "العملاء النشطون",
+    "inactiveClients": "العملاء غير النشطين",
+    "clientsOverview": "نظرة عامة على العملاء",
+    "of": "من",
+    "clients": "عملاء",
+    "noResults": "لم يتم العثور على نتائج",
+    "noResultsDescription": "لا يوجد عملاء يطابقون معايير البحث الخاصة بك",
+    "noClients": "لم يتم العثور على عملاء",
+    "noClientsDescription": "ابدأ بإضافة عملاء إلى نظامك",
+    "exited": "خارجة"
   },
   "clientSensors": {
     "clientTitle": "حساساتي",
