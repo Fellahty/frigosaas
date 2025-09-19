@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Spinner } from '../../components/Spinner';
@@ -55,6 +55,16 @@ interface Reception {
   createdAt: Date;
 }
 
+interface CautionRecord {
+  id: string;
+  clientId: string;
+  clientName: string;
+  amount: number;
+  type: string;
+  status: string;
+  createdAt: Date;
+}
+
 interface ClientStatus {
   client: Client;
   reservations: Reservation[];
@@ -65,6 +75,7 @@ interface ClientStatus {
     totalLoaned: number;
     totalReceived: number;
     totalExited: number;
+    netOutstanding: number;
     activeReservations: number;
     openLoans: number;
     totalDeposit: number;
@@ -77,6 +88,7 @@ export const OperationsOverviewPage: React.FC = () => {
   const tenantId = useTenantId();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [sortBy, setSortBy] = useState<'entries' | 'name' | 'activity' | 'outstanding'>('entries');
 
   // Fetch all clients
   const { data: clients, isLoading: clientsLoading, error: clientsError } = useQuery({
@@ -178,6 +190,64 @@ export const OperationsOverviewPage: React.FC = () => {
     retryDelay: 1000,
   });
 
+  // Fetch pricing settings to get caution_par_caisse
+  const { data: depositPerCrate = 50, isLoading: pricingLoading } = useQuery({
+    queryKey: ['deposit-per-crate', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return 50;
+      try {
+        const pricingRef = doc(db, `tenants/${tenantId}/settings/pricing`);
+        const pricingDoc = await getDoc(pricingRef);
+        if (pricingDoc.exists()) {
+          const data = pricingDoc.data();
+          return data?.caution_par_caisse || 50;
+        }
+        return 50;
+      } catch (error) {
+        console.error('Error fetching deposit per crate:', error);
+        return 50;
+      }
+    },
+    enabled: !!tenantId,
+    retry: 2,
+    retryDelay: 1000,
+  });
+
+  // Fetch caution records to get total caution amount
+  const { data: cautionRecords = [], isLoading: cautionLoading } = useQuery({
+    queryKey: ['caution-records', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      try {
+        const cautionQuery = query(
+          collection(db, 'caution_records'),
+          where('tenantId', '==', tenantId),
+          where('status', '==', 'completed')
+        );
+        const snapshot = await getDocs(cautionQuery);
+        
+        return snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            clientId: data.clientId || '',
+            clientName: data.clientName || '',
+            amount: data.amount || 0,
+            type: data.type || 'deposit',
+            status: data.status || 'completed',
+            createdAt: data.createdAt?.toDate?.() || new Date(),
+          };
+        });
+      } catch (error) {
+        console.error('Error fetching caution records:', error);
+        return [];
+      }
+    },
+    enabled: !!tenantId,
+    retry: 2,
+    retryDelay: 1000,
+  });
+
   // Fetch all receptions
   const { data: receptions, isLoading: receptionsLoading, error: receptionsError } = useQuery({
     queryKey: ['receptions', tenantId],
@@ -245,6 +315,8 @@ export const OperationsOverviewPage: React.FC = () => {
       const totalReceived = clientReceptions
         .reduce((sum, r) => sum + r.totalCrates, 0);
       
+      const netOutstanding = Math.max(totalLoaned - totalReceived, 0);
+      
       const totalExited = clientLoans
         .filter(l => l.status === 'closed')
         .reduce((sum, l) => sum + l.crates, 0);
@@ -310,6 +382,7 @@ export const OperationsOverviewPage: React.FC = () => {
           totalLoaned,
           totalReceived,
           totalExited,
+          netOutstanding,
           activeReservations,
           openLoans,
           totalDeposit,
@@ -318,6 +391,40 @@ export const OperationsOverviewPage: React.FC = () => {
       };
     });
   }, [clients, reservations, emptyCrateLoans, receptions]);
+
+  // Calculate total caution amount from caution records
+  const totalCautionAmount = useMemo(() => {
+    return cautionRecords.reduce((sum, record) => sum + record.amount, 0);
+  }, [cautionRecords]);
+
+  // Helper function to get caution amount for a specific client
+  const getClientCautionAmount = (clientId: string) => {
+    return cautionRecords
+      .filter(record => record.clientId === clientId)
+      .reduce((sum, record) => sum + record.amount, 0);
+  };
+
+  const getSortLabel = () => {
+    switch (sortBy) {
+      case 'entries':
+        return `📊 ${t('operations.sortedByEntries', 'Trié par entrées pommiers')}`;
+      case 'name':
+        return `📊 ${t('operations.sortedByName', 'Trié par nom')}`;
+      case 'activity':
+        return `📊 ${t('operations.sortedByActivity', 'Trié par activité')}`;
+      case 'outstanding':
+        return `📊 ${t('operations.sortedByOutstanding', 'Trié par caisses dehors')}`;
+      default:
+        return `📊 ${t('operations.sortedByEntries', 'Trié par entrées pommiers')}`;
+    }
+  };
+
+  const cycleSortBy = () => {
+    const sortOptions: Array<'entries' | 'name' | 'activity' | 'outstanding'> = ['entries', 'name', 'activity', 'outstanding'];
+    const currentIndex = sortOptions.indexOf(sortBy);
+    const nextIndex = (currentIndex + 1) % sortOptions.length;
+    setSortBy(sortOptions[nextIndex]);
+  };
 
   // Filter and search client statuses
   const filteredClientStatuses = useMemo(() => {
@@ -336,19 +443,38 @@ export const OperationsOverviewPage: React.FC = () => {
       return matchesSearch && matchesStatus;
     });
 
-    // Sort by number of apple entries (highest first), then by client name
+    // Sort based on selected criteria
     return filtered.sort((a, b) => {
-      const aEntries = a.receptions.length;
-      const bEntries = b.receptions.length;
-      
-      if (aEntries !== bEntries) {
-        return bEntries - aEntries; // Highest number of entries first
+      switch (sortBy) {
+        case 'entries':
+          const aEntries = a.receptions.length;
+          const bEntries = b.receptions.length;
+          if (aEntries !== bEntries) {
+            return bEntries - aEntries; // Highest number of entries first
+          }
+          return a.client.name.localeCompare(b.client.name);
+          
+        case 'name':
+          return a.client.name.localeCompare(b.client.name);
+          
+        case 'activity':
+          const aActivity = a.summary.lastActivity?.getTime() || 0;
+          const bActivity = b.summary.lastActivity?.getTime() || 0;
+          return bActivity - aActivity; // Most recent activity first
+          
+        case 'outstanding':
+          const aOutstanding = a.summary.netOutstanding;
+          const bOutstanding = b.summary.netOutstanding;
+          if (aOutstanding !== bOutstanding) {
+            return bOutstanding - aOutstanding; // Highest outstanding first
+          }
+          return a.client.name.localeCompare(b.client.name);
+          
+        default:
+          return a.client.name.localeCompare(b.client.name);
       }
-      
-      // If same number of entries, sort alphabetically by name
-      return a.client.name.localeCompare(b.client.name);
     });
-  }, [clientStatuses, searchTerm, statusFilter]);
+  }, [clientStatuses, searchTerm, statusFilter, sortBy]);
 
   const isLoading = clientsLoading || reservationsLoading || loansLoading || receptionsLoading;
   const hasError = clientsError || reservationsError || loansError || receptionsError;
@@ -389,25 +515,26 @@ export const OperationsOverviewPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      {/* Header Section - Compact for Mobile */}
-      <div className="bg-white border-b border-gray-200/60 sticky top-0 z-10 backdrop-blur-xl bg-white/80">
-        <div className="px-3 py-4 sm:px-6 sm:py-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 sm:gap-6">
-            <div className="flex-1">
-              <h1 className="text-xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+      {/* Header Section - Apple-style Compact */}
+      <div className="bg-white/95 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-10">
+        <div className="px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex items-center justify-between">
+            {/* Title Section */}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 {t('operations.overview', 'Vue d\'ensemble des opérations')}
               </h1>
-              <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-lg">
+              <p className="text-xs sm:text-sm text-gray-500 truncate">
                 {t('operations.overviewSubtitle', 'Statut des clients et leurs opérations en cours')}
               </p>
             </div>
             
-            {/* Search and Filter Controls - Mobile Optimized */}
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            {/* Controls Section */}
+            <div className="flex items-center gap-2 sm:gap-3 ml-4">
               {/* Search Input */}
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                  <svg className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </div>
@@ -416,7 +543,7 @@ export const OperationsOverviewPage: React.FC = () => {
                   placeholder={t('operations.searchClients', 'Rechercher...') as string}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full sm:w-80 pl-10 pr-3 py-2.5 sm:py-3 border border-gray-200 rounded-xl bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 text-gray-900 placeholder-gray-500 text-sm sm:text-base"
+                  className="w-40 sm:w-48 pl-8 pr-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg bg-gray-50/80 focus:bg-white focus:ring-1 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 text-gray-900 placeholder-gray-400 text-xs sm:text-sm"
                 />
               </div>
               
@@ -424,85 +551,79 @@ export const OperationsOverviewPage: React.FC = () => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-                className="px-3 py-2.5 sm:py-3 border border-gray-200 rounded-xl bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 text-gray-900 text-sm sm:text-base"
+                className="px-2.5 py-1.5 sm:py-2 border border-gray-200 rounded-lg bg-gray-50/80 focus:bg-white focus:ring-1 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 text-gray-900 text-xs sm:text-sm"
               >
-                <option value="all">{t('operations.allClients', 'Tous les clients')}</option>
-                <option value="active">{t('operations.activeClients', 'Clients actifs')}</option>
-                <option value="inactive">{t('operations.inactiveClients', 'Clients inactifs')}</option>
+                <option value="all">{t('operations.allClients', 'Tous')}</option>
+                <option value="active">{t('operations.activeClients', 'Actifs')}</option>
+                <option value="inactive">{t('operations.inactiveClients', 'Inactifs')}</option>
               </select>
-
             </div>
           </div>
         </div>
       </div>
 
-      <div className="px-2 py-4 space-y-4 sm:px-6 sm:py-8 sm:space-y-8">
+      <div className="px-4 py-4 space-y-6 sm:px-6 sm:py-6 sm:space-y-8">
 
         {/* Summary Statistics */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100/50 hover:shadow-md transition-all duration-300 group">
+        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+          <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-100/50 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 group">
             <div className="text-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/25 mx-auto mb-2">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25 mx-auto mb-3 group-hover:shadow-xl group-hover:shadow-blue-500/30 transition-all duration-300">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              <p className="text-xs font-medium text-gray-600 mb-1">
+              <p className="text-xs sm:text-sm font-medium text-gray-600 mb-2">
                 {t('operations.totalClients', 'Total clients')}
               </p>
-              <p className="text-xl font-bold text-gray-900">
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">
                 {clientStatuses.length}
               </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100/50 hover:shadow-md transition-all duration-300 group">
+          <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-100/50 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 group">
             <div className="text-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center shadow-lg shadow-green-500/25 mx-auto mb-2">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <p className="text-xs font-medium text-gray-600 mb-1">
-                {t('operations.activeReservations', 'Réservations actives')}
-              </p>
-              <p className="text-xl font-bold text-gray-900">
-                {clientStatuses.reduce((sum, cs) => sum + cs.summary.activeReservations, 0)}
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100/50 hover:shadow-md transition-all duration-300 group">
-            <div className="text-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/25 mx-auto mb-2">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/25 mx-auto mb-3 group-hover:shadow-xl group-hover:shadow-purple-500/30 transition-all duration-300">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
               </div>
-              <p className="text-xs font-medium text-gray-600 mb-1">
-                {t('operations.totalCratesInUse', 'Caisses sorties')}
+              <p className={`text-xs sm:text-sm font-medium mb-2 ${
+                (clientStatuses.reduce((sum, cs) => sum + cs.summary.netOutstanding, 0) * depositPerCrate) > totalCautionAmount
+                  ? 'text-red-600 font-bold'
+                  : 'text-gray-600'
+              }`}>
+                {t('operations.cratesOutstanding', 'Caisses dehors')}
               </p>
-              <p className="text-xl font-bold text-gray-900">
-                {clientStatuses.reduce((sum, cs) => sum + cs.summary.totalLoaned, 0)}
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
+                {clientStatuses.reduce((sum, cs) => sum + cs.summary.netOutstanding, 0)}
               </p>
+              <div className="space-y-2">
+                <div className="bg-gray-50 rounded-lg p-2 sm:p-3">
+                  <p className="text-xs sm:text-sm text-gray-600 font-medium mb-1">Valeur</p>
+                  <p className="text-sm sm:text-base font-bold text-gray-900">
+                    {(clientStatuses.reduce((sum, cs) => sum + cs.summary.netOutstanding, 0) * depositPerCrate).toLocaleString()} MAD
+                  </p>
+                </div>
+                <div className={`rounded-lg p-2 sm:p-3 ${
+                  (clientStatuses.reduce((sum, cs) => sum + cs.summary.netOutstanding, 0) * depositPerCrate) > totalCautionAmount
+                    ? 'bg-red-50 border border-red-200'
+                    : 'bg-green-50 border border-green-200'
+                }`}>
+                  <p className="text-xs text-gray-600 font-medium mb-1">Caution</p>
+                  <p className={`text-sm sm:text-base font-bold ${
+                    (clientStatuses.reduce((sum, cs) => sum + cs.summary.netOutstanding, 0) * depositPerCrate) > totalCautionAmount
+                      ? 'text-red-700'
+                      : 'text-green-700'
+                  }`}>
+                    {totalCautionAmount.toLocaleString()} MAD
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100/50 hover:shadow-md transition-all duration-300 group">
-            <div className="text-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/25 mx-auto mb-2">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-              </div>
-              <p className="text-xs font-medium text-gray-600 mb-1">
-                {t('operations.totalDeposits', 'Total des cautions')}
-              </p>
-              <p className="text-lg font-bold text-gray-900">
-                {clientStatuses.reduce((sum, cs) => sum + cs.summary.totalDeposit, 0).toLocaleString()} MAD
-              </p>
-            </div>
-          </div>
 
           <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100/50 hover:shadow-md transition-all duration-300 group">
             <div className="text-center">
@@ -529,9 +650,16 @@ export const OperationsOverviewPage: React.FC = () => {
             </h2>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-xs text-gray-500">
               <span>{filteredClientStatuses.length} {t('operations.of', 'sur')} {clientStatuses.length} {t('operations.clients', 'clients')}</span>
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                📊 Trié par entrées pommiers
-              </span>
+              <button
+                onClick={cycleSortBy}
+                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200 hover:text-green-800 transition-all duration-200 cursor-pointer select-none"
+                title={t('operations.clickToChangeSort', 'Cliquer pour changer le tri')}
+              >
+                {getSortLabel()}
+                <svg className="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                </svg>
+              </button>
             </div>
           </div>
           
@@ -579,14 +707,6 @@ export const OperationsOverviewPage: React.FC = () => {
                             ? 'bg-blue-500'
                             : 'bg-gray-400'
                       }`}></div>
-                      <span className="text-xs font-medium text-gray-700">
-                        {clientStatus.summary.activeReservations > 0 || clientStatus.summary.openLoans > 0
-                          ? 'Client Actif'
-                          : clientStatus.receptions.length > 0
-                            ? 'Client avec Historique'
-                            : 'Client Inactif'
-                        }
-                      </span>
                     </div>
                     <div className="text-xs text-gray-500">
                       {(clientStatus.receptions.length > 0 || clientStatus.reservations.length > 0 || clientStatus.emptyCrateLoans.length > 0) && (
@@ -594,6 +714,14 @@ export const OperationsOverviewPage: React.FC = () => {
                       )}
                     </div>
                   </div>
+                  {clientStatus.summary.netOutstanding > 0 && (
+                    <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-orange-100 px-3 py-1 text-[11px] font-semibold text-orange-700 shadow-sm">
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      <span>{clientStatus.summary.netOutstanding} {t('operations.cratesOutTag', 'caisses dehors')}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Simple Metrics */}
@@ -619,13 +747,46 @@ export const OperationsOverviewPage: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
                       </div>
-                      <span className="text-xs text-gray-600">{t('operations.loaned', 'Caisse vide')}</span>
+                      <span className="text-xs text-gray-600">{t('operations.loaned', 'Caisses prêtées')}</span>
                     </div>
                     <span className="text-lg font-bold text-gray-900">
                       {clientStatus.summary.totalLoaned}
                     </span>
                   </div>
 
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-3 h-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                      </div>
+                      <span className={`text-xs font-medium ${
+                        (clientStatus.summary.netOutstanding * depositPerCrate) > getClientCautionAmount(clientStatus.client.id)
+                          ? 'text-red-600 font-bold'
+                          : 'text-gray-600'
+                      }`}>
+                        {t('operations.cratesOutTag', 'Caisses dehors')}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-bold text-gray-900">
+                        {clientStatus.summary.netOutstanding}
+                      </span>
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] text-gray-500">
+                          {(clientStatus.summary.netOutstanding * depositPerCrate).toLocaleString()} MAD
+                        </p>
+                        <p className={`text-[9px] font-medium ${
+                          (clientStatus.summary.netOutstanding * depositPerCrate) > getClientCautionAmount(clientStatus.client.id)
+                            ? 'text-red-600'
+                            : 'text-green-600'
+                        }`}>
+                          Caution: {getClientCautionAmount(clientStatus.client.id).toLocaleString()} MAD
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -656,36 +817,7 @@ export const OperationsOverviewPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Status Footer */}
-                <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      clientStatus.summary.activeReservations > 0 || clientStatus.summary.openLoans > 0
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {clientStatus.summary.activeReservations > 0 || clientStatus.summary.openLoans > 0
-                        ? 'Actif'
-                        : 'Inactif'
-                      }
-                    </span>
-                    {clientStatus.summary.activeReservations > 0 && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                        {clientStatus.summary.activeReservations} réservations
-                      </span>
-                    )}
-                    {clientStatus.summary.openLoans > 0 && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                        {clientStatus.summary.openLoans} prêts
-                      </span>
-                    )}
-                  </div>
-                  {clientStatus.receptions.length > 0 && (
-                    <div className="mt-2 text-xs text-gray-500">
-                      Total historique: {clientStatus.summary.totalReceived} caisses
-                    </div>
-                  )}
-                </div>
+                <div className="mt-3 sm:mt-4" />
               </div>
             ))}
           </div>

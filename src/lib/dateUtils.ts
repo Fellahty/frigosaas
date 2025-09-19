@@ -1,15 +1,34 @@
 import { Timestamp } from 'firebase/firestore';
 
 /**
- * Safely converts a Firestore Timestamp to a Date object
- * @param timestamp - Firestore Timestamp, null, or undefined
- * @returns Date object or undefined if timestamp is invalid
+ * Safely converts supported time representations to a JavaScript Date.
+ * Accepts Firestore Timestamp, Date, ISO/string values, or nullish.
  */
-export const safeToDate = (timestamp: Timestamp | null | undefined): Date | undefined => {
-  if (!timestamp || typeof timestamp.toDate !== 'function') {
-    return undefined;
+export const safeToDate = (
+  value: Timestamp | Date | string | number | null | undefined
+): Date | undefined => {
+  if (!value) return undefined;
+
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? undefined : value;
   }
-  return timestamp.toDate();
+
+  if (value instanceof Timestamp) {
+    try {
+      const date = value.toDate();
+      return isNaN(date.getTime()) ? undefined : date;
+    } catch (error) {
+      console.warn('[dateUtils] Failed to convert Timestamp to Date', error);
+      return undefined;
+    }
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    return isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+
+  return undefined;
 };
 
 /**

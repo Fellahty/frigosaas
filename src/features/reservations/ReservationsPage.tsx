@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, Timestamp } from 'firebase/firestore';
@@ -144,16 +144,9 @@ export const ReservationsPage: React.FC = () => {
       return querySnapshot.docs.map(doc => {
         const data = doc.data();
         const selectedRooms = data.selectedRooms || [];
-        const roomNames = selectedRooms.map((roomId: string) => {
-          const room = rooms.find(r => r.id === roomId);
-          return room ? (room.room || room.name || `Room ${roomId}`) : `Room ${roomId}`;
-        });
-        
-        // Calculate total capacity of selected rooms
-        const totalRoomCapacity = selectedRooms.reduce((total, roomId) => {
-          const room = rooms.find(r => r.id === roomId);
-          return total + (room ? (room.capacityCrates || room.capacity || 0) : 0);
-        }, 0);
+        // Room names and capacity will be computed later when rooms data is available
+        const roomNames: string[] = [];
+        const totalRoomCapacity = 0;
         
         return {
           id: doc.id,
@@ -176,15 +169,9 @@ export const ReservationsPage: React.FC = () => {
       transform: (snapshot) => snapshot.docs.map(doc => {
         const data = doc.data();
         const selectedRooms = data.selectedRooms || [];
-        const roomNames = selectedRooms.map((roomId: string) => {
-          const room = rooms.find(r => r.id === roomId);
-          return room ? (room.room || room.name || `Room ${roomId}`) : `Room ${roomId}`;
-        });
-        
-        const totalRoomCapacity = selectedRooms.reduce((total, roomId) => {
-          const room = rooms.find(r => r.id === roomId);
-          return total + (room ? (room.capacityCrates || room.capacity || 0) : 0);
-        }, 0);
+        // Room names and capacity will be computed later when rooms data is available
+        const roomNames: string[] = [];
+        const totalRoomCapacity = 0;
         
         return {
           id: doc.id,
@@ -201,13 +188,35 @@ export const ReservationsPage: React.FC = () => {
       })
     },
     {
-      enabled: !!rooms.length && !!tenantId,
+      enabled: !!tenantId,
       staleTime: 2 * 60 * 1000, // 2 minutes
     }
   );
 
+  // Compute room names and capacity for reservations when rooms data is available
+  const reservationsWithRooms = useMemo(() => {
+    return reservations.map(reservation => {
+      const selectedRooms = reservation.selectedRooms || [];
+      const roomNames = selectedRooms.map((roomId: string) => {
+        const room = rooms.find(r => r.id === roomId);
+        return room ? (room.room || room.name || `Room ${roomId}`) : `Room ${roomId}`;
+      });
+      
+      const totalRoomCapacity = selectedRooms.reduce((total, roomId) => {
+        const room = rooms.find(r => r.id === roomId);
+        return total + (room ? (room.capacityCrates || room.capacity || 0) : 0);
+      }, 0);
+      
+      return {
+        ...reservation,
+        roomNames,
+        totalRoomCapacity,
+      };
+    });
+  }, [reservations, rooms]);
+
   // Filter reservations based on active tab and filters
-  const filteredReservations = reservations.filter(reservation => {
+  const filteredReservations = reservationsWithRooms.filter(reservation => {
     // Tab filter
     if (activeTab === 'requests' && reservation.status !== 'REQUESTED') return false;
     if (activeTab === 'approved' && reservation.status !== 'APPROVED') return false;

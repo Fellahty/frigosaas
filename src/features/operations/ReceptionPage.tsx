@@ -10,6 +10,8 @@ import { db, storage } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { useAppSettings } from '../../lib/hooks/useAppSettings';
 import { logCreate, logUpdate, logDelete } from '../../lib/logging';
+import { fetchWithCache } from '../../lib/cache';
+import { safeToDate } from '../../lib/dateUtils';
 import QRCode from 'qrcode';
 
 // QRCode is now imported locally
@@ -352,26 +354,40 @@ export const ReceptionPage: React.FC = () => {
   // Fetch crate types from database
   const { data: crateTypes = [] } = useQuery({
     queryKey: ['crate-types', tenantId],
+    staleTime: 1000 * 60 * 5,
     queryFn: async () => {
-      const q = query(collection(db, 'tenants', tenantId, 'crate-types'), where('isActive', '==', true));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      if (!tenantId) {
+        return [];
+      }
+
+      return fetchWithCache(`crate-types:${tenantId}`, async () => {
+        const q = query(collection(db, 'tenants', tenantId, 'crate-types'), where('isActive', '==', true));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      }, { ttlMs: 1000 * 60 * 10 });
     },
   });
 
   // Fetch reservations to filter rooms by client
   const { data: reservations = [] } = useQuery({
     queryKey: ['reservations', tenantId],
+    staleTime: 1000 * 60 * 2,
     queryFn: async () => {
-      const q = query(collection(db, 'tenants', tenantId, 'reservations'));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      if (!tenantId) {
+        return [];
+      }
+
+      return fetchWithCache(`reservations:${tenantId}`, async () => {
+        const q = query(collection(db, 'tenants', tenantId, 'reservations'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      }, { ttlMs: 1000 * 60 * 5 });
     },
   });
 
@@ -919,6 +935,7 @@ export const ReceptionPage: React.FC = () => {
   // Fetch clients
   const { data: clients } = useQuery({
     queryKey: ['clients', tenantId],
+    staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<Client[]> => {
       if (!tenantId) {
         console.warn('No tenant ID available for clients query');
@@ -927,25 +944,25 @@ export const ReceptionPage: React.FC = () => {
       
       try {
         console.log('Fetching clients for tenant:', tenantId);
-        
-        // Use tenant-specific subcollection (recommended for SaaS)
-        const q = query(collection(db, 'tenants', tenantId, 'clients'));
-        const snap = await getDocs(q);
-        
-        const clientsData = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return {
-            id: d.id,
-            name: data.name || '',
-            phone: data.phone || '',
-            company: data.company || '',
-            reservedCrates: data.reservedCrates || 0,
-            requiresEmptyCrates: data.requiresEmptyCrates || false,
-          };
-        });
-        
-        console.log('Clients loaded:', clientsData.length, 'clients');
-        return clientsData;
+        return fetchWithCache(`clients:${tenantId}`, async () => {
+          const q = query(collection(db, 'tenants', tenantId, 'clients'));
+          const snap = await getDocs(q);
+          
+          const clientsData = snap.docs.map((d) => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              name: data.name || '',
+              phone: data.phone || '',
+              company: data.company || '',
+              reservedCrates: data.reservedCrates || 0,
+              requiresEmptyCrates: data.requiresEmptyCrates || false,
+            };
+          });
+
+          console.log('Clients loaded:', clientsData.length, 'clients');
+          return clientsData;
+        }, { ttlMs: 1000 * 60 * 10 });
       } catch (error) {
         console.error('Error fetching clients:', error);
         return [];
@@ -956,6 +973,7 @@ export const ReceptionPage: React.FC = () => {
   // Fetch trucks
   const { data: trucks } = useQuery({
     queryKey: ['trucks', tenantId],
+    staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<Truck[]> => {
       if (!tenantId) {
         console.warn('No tenant ID available for trucks query');
@@ -964,20 +982,22 @@ export const ReceptionPage: React.FC = () => {
       
       try {
         console.log('Fetching trucks for tenant:', tenantId);
-        const q = query(collection(db, 'trucks'), where('tenantId', '==', tenantId), where('isActive', '==', true));
-        const snap = await getDocs(q);
-        const trucksData = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return {
-            id: d.id,
-            number: data.number || '',
-            color: data.color || '',
-            photoUrl: data.photoUrl || '',
-            isActive: data.isActive !== false,
-          };
-        });
-        console.log('Trucks loaded:', trucksData.length, 'trucks');
-        return trucksData;
+        return fetchWithCache(`trucks:${tenantId}`, async () => {
+          const q = query(collection(db, 'trucks'), where('tenantId', '==', tenantId), where('isActive', '==', true));
+          const snap = await getDocs(q);
+          const trucksData = snap.docs.map((d) => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              number: data.number || '',
+              color: data.color || '',
+              photoUrl: data.photoUrl || '',
+              isActive: data.isActive !== false,
+            };
+          });
+          console.log('Trucks loaded:', trucksData.length, 'trucks');
+          return trucksData;
+        }, { ttlMs: 1000 * 60 * 10 });
       } catch (error) {
         console.error('Error fetching trucks:', error);
         return [];
@@ -988,6 +1008,7 @@ export const ReceptionPage: React.FC = () => {
   // Fetch drivers
   const { data: drivers } = useQuery({
     queryKey: ['drivers', tenantId],
+    staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<Driver[]> => {
       if (!tenantId) {
         console.warn('No tenant ID available for drivers query');
@@ -996,20 +1017,22 @@ export const ReceptionPage: React.FC = () => {
       
       try {
         console.log('Fetching drivers for tenant:', tenantId);
-        const q = query(collection(db, 'drivers'), where('tenantId', '==', tenantId), where('isActive', '==', true));
-        const snap = await getDocs(q);
-        const driversData = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return {
-            id: d.id,
-            name: data.name || '',
-            phone: data.phone || '',
-            licenseNumber: data.licenseNumber || '',
-            isActive: data.isActive !== false,
-          };
-        });
-        console.log('Drivers loaded:', driversData.length, 'drivers');
-        return driversData;
+        return fetchWithCache(`drivers:${tenantId}`, async () => {
+          const q = query(collection(db, 'drivers'), where('tenantId', '==', tenantId), where('isActive', '==', true));
+          const snap = await getDocs(q);
+          const driversData = snap.docs.map((d) => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              name: data.name || '',
+              phone: data.phone || '',
+              licenseNumber: data.licenseNumber || '',
+              isActive: data.isActive !== false,
+            };
+          });
+          console.log('Drivers loaded:', driversData.length, 'drivers');
+          return driversData;
+        }, { ttlMs: 1000 * 60 * 10 });
       } catch (error) {
         console.error('Error fetching drivers:', error);
         return [];
@@ -1020,6 +1043,7 @@ export const ReceptionPage: React.FC = () => {
   // Fetch products
   const { data: products } = useQuery({
     queryKey: ['products', tenantId],
+    staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<Product[]> => {
       if (!tenantId) {
         console.warn('No tenant ID available for products query');
@@ -1028,20 +1052,22 @@ export const ReceptionPage: React.FC = () => {
       
       try {
         console.log('Fetching products for tenant:', tenantId);
-        const q = query(collection(db, 'products'), where('tenantId', '==', tenantId), where('isActive', '==', true));
-        const snap = await getDocs(q);
-        const productsData = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return {
-            id: d.id,
-            name: data.name || '',
-            variety: data.variety || '',
-            imageUrl: data.imageUrl || '',
-            isActive: data.isActive !== false,
-          };
-        });
-        console.log('Products loaded:', productsData.length, 'products');
-        return productsData;
+        return fetchWithCache(`products:${tenantId}`, async () => {
+          const q = query(collection(db, 'products'), where('tenantId', '==', tenantId), where('isActive', '==', true));
+          const snap = await getDocs(q);
+          const productsData = snap.docs.map((d) => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              name: data.name || '',
+              variety: data.variety || '',
+              imageUrl: data.imageUrl || '',
+              isActive: data.isActive !== false,
+            };
+          });
+          console.log('Products loaded:', productsData.length, 'products');
+          return productsData;
+        }, { ttlMs: 1000 * 60 * 10 });
       } catch (error) {
         console.error('Error fetching products:', error);
         return [];
@@ -1052,6 +1078,7 @@ export const ReceptionPage: React.FC = () => {
   // Fetch rooms
   const { data: rooms } = useQuery({
     queryKey: ['rooms', tenantId],
+    staleTime: 1000 * 60 * 2,
     queryFn: async (): Promise<Room[]> => {
       if (!tenantId) {
         console.warn('No tenant ID available for rooms query');
@@ -1060,22 +1087,24 @@ export const ReceptionPage: React.FC = () => {
       
       try {
         console.log('Fetching rooms for tenant:', tenantId);
-        const q = query(collection(db, 'rooms'), where('tenantId', '==', tenantId), where('active', '==', true));
-        const snap = await getDocs(q);
-        const roomsData = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return {
-            id: d.id,
-            room: data.room || '',
-            capacity: data.capacity || 0,
-            capacityCrates: data.capacityCrates || 0,
-            capacityPallets: data.capacityPallets || 0,
-            sensorId: data.sensorId || '',
-            active: data.active !== false,
-          };
-        });
-        console.log('Rooms loaded:', roomsData.length, 'rooms');
-        return roomsData;
+        return fetchWithCache(`rooms:${tenantId}`, async () => {
+          const q = query(collection(db, 'rooms'), where('tenantId', '==', tenantId), where('active', '==', true));
+          const snap = await getDocs(q);
+          const roomsData = snap.docs.map((d) => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              room: data.room || '',
+              capacity: data.capacity || 0,
+              capacityCrates: data.capacityCrates || 0,
+              capacityPallets: data.capacityPallets || 0,
+              sensorId: data.sensorId || '',
+              active: data.active !== false,
+            };
+          });
+          console.log('Rooms loaded:', roomsData.length, 'rooms');
+          return roomsData;
+        }, { ttlMs: 1000 * 60 * 5 });
       } catch (error) {
         console.error('Error fetching rooms:', error);
         return [];
@@ -1127,33 +1156,46 @@ export const ReceptionPage: React.FC = () => {
 
   const { data: receptions, isLoading, error } = useQuery({
     queryKey: ['receptions', tenantId],
+    staleTime: 1000 * 60,
     queryFn: async (): Promise<Reception[]> => {
-      const q = query(collection(db, 'receptions'), where('tenantId', '==', tenantId));
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          serial: data.serial || '',
-          clientId: data.clientId || '',
-          clientName: data.clientName || '',
-          truckId: data.truckId || '',
-          truckNumber: data.truckNumber || '',
-          driverId: data.driverId || '',
-          driverName: data.driverName || '',
-          driverPhone: data.driverPhone || '',
-          productId: data.productId || '',
-          productName: data.productName || '',
-          productVariety: data.productVariety || '',
-          roomId: data.roomId || '',
-          roomName: data.roomName || '',
-          totalCrates: data.totalCrates || 0,
-          arrivalTime: data.arrivalTime?.toDate?.() || new Date(),
-          status: data.status || 'pending',
-          notes: data.notes || '',
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-        };
-      });
+      if (!tenantId) {
+        return [];
+      }
+
+      const receptionsData = await fetchWithCache(`receptions:${tenantId}`, async () => {
+        const q = query(collection(db, 'receptions'), where('tenantId', '==', tenantId));
+        const snap = await getDocs(q);
+        return snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            serial: data.serial || '',
+            clientId: data.clientId || '',
+            clientName: data.clientName || '',
+            truckId: data.truckId || '',
+            truckNumber: data.truckNumber || '',
+            driverId: data.driverId || '',
+            driverName: data.driverName || '',
+            driverPhone: data.driverPhone || '',
+            productId: data.productId || '',
+            productName: data.productName || '',
+            productVariety: data.productVariety || '',
+            roomId: data.roomId || '',
+            roomName: data.roomName || '',
+            totalCrates: data.totalCrates || 0,
+            arrivalTime: data.arrivalTime?.toDate?.() || new Date(),
+            status: data.status || 'pending',
+            notes: data.notes || '',
+            createdAt: data.createdAt?.toDate?.() || new Date(),
+          };
+        });
+      }, { ttlMs: 1000 * 60 * 2 });
+
+      return receptionsData.map((reception) => ({
+        ...reception,
+        arrivalTime: reception.arrivalTime instanceof Date ? reception.arrivalTime : new Date(reception.arrivalTime),
+        createdAt: reception.createdAt instanceof Date ? reception.createdAt : new Date(reception.createdAt),
+      }));
     },
   });
 
@@ -1297,37 +1339,54 @@ export const ReceptionPage: React.FC = () => {
   // Fetch empty crate loans for selected client
   const { data: clientLoans } = useQuery({
     queryKey: ['empty-crate-loans', tenantId, form.clientId],
-    queryFn: async (): Promise<EmptyCrateLoan[]> => {
-      if (!form.clientId) return [];
-      console.log('🔍 Fetching loans for clientId:', form.clientId);
-      const q = query(
-        collection(db, 'empty_crate_loans'), 
-        where('tenantId', '==', tenantId),
-        where('clientId', '==', form.clientId)
-        // Removed status filter to get all loans
-      );
-      const snap = await getDocs(q);
-      console.log('📦 Found loans:', snap.docs.length);
-      const loans = snap.docs.map((d) => {
-        const data = d.data() as any;
-        console.log('📋 Loan data:', data);
-        return {
-          id: d.id,
-          clientId: data.clientId || '',
-          crates: Number(data.crates) || 0,
-          status: data.status || 'open',
-        };
-      });
-      console.log('✅ Processed loans:', loans);
-      return loans;
-    },
     enabled: !!form.clientId,
+    staleTime: 1000 * 60 * 2,
+    queryFn: async (): Promise<EmptyCrateLoan[]> => {
+      if (!form.clientId || !tenantId) return [];
+      console.log('🔍 Fetching loans for clientId:', form.clientId);
+
+      return fetchWithCache(`empty-crate-loans:${tenantId}:${form.clientId}`, async () => {
+        const q = query(
+          collection(db, 'empty_crate_loans'), 
+          where('tenantId', '==', tenantId),
+          where('clientId', '==', form.clientId)
+        );
+        const snap = await getDocs(q);
+        console.log('📦 Found loans:', snap.docs.length);
+        const loans = snap.docs.map((d) => {
+          const data = d.data() as any;
+          console.log('📋 Loan data:', data);
+          return {
+            id: d.id,
+            clientId: data.clientId || '',
+            crates: Number(data.crates) || 0,
+            status: data.status || 'open',
+          };
+        });
+        console.log('✅ Processed loans:', loans);
+        return loans;
+      }, { ttlMs: 1000 * 60 * 5 });
+    },
   });
 
   // Get selected client info
   const selectedClient = clients?.find(client => client.id === form.clientId);
   console.log('👤 Selected client:', selectedClient);
   console.log('📊 Client loans:', clientLoans);
+
+  const selectedClientReservations = React.useMemo(() => {
+    if (!selectedClient?.id || !reservations) return [];
+    return reservations.filter((reservation: any) =>
+      reservation.clientId === selectedClient.id && reservation.status !== 'REFUSED'
+    );
+  }, [selectedClient?.id, reservations]);
+
+  const clientReservedCrates = React.useMemo(() => {
+    return selectedClientReservations.reduce((sum, reservation: any) => {
+      const crates = Number(reservation.reservedCrates) || 0;
+      return sum + crates;
+    }, 0);
+  }, [selectedClientReservations]);
 
   // Calculate total empty crates taken by client (only active loans)
   const totalEmptyCratesTaken = clientLoans?.filter(loan => loan.status === 'open').reduce((sum, loan) => sum + loan.crates, 0) || 0;
@@ -1347,7 +1406,7 @@ export const ReceptionPage: React.FC = () => {
   }, [form.clientId, queryClient, tenantId]);
 
   // Filter and sort receptions with cumulative calculation
-  const filteredAndSortedReceptions = React.useMemo(() => {
+  const filteredAndSortedReceptions = React.useMemo<(Reception & { cumulativeCrates: number })[]>(() => {
     if (!receptions) return [];
     
     let filtered = receptions;
@@ -1425,6 +1484,60 @@ export const ReceptionPage: React.FC = () => {
     
     return result;
   }, [receptions, clientFilter, nameFilter, sortBy, sortOrder]);
+
+  const defaultClientId = React.useMemo(() => {
+    if (clientFilter) {
+      return clientFilter;
+    }
+
+    const trimmedFilter = nameFilter.trim().toLowerCase();
+
+    if (trimmedFilter) {
+      const directMatch = clients?.find(client =>
+        client.name.toLowerCase().includes(trimmedFilter)
+      );
+
+      if (directMatch) {
+        return directMatch.id;
+      }
+
+      const receptionMatch = filteredAndSortedReceptions[0];
+      if (receptionMatch) {
+        return receptionMatch.clientId;
+      }
+    }
+
+    return '';
+  }, [clientFilter, nameFilter, clients, filteredAndSortedReceptions]);
+
+  const receptionSummary = React.useMemo(() => {
+    const list = Array.isArray(filteredAndSortedReceptions) ? filteredAndSortedReceptions : [];
+    if (list.length === 0) {
+      return {
+        totalReceptions: 0,
+        totalCrates: 0,
+        uniqueClients: 0,
+        latestArrival: null as Date | null,
+      };
+    }
+
+    const totalReceptions = list.length;
+    const totalCrates = list.reduce((sum, reception) => sum + (Number(reception.totalCrates) || 0), 0);
+    const uniqueClients = new Set(list.map(reception => reception.clientId)).size;
+    const latestArrival = list.reduce<Date | null>((latest, reception) => {
+      const current = reception.arrivalTime instanceof Date ? reception.arrivalTime : safeToDate(reception.arrivalTime);
+      if (!current) return latest;
+      if (!latest) return current;
+      return current > latest ? current : latest;
+    }, null);
+
+    return {
+      totalReceptions,
+      totalCrates,
+      uniqueClients,
+      latestArrival,
+    };
+  }, [filteredAndSortedReceptions]);
 
   // Handle edit reception
   const handleEditReception = (reception: Reception) => {
@@ -1820,12 +1933,61 @@ export const ReceptionPage: React.FC = () => {
             <p className="text-gray-600">{t('reception.subtitle', 'Gérer les entrées de caisses produits clients')}</p>
         </div>
         <button
-          onClick={() => setIsAdding(true)}
+          onClick={() => {
+            setEditingReceptionId(null);
+            setForm({
+              clientId: defaultClientId,
+              truckId: '',
+              driverId: '',
+              productId: '',
+              roomId: '',
+              totalCrates: 0,
+              crateType: '',
+              notes: '',
+              arrivalTime: new Date(),
+            });
+            setIsAdding(true);
+          }}
           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
         >
           {t('reception.addReception', 'Nouvelle réception')}
         </button>
       </div>
+
+      <Card className="border border-slate-200/70 bg-white/90 backdrop-blur rounded-3xl shadow-md shadow-slate-900/5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 md:p-6">
+          <div className="rounded-2xl border border-slate-200/70 bg-slate-50 px-4 py-3">
+            <p className="text-[11px] font-medium text-slate-500">{t('reception.summary.totalEntries', 'Entrées')}</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{receptionSummary.totalReceptions.toLocaleString()}</p>
+            <p className="text-[10px] text-slate-500">{t('reception.summary.visibleRange', 'Vue filtrée')}</p>
+          </div>
+          <div className="rounded-2xl border border-blue-200/80 bg-blue-50 px-4 py-3 shadow-sm shadow-blue-100/60">
+            <p className="text-[11px] font-medium text-blue-600">{t('reception.summary.totalCrates', 'Caisses')}</p>
+            <p className="mt-1 text-2xl font-semibold text-blue-700">{receptionSummary.totalCrates.toLocaleString()}</p>
+            <p className="text-[10px] text-blue-600/80">{t('reception.summary.totalCratesHint', 'Vue filtrée')}</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50 px-4 py-3 shadow-sm shadow-emerald-100/60">
+            <p className="text-[11px] font-medium text-emerald-600">{t('reception.summary.uniqueClients', 'Clients')}</p>
+            <p className="mt-1 text-2xl font-semibold text-emerald-700">{receptionSummary.uniqueClients.toLocaleString()}</p>
+            <p className="text-[10px] text-emerald-600/80">{t('reception.summary.uniqueClientsHint', 'Clients distincts')}</p>
+          </div>
+          <div className="rounded-2xl border border-purple-200/70 bg-purple-50 px-4 py-3">
+            <p className="text-[11px] font-medium text-purple-600">{t('reception.summary.latestEntry', 'Dernière')}</p>
+            <p className="mt-1 text-base font-semibold text-purple-700">
+              {receptionSummary.latestArrival
+                ? receptionSummary.latestArrival.toLocaleString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : t('reception.summary.noEntries', 'Aucune entrée')}
+            </p>
+            <p className="text-[10px] text-purple-600/80">{t('reception.summary.latestEntryHint', 'Vue filtrée')}</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Client Info Display */}
       {selectedClient && (
@@ -1841,16 +2003,16 @@ export const ReceptionPage: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-lg border bg-blue-50">
-              <div className="text-sm text-gray-600">{t('reception.reservedCrates', 'Caisses réservées')}</div>
-              <div className="mt-1 text-2xl font-bold text-blue-600">
-                {selectedClient.reservedCrates || 0}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-lg border bg-blue-50">
+                <div className="text-sm text-gray-600">{t('reception.reservedCrates', 'Caisses réservées')}</div>
+                <div className="mt-1 text-2xl font-bold text-blue-600">
+                {clientReservedCrates}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {t('reception.fromReservationsTable', 'Depuis la table réservations')}
+                </div>
               </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {t('reception.fromReservationsTable', 'Depuis la table réservations')}
-              </div>
-            </div>
             <div className="p-4 rounded-lg border bg-green-50">
               <div className="text-sm text-gray-600">{t('reception.emptyCratesTaken', 'Caisses vides prises')}</div>
               <div className="mt-1 text-2xl font-bold text-green-600">
@@ -2614,27 +2776,32 @@ export const ReceptionPage: React.FC = () => {
 
 
       {/* Desktop Table View */}
-      <Card className="hidden lg:block">
-        <div className="overflow-x-auto">
-          <Table className="min-w-full text-xs">
-            <TableHead>
-              <TableRow className="bg-gray-50">
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.exitReceipt', 'Bon de sortie')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.client', 'Client')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.totalCrates', 'Caisses')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.cumulative', 'Cumulatif')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.arrivalTime', 'Date/Heure')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.truckNumber', 'Camion')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.driverName', 'Chauffeur')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.product', 'Produit')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('reception.room', 'Chambre')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('reception.actions', 'Actions')}</TableHeader>
-              </TableRow>
-            </TableHead>
+      <Card className="hidden lg:block border border-slate-200/70 bg-white/90 backdrop-blur rounded-3xl shadow-xl shadow-slate-900/10">
+        <div className="overflow-hidden rounded-3xl">
+          <div className="overflow-x-auto">
+            <Table className="min-w-full text-xs">
+              <TableHead>
+                <TableRow className="bg-gradient-to-r from-slate-100 to-slate-200/80">
+                  <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.exitReceipt', 'Bon de sortie')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.client', 'Client')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.totalCrates', 'Caisses')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.cumulative', 'Cumulatif')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.arrivalTime', 'Date/Heure')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.truckNumber', 'Camion')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.driverName', 'Chauffeur')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.product', 'Produit')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.room', 'Chambre')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.actions', 'Actions')}</TableHeader>
+                </TableRow>
+              </TableHead>
             <TableBody>
               {Array.isArray(filteredAndSortedReceptions) && filteredAndSortedReceptions.length > 0 ? (
                 filteredAndSortedReceptions.map((r) => (
-                  <TableRow key={r.id} id={`reception-${r.id}`} className="hover:bg-gray-50 border-b border-gray-200">
+                  <TableRow
+                    key={r.id}
+                    id={`reception-${r.id}`}
+                    className="border-b border-slate-100/80 transition-all duration-200 hover:bg-slate-50/80 hover:shadow-sm hover:-translate-y-[1px]"
+                  >
                     <TableCell className="px-3 py-2 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button
@@ -2667,8 +2834,8 @@ export const ReceptionPage: React.FC = () => {
                         </button>
                       </div>
                     </TableCell>
-                    <TableCell className="px-3 py-2 font-medium text-gray-900 truncate max-w-[120px]">
-                      <span title={r.clientName}>{r.clientName}</span>
+                    <TableCell className="px-3 py-3 text-sm font-semibold text-slate-900">
+                      <span className="block whitespace-normal leading-relaxed">{r.clientName}</span>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-center">
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -2683,7 +2850,7 @@ export const ReceptionPage: React.FC = () => {
                         total
                       </div>
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-center text-gray-500 text-xs">
+                    <TableCell className="px-3 py-2 text-center text-[11px] font-medium text-slate-500">
                       {r.arrivalTime.toLocaleDateString('fr-FR', { 
                         day: '2-digit', 
                         month: '2-digit', 
@@ -2692,23 +2859,27 @@ export const ReceptionPage: React.FC = () => {
                         minute: '2-digit'
                       })}
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-gray-600 font-mono text-xs">
-                      {r.truckNumber}
+                    <TableCell className="px-3 py-2 text-sm text-slate-600 font-mono">
+                      <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                        {r.truckNumber}
+                      </span>
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-gray-600">
+                    <TableCell className="px-3 py-2 text-sm text-slate-600 whitespace-normal">
                       {r.driverName}
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-gray-600">
-                      <div className="flex items-center gap-2">
+                    <TableCell className="px-3 py-2 text-sm text-slate-600 whitespace-normal">
+                      <div className="flex flex-wrap items-center gap-2">
                         {r.productName && (
-                          <span className="font-medium">{r.productName}</span>
+                          <span className="font-medium text-slate-900">{r.productName}</span>
                         )}
                         {r.productVariety && (
-                          <span className="text-xs text-gray-500">- {r.productVariety}</span>
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                            {r.productVariety}
+                          </span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-gray-600">
+                    <TableCell className="px-3 py-2 text-sm text-slate-600">
                       {r.roomName ? (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                           🏠 {r.roomName}
@@ -2749,7 +2920,8 @@ export const ReceptionPage: React.FC = () => {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </div>
       </Card>
 
@@ -2757,12 +2929,12 @@ export const ReceptionPage: React.FC = () => {
       <div className="lg:hidden space-y-4">
         {Array.isArray(filteredAndSortedReceptions) && filteredAndSortedReceptions.length > 0 ? (
           filteredAndSortedReceptions.map((r) => (
-            <Card key={r.id} className="p-4 hover:shadow-md transition-shadow">
+            <Card key={r.id} className="p-5 rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur shadow-md shadow-slate-900/5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
               <div className="space-y-4">
                 {/* Header with client name and print button */}
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-gray-900 truncate">{r.clientName}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 leading-snug break-words">{r.clientName}</h3>
                     <div className="mt-1 text-sm text-gray-500">
                       {r.arrivalTime.toLocaleDateString('fr-FR', { 
                         day: '2-digit', 

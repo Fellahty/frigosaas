@@ -1062,7 +1062,12 @@
     "deleteWarning": "Cette action ne peut pas être annulée.",
     "deleting": "Suppression...",
     "notes": "Notes",
-    "saving": "Enregistrement..."
+    "saving": "Enregistrement...",
+    "sortedByEntries": "Trié par entrées pommiers",
+    "sortedByName": "Trié par nom",
+    "sortedByActivity": "Trié par activité",
+    "sortedByOutstanding": "Trié par caisses dehors",
+    "clickToChangeSort": "Cliquer pour changer le tri"
   },
   "clientSensors": {
     "clientTitle": "Mes Capteurs",

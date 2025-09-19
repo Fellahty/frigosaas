@@ -997,7 +997,12 @@
     "noResultsDescription": "لا يوجد عملاء يطابقون معايير البحث الخاصة بك",
     "noClients": "لم يتم العثور على عملاء",
     "noClientsDescription": "ابدأ بإضافة عملاء إلى نظامك",
-    "exited": "خارجة"
+    "exited": "خارجة",
+    "sortedByEntries": "مرتب حسب إدخالات التفاح",
+    "sortedByName": "مرتب حسب الاسم",
+    "sortedByActivity": "مرتب حسب النشاط",
+    "sortedByOutstanding": "مرتب حسب الصناديق الخارجية",
+    "clickToChangeSort": "انقر لتغيير الترتيب"
   },
   "clientSensors": {
     "clientTitle": "حساساتي",
