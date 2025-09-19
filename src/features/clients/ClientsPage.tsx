@@ -651,14 +651,14 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
           <Table className="min-w-full text-xs">
           <TableHead>
               <TableRow className="bg-gray-50">
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">Actions</TableHeader>
+                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('clients.actions')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('clients.name')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('clients.email', 'Email')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('clients.phone', 'Phone')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-left font-semibold text-gray-700">{t('clients.company', 'Company')}</TableHeader>
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">Mot de passe</TableHeader>
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">Créé par</TableHeader>
-                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">Modifié par</TableHeader>
+                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('clients.password')}</TableHeader>
+                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('clients.createdBy')}</TableHeader>
+                <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('clients.modifiedBy')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('clients.created', 'Created')}</TableHeader>
                 <TableHeader className="px-3 py-2 text-center font-semibold text-gray-700">{t('clients.lastVisit')}</TableHeader>
             </TableRow>
@@ -672,7 +672,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                         <button
                           onClick={() => handleEdit(client)}
                           className="text-blue-600 hover:text-blue-800 p-1"
-                          title="Modifier"
+                          title={t('clients.edit')}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -690,7 +690,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                         <button
                           onClick={() => sendClientInfoWhatsApp(client)}
                           className={`p-1 ${client.phone ? 'text-green-500 hover:text-green-700' : 'text-gray-400 cursor-not-allowed'}`}
-                          title={client.phone ? "Envoyer par WhatsApp" : "Téléphone requis pour WhatsApp"}
+                          title={client.phone ? t('clients.whatsapp') : t('clients.phoneRequired')}
                           disabled={!client.phone}
                         >
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -700,7 +700,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                         <button
                           onClick={() => handleDelete(client)}
                           className="text-red-600 hover:text-red-800 p-1"
-                          title="Supprimer"
+                          title={t('clients.delete')}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -793,14 +793,14 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                 onClick={() => setDeletingClient(null)}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
-                Annuler
+                {t('clients.cancel')}
               </button>
               <button
                 onClick={confirmDelete}
                 disabled={deleteClientMutation.isPending}
                 className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
               >
-                {deleteClientMutation.isPending ? 'Suppression...' : 'Supprimer'}
+                {deleteClientMutation.isPending ? t('clients.deleting') : t('clients.delete')}
               </button>
             </div>
           </div>
@@ -826,10 +826,10 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-lg sm:text-xl font-bold text-white truncate">
-                      {editingClient ? 'Modifier le client' : 'Nouveau client'}
+                      {editingClient ? t('clients.editClient') : t('clients.newClient')}
                     </h3>
                     <p className="text-blue-100 text-xs sm:text-sm truncate">
-                      {editingClient ? 'Modifiez les informations du client' : 'Ajoutez un nouveau client au système'}
+                      {editingClient ? t('clients.editClientSubtitle') : t('clients.addNewClientSubtitle')}
                     </p>
                   </div>
                 </div>
@@ -851,7 +851,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                 {/* Nom */}
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-700">
-                    Nom complet *
+                    {t('clients.fullName')} *
                   </label>
                   <input
                     type="text"
@@ -866,7 +866,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                 {/* Email */}
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-700">
-                    Adresse email *
+                    {t('clients.emailRequired')}
                   </label>
                   <input
                     type="email"
@@ -881,7 +881,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                 {/* Téléphone */}
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-700">
-                    Téléphone
+                    {t('clients.phone')}
                   </label>
                   <input
                     type="tel"
@@ -895,7 +895,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                 {/* Entreprise */}
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-700">
-                    Entreprise
+                    {t('clients.company')}
                   </label>
                   <input
                     type="text"
@@ -948,8 +948,8 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                   </div>
                   <p className="text-xs text-gray-500">
                     {editingClient 
-                      ? "Modifiez le mot de passe ou cliquez sur l'icône pour le régénérer" 
-                      : "Un mot de passe sécurisé sera généré automatiquement si laissé vide"
+                      ? t('clients.passwordRegeneration') 
+                      : t('clients.passwordGeneration')
                     }
                   </p>
                 </div>
@@ -964,7 +964,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                   onClick={cancelEdit}
                   className="w-full sm:w-auto px-4 sm:px-6 py-2.5 text-gray-600 hover:text-gray-800 font-medium transition-colors rounded-lg sm:rounded-xl border border-gray-300 hover:border-gray-400 sm:border-0"
                 >
-                  Annuler
+                  {t('clients.cancel')}
                 </button>
                 <button
                   type="submit"
@@ -981,7 +981,7 @@ L'équipe Entrepôts Frigorifiques YAZAMI`;
                       Enregistrement...
                     </div>
                   ) : (
-                    editingClient ? 'Modifier le client' : 'Ajouter le client'
+                    editingClient ? t('clients.editClientAction') : t('clients.addClientAction')
                   )}
                 </button>
               </div>

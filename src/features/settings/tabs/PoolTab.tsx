@@ -1,6 +1,7 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, getDocs, addDoc, updateDoc, doc, query, where, Timestamp, getDoc } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../../components/Card';
 import { Spinner } from '../../../components/Spinner';
 import { type PoolSettings } from '../../../types/settings';
@@ -29,6 +30,7 @@ interface PoolTabProps {
 }
 
 export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>(({ onDirtyChange, onValidChange }, ref) => {
+  const { t } = useTranslation();
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
   
@@ -268,10 +270,10 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
               <div className="flex items-start justify-between mb-4 sm:mb-6">
                 <div className="flex-1 pr-2">
                   <h3 className="text-base sm:text-lg lg:text-xl font-bold text-slate-900 tracking-tight mb-1">
-                    Stock total
+                    {t('settings.pool.stockTotal', 'Stock total')}
                   </h3>
                   <p className="text-xs sm:text-sm lg:text-base text-slate-600 font-medium">
-                    Caisses disponibles
+                    {t('settings.pool.availableCrates', 'Caisses disponibles')}
                   </p>
                 </div>
                 
@@ -287,7 +289,7 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                   {totalCrateSize.toLocaleString()}
                 </div>
                 <div className="text-xs sm:text-sm lg:text-base text-slate-600 font-medium">
-                  caisses en stock
+                  {t('settings.pool.cratesInStock', 'caisses en stock')}
                 </div>
               </div>
               
@@ -303,10 +305,10 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                   }`}></div>
                   <span className="text-xs sm:text-sm font-medium text-slate-600">
                     {totalCrateSize > 1000 
-                      ? 'Excellent' 
+                      ? t('settings.pool.status.excellent', 'Excellent')
                       : totalCrateSize > 100 
-                        ? 'Bon' 
-                        : 'Faible'
+                        ? t('settings.pool.status.good', 'Bon')
+                        : t('settings.pool.status.low', 'Faible')
                     }
                   </span>
                 </div>
@@ -332,10 +334,10 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
               <div className="flex items-start justify-between mb-4 sm:mb-6">
                 <div className="flex-1 pr-2">
                   <h3 className="text-base sm:text-lg lg:text-xl font-bold text-blue-900 tracking-tight mb-1">
-                    Types de caisses
+                    {t('settings.pool.crateTypes', 'Types de caisses')}
                   </h3>
                   <p className="text-xs sm:text-sm lg:text-base text-blue-700 font-medium">
-                    Variétés configurées
+                    {t('settings.pool.configuredVarieties', 'Variétés configurées')}
                   </p>
                 </div>
                 
@@ -351,7 +353,7 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                   {crateTypes?.length || 0}
                 </div>
                 <div className="text-xs sm:text-sm lg:text-base text-blue-700 font-medium">
-                  types configurés
+                  {t('settings.pool.typesConfigured', 'types configurés')}
                 </div>
               </div>
               
@@ -367,16 +369,16 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                   }`}></div>
                   <span className="text-xs sm:text-sm font-medium text-blue-700">
                     {(crateTypes?.length || 0) > 5 
-                      ? 'Excellent' 
+                      ? t('settings.pool.status.excellent', 'Excellent')
                       : (crateTypes?.length || 0) > 2 
-                        ? 'Bon' 
-                        : 'Faible'
+                        ? t('settings.pool.status.good', 'Bon')
+                        : t('settings.pool.status.low', 'Faible')
                     }
                   </span>
                 </div>
                 
                 <div className="text-xs text-blue-600 font-medium">
-                  Diversité
+                  {t('settings.pool.diversity', 'Diversité')}
                 </div>
               </div>
             </div>
@@ -389,8 +391,8 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
         <div className="p-6">
           <div className="mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Types de caisses</h3>
-              <p className="text-sm text-gray-600">Gérez les différents types de caisses et leurs propriétés</p>
+              <h3 className="text-lg font-semibold text-gray-900">{t('settings.pool.crateTypes', 'Types de caisses')}</h3>
+              <p className="text-sm text-gray-600">{t('settings.pool.manageCrateTypes', 'Gérez les différents types de caisses et leurs propriétés')}</p>
             </div>
           </div>
 
@@ -398,11 +400,11 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
           <div className="mb-4 sm:mb-6 bg-white border border-gray-200 rounded-xl sm:rounded-2xl shadow-sm overflow-hidden">
             <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
               <h4 className="text-base sm:text-lg font-semibold text-gray-900">
-                {editingCrateType ? `Modifier le type de caisse - ${editingCrateType.name}` : 'Ajouter un nouveau type de caisse'}
+                {editingCrateType ? t('settings.pool.editCrateType', `Modifier le type de caisse - ${editingCrateType.name}`) : t('settings.pool.addNewCrateType', 'Ajouter un nouveau type de caisse')}
               </h4>
               {editingCrateType && (
                 <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                  Stock actuel: {editingCrateType.quantity || 0} caisses
+                  {t('settings.pool.currentStock', 'Stock actuel')}: {editingCrateType.quantity || 0} {t('settings.pool.crates', 'caisses')}
                 </p>
               )}
             </div>
@@ -411,19 +413,19 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
               <div className={`grid grid-cols-1 sm:grid-cols-2 ${crateTypeForm.type === 'plastic' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3 sm:gap-4 mb-4 sm:mb-6`}>
                 {/* Nom */}
                 <div className="space-y-1.5 sm:space-y-2">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700">Nom</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700">{t('settings.pool.name', 'Nom')}</label>
                   <input
                     type="text"
                     value={crateTypeForm.name}
                     onChange={(e) => setCrateTypeForm(f => ({ ...f, name: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    placeholder="Ex: Caisse standard"
+                    placeholder={t('settings.pool.namePlaceholder', 'Ex: Caisse standard')}
                   />
                 </div>
 
                 {/* Type */}
                 <div className="space-y-1.5 sm:space-y-2">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700">Type</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700">{t('settings.pool.type', 'Type')}</label>
                   <select
                     value={crateTypeForm.type}
                     onChange={(e) => {
@@ -437,35 +439,35 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                     }}
                     className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
                   >
-                    <option value="plastic">🟦 Plastique</option>
-                    <option value="wood">🟫 Bois</option>
+                    <option value="plastic">🟦 {t('settings.pool.plastic', 'Plastique')}</option>
+                    <option value="wood">🟫 {t('settings.pool.wood', 'Bois')}</option>
                   </select>
                 </div>
 
                 {/* Couleur - Only show for plastic */}
                 {crateTypeForm.type === 'plastic' && (
                   <div className="space-y-1.5 sm:space-y-2">
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700">Couleur</label>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700">{t('settings.pool.color', 'Couleur')}</label>
                     <select
                       value={crateTypeForm.color}
                       onChange={(e) => setCrateTypeForm(f => ({ ...f, color: e.target.value as CrateColor }))}
                       className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
                     >
-                      <option value="blue">🔵 Bleu</option>
-                      <option value="green">🟢 Vert</option>
-                      <option value="red">🔴 Rouge</option>
-                      <option value="yellow">🟡 Jaune</option>
-                      <option value="white">⚪ Blanc</option>
-                      <option value="black">⚫ Noir</option>
-                      <option value="gray">⚫ Gris</option>
-                      <option value="brown">🟤 Marron</option>
+                      <option value="blue">🔵 {t('settings.pool.colors.blue', 'Bleu')}</option>
+                      <option value="green">🟢 {t('settings.pool.colors.green', 'Vert')}</option>
+                      <option value="red">🔴 {t('settings.pool.colors.red', 'Rouge')}</option>
+                      <option value="yellow">🟡 {t('settings.pool.colors.yellow', 'Jaune')}</option>
+                      <option value="white">⚪ {t('settings.pool.colors.white', 'Blanc')}</option>
+                      <option value="black">⚫ {t('settings.pool.colors.black', 'Noir')}</option>
+                      <option value="gray">⚫ {t('settings.pool.colors.gray', 'Gris')}</option>
+                      <option value="brown">🟤 {t('settings.pool.colors.brown', 'Marron')}</option>
                     </select>
                   </div>
                 )}
 
                 {/* Caution */}
                 <div className="space-y-1.5 sm:space-y-2">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700">Caution (MAD)</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700">{t('settings.pool.deposit', 'Caution (MAD)')}</label>
                   <div className="relative">
                     <input
                       type="number"
@@ -486,12 +488,12 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                   <div className="flex-1">
                     <h5 className="text-xs sm:text-sm font-semibold text-blue-900 mb-1">
-                      {editingCrateType ? 'Modifier la quantité' : 'Quantité à ajouter'}
+                      {editingCrateType ? t('settings.pool.modifyQuantity', 'Modifier la quantité') : t('settings.pool.quantityToAdd', 'Quantité à ajouter')}
                     </h5>
                     <p className="text-xs text-blue-700">
                       {editingCrateType 
-                        ? 'Modifiez le nombre de caisses en stock' 
-                        : 'Entrez le nombre de caisses à ajouter au pool total'
+                        ? t('settings.pool.modifyStockDescription', 'Modifiez le nombre de caisses en stock')
+                        : t('settings.pool.addToPoolDescription', 'Entrez le nombre de caisses à ajouter au pool total')
                       }
                     </p>
                   </div>
@@ -505,7 +507,7 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                         placeholder="0"
                         min="0"
                       />
-                      <span className="text-xs sm:text-sm font-medium text-blue-900">caisses</span>
+                      <span className="text-xs sm:text-sm font-medium text-blue-900">{t('settings.pool.crates', 'caisses')}</span>
                     </div>
                     <div className="text-right">
                       <div className="text-sm sm:text-lg font-bold text-blue-900">
@@ -513,8 +515,8 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                       </div>
                       <div className="text-xs text-blue-700">
                         {editingCrateType 
-                          ? `Stock: ${crateTypeForm.quantity}` 
-                          : 'Total caisses'
+                          ? `${t('settings.pool.stock', 'Stock')}: ${crateTypeForm.quantity}`
+                          : t('settings.pool.totalCrates', 'Total caisses')
                         }
                       </div>
                     </div>
@@ -627,13 +629,13 @@ export const PoolTab = forwardRef<{ save: () => Promise<void> }, PoolTabProps>((
                   {/* Details */}
                   <div className="space-y-2 sm:space-y-3">
                     <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded-lg sm:rounded-xl">
-                      <span className="text-xs sm:text-sm font-medium text-gray-600">Caution unitaire</span>
+                      <span className="text-xs sm:text-sm font-medium text-gray-600">{t('settings.pool.unitDeposit', 'Caution unitaire')}</span>
                       <span className="text-sm sm:text-base lg:text-lg font-bold text-gray-900">{ct.depositAmount} MAD</span>
                     </div>
                     <div className="flex justify-between items-center text-xs sm:text-sm text-gray-500">
-                      <span className="truncate">Créé le {ct.createdAt.toLocaleDateString()}</span>
+                      <span className="truncate">{t('settings.pool.createdOn', 'Créé le')} {ct.createdAt.toLocaleDateString()}</span>
                       <span className="text-blue-600 font-medium flex-shrink-0 ml-2">
-                        {ct.quantity || 0} en stock
+                        {ct.quantity || 0} {t('settings.pool.inStock', 'en stock')}
                       </span>
                     </div>
                   </div>

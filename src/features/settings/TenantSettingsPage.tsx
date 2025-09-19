@@ -88,9 +88,9 @@ export const TenantSettingsPage: React.FC = () => {
               onChange={(e) => setForm((f) => ({ ...f, language: e.target.value }))}
               className="w-full border rounded-md px-3 py-2"
             >
-              <option value="fr">Français</option>
-              <option value="ar">العربية</option>
-              <option value="en">English</option>
+              <option value="fr">{t('settings.app.languageFrench', 'Français')}</option>
+              <option value="ar">{t('settings.app.languageArabic', 'العربية')}</option>
+              <option value="en">{t('settings.app.languageEnglish', 'English')}</option>
             </select>
           </div>
         </div>

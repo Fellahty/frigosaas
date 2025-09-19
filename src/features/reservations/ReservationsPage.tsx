@@ -482,11 +482,6 @@ export const ReservationsPage: React.FC = () => {
           </div>
           <p className="text-gray-600 mt-1 text-sm sm:text-base">
             {t('reservations.subtitle', 'Gérez les réservations de vos clients')}
-            {lastSync && (
-              <span className="text-xs text-gray-500 ml-2">
-                • Dernière sync: {lastSync.toLocaleTimeString()}
-              </span>
-            )}
           </p>
         </div>
         <div className="flex items-center space-x-2 sm:space-x-3">
@@ -507,8 +502,8 @@ export const ReservationsPage: React.FC = () => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            <span className="hidden sm:inline">Créer une réservation</span>
-            <span className="sm:hidden">Créer</span>
+            <span className="hidden sm:inline">{t('reservations.createReservation', 'Créer une réservation')}</span>
+            <span className="sm:hidden">{t('reservations.createReservationShort', 'Créer')}</span>
           </button>
         </div>
       </div>
@@ -536,7 +531,7 @@ export const ReservationsPage: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             {!isSearchOpen && !searchTerm && (
-              <span className="text-sm font-medium">Rechercher</span>
+              <span className="text-sm font-medium">{t('reservations.search', 'Rechercher')}</span>
             )}
             {searchTerm && (
               <span className="text-sm font-medium">Recherche active</span>
@@ -550,7 +545,7 @@ export const ReservationsPage: React.FC = () => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="Rechercher par client, référence..."
+                placeholder={t('reservations.searchPlaceholder', 'Rechercher par client, référence...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onBlur={() => {
@@ -594,7 +589,7 @@ export const ReservationsPage: React.FC = () => {
         <Card className="p-3 sm:p-4">
           <div className="text-center">
             <div className="text-xl sm:text-2xl font-bold text-purple-600">{kpis.totalReserved}</div>
-            <div className="text-xs sm:text-sm text-gray-600">Caisses réservées</div>
+            <div className="text-xs sm:text-sm text-gray-600">{t('reservations.reservedCrates', 'Caisses réservées')}</div>
           </div>
         </Card>
         <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200 p-3 sm:p-4">
@@ -644,12 +639,12 @@ export const ReservationsPage: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableHeader>Actions</TableHeader>
-              <TableHeader>Client</TableHeader>
+              <TableHeader>{t('reservations.actions', 'Actions')}</TableHeader>
+              <TableHeader>{t('reservations.client', 'Client')}</TableHeader>
               <TableHeader>Réservé</TableHeader>
-              <TableHeader>Caisses vides</TableHeader>
+              <TableHeader>{t('reservations.emptyCrates', 'Caisses vides')}</TableHeader>
               <TableHeader>Salles</TableHeader>
-              <TableHeader>Statut</TableHeader>
+              <TableHeader>{t('reservations.status', 'Statut')}</TableHeader>
               <TableHeader>Capacité</TableHeader>
             </TableRow>
           </TableHead>
@@ -665,7 +660,7 @@ export const ReservationsPage: React.FC = () => {
             ) : filteredReservations.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                  Aucune réservation trouvée
+                  {t('reservations.noReservationsFound', 'Aucune réservation trouvée')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -931,8 +926,8 @@ export const ReservationsPage: React.FC = () => {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-white">Nouvelle Réservation</h3>
-                    <p className="text-blue-100 text-sm">Créer une réservation pour un client</p>
+                    <h3 className="text-xl font-semibold text-white">{t('reservations.newReservation', 'Nouvelle Réservation')}</h3>
+                    <p className="text-blue-100 text-sm">{t('reservations.createReservationForClient', 'Créer une réservation pour un client')}</p>
                   </div>
                 </div>
                 <button
@@ -954,7 +949,7 @@ export const ReservationsPage: React.FC = () => {
                   <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
-                  <span>Client</span>
+                  <span>{t('reservations.client', 'Client')}</span>
                 </label>
                 <select
                   value={form.clientId}
@@ -976,7 +971,7 @@ export const ReservationsPage: React.FC = () => {
                     <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
-                    <span>Nombre de caisses à rentrer</span>
+                    <span>{t('reservations.numberOfCratesToStore', 'Nombre de caisses à rentrer')}</span>
                   </label>
                   <input
                     type="number"
@@ -993,7 +988,7 @@ export const ReservationsPage: React.FC = () => {
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 bg-gray-50 focus:bg-white"
                     placeholder="0"
                   />
-                  <p className="text-xs text-gray-600">Nombre total de caisses que le client veut stocker</p>
+                  <p className="text-xs text-gray-600">{t('reservations.totalCratesDescription', 'Nombre total de caisses que le client veut stocker')}</p>
                 </div>
 
                 {/* Empty Crates */}
@@ -1002,7 +997,7 @@ export const ReservationsPage: React.FC = () => {
                     <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                    <span>Caisses vides nécessaires</span>
+                    <span>{t('reservations.emptyCratesNeeded', 'Caisses vides nécessaires')}</span>
                   </label>
                   <input
                     type="number"
@@ -1120,7 +1115,7 @@ export const ReservationsPage: React.FC = () => {
                   ))}
                   {rooms.length === 0 && (
                     <div className="col-span-1 text-center py-4 text-gray-500 text-sm">
-                      Aucune salle disponible
+                      {t('reservations.noRoomsAvailable', 'Aucune salle disponible')}
                     </div>
                   )}
                 </div>
@@ -1134,7 +1129,7 @@ export const ReservationsPage: React.FC = () => {
                 onClick={() => setIsCreating(false)}
                 className="w-full sm:w-auto px-6 py-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-xl transition-all duration-200 font-medium"
               >
-                Annuler
+                {t('reservations.cancel', 'Annuler')}
               </button>
               <button
                 onClick={handleCreateReservation}
@@ -1154,7 +1149,7 @@ export const ReservationsPage: React.FC = () => {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <span>Créer la réservation</span>
+                    <span>{t('reservations.createReservationAction', 'Créer la réservation')}</span>
                   </div>
                 )}
               </button>
@@ -1276,7 +1271,7 @@ export const ReservationsPage: React.FC = () => {
                   <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
-                  <span>Client</span>
+                  <span>{t('reservations.client', 'Client')}</span>
                 </label>
                 <EnhancedSelect
                   options={clients?.map(client => ({
@@ -1402,7 +1397,7 @@ export const ReservationsPage: React.FC = () => {
                   ))}
                   {rooms.length === 0 && (
                     <div className="col-span-2 text-center py-4 text-gray-500 text-sm">
-                      Aucune salle disponible
+                      {t('reservations.noRoomsAvailable', 'Aucune salle disponible')}
                     </div>
                   )}
                 </div>
@@ -1422,7 +1417,7 @@ export const ReservationsPage: React.FC = () => {
                 onClick={handleCancelEdit}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
-                Annuler
+                {t('reservations.cancel', 'Annuler')}
               </button>
             </div>
           </div>

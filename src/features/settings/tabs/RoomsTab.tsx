@@ -307,10 +307,10 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-green-900 mb-1">
-                🏠 Capacité totale des chambres
+                🏠 {t('settings.rooms.totalRoomCapacity', 'Capacité totale des chambres')}
               </h3>
               <p className="text-sm text-green-700">
-                Nombre total de caisses que peuvent contenir toutes les chambres
+                {t('settings.rooms.totalRoomCapacityDescription', 'Nombre total de caisses que peuvent contenir toutes les chambres')}
               </p>
             </div>
             <div className="text-right">
@@ -318,7 +318,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                 {totalRoomCrateCapacity.toLocaleString()}
               </div>
               <div className="text-sm text-green-600 font-medium">
-                caisses en capacité
+                {t('settings.rooms.cratesInCapacity', 'caisses en capacité')}
               </div>
             </div>
           </div>
