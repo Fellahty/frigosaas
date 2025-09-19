@@ -21,8 +21,7 @@ export const RoomCapacity: React.FC<RoomCapacityProps> = ({ rooms = [] }) => {
   };
 
   const getOccupancyStatus = (percentage: number) => {
-    if (percentage >= 80) return { text: 'Critical', color: 'text-red-600', bg: 'bg-red-100' };
-    if (percentage >= 60) return { text: 'Warning', color: 'text-yellow-600', bg: 'bg-yellow-100' };
+    if (percentage >= 60) return { text: 'Critical', color: 'text-red-600', bg: 'bg-red-100' };
     return { text: 'Normal', color: 'text-green-600', bg: 'bg-green-100' };
   };
 

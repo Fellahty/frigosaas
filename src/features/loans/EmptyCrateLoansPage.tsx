@@ -152,7 +152,8 @@ export const EmptyCrateLoansPage: React.FC = () => {
   const navigate = useNavigate();
 
   // Helper function to translate crate types
-  const translateCrateType = (type: CrateType): string => {
+  const translateCrateType = (type: CrateType | string | undefined): string => {
+    if (!type) return 'N/A';
     return t(`loans.crateTypes.${type}`, type) as string;
   };
 

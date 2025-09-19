@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useTenantId } from './useTenantId';
+import { safeToDate } from '../dateUtils';
 
 // Types
 export type LoanStatus = 'open' | 'returned';
@@ -81,13 +82,23 @@ export const useEmptyCrateLoans = () => {
 
       const q = query(collection(db, 'empty_crate_loans'), where('tenantId', '==', tenantId));
       const snap = await getDocs(q);
+      
+      // Get clients data to populate missing client names
+      const clientsQuery = query(collection(db, 'clients'), where('tenantId', '==', tenantId));
+      const clientsSnap = await getDocs(clientsQuery);
+      const clientsMap = new Map();
+      clientsSnap.docs.forEach(doc => {
+        const clientData = doc.data();
+        clientsMap.set(doc.id, clientData.name || 'Client inconnu');
+      });
+      
       const list = snap.docs.map((d) => {
         const data = d.data() as any;
         return {
           id: d.id,
           ticketId: data.ticketId || '',
           clientId: data.clientId || null,
-          clientName: data.clientName || '',
+          clientName: data.clientName || (data.clientId ? clientsMap.get(data.clientId) || 'Client inconnu' : 'N/A'),
           crates: Number(data.crates) || 0,
           crateTypeId: data.crateTypeId || '',
           crateTypeName: data.crateTypeName || '',
@@ -99,7 +110,7 @@ export const useEmptyCrateLoans = () => {
           driverId: data.driverId || null,
           driverName: data.driverName || '',
           driverPhone: data.driverPhone || '',
-          createdAt: data.createdAt?.toDate?.() || new Date(),
+          createdAt: safeToDate(data.createdAt),
         };
       });
       // newest first
@@ -247,7 +258,7 @@ export const useCrateTypes = () => {
           depositAmount: Number(data.depositAmount) || 0,
           quantity: Number(data.quantity) || 0,
           isActive: data.isActive || false,
-          createdAt: data.createdAt?.toDate?.() || new Date(),
+          createdAt: safeToDate(data.createdAt),
         };
       });
     },
@@ -367,7 +378,7 @@ export const useCautionRecords = (clientId: string | null) => {
           id: doc.id,
           amount: Number(data.amount) || 0,
           type: data.type || 'caution',
-          createdAt: data.createdAt?.toDate?.() || new Date(),
+          createdAt: safeToDate(data.createdAt),
           ...data
         };
       });

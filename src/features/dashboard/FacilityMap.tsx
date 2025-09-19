@@ -47,10 +47,8 @@ interface Reception {
 const getBatteryConfig = (percentage: number) => {
   if (percentage === 0) {
     return { color: 'bg-gray-500', status: 'Empty', statusColor: 'text-gray-600' };
-  } else if (percentage < 30) {
+  } else if (percentage < 60) {
     return { color: 'bg-green-500', status: 'Normal', statusColor: 'text-green-600' };
-  } else if (percentage < 70) {
-    return { color: 'bg-yellow-500', status: 'Warning', statusColor: 'text-yellow-600' };
   } else {
     return { color: 'bg-red-500', status: 'Critical', statusColor: 'text-red-600' };
   }
@@ -122,7 +120,6 @@ const RoomCard: React.FC<{
           <div className={`px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs font-bold bg-white ${batteryConfig.statusColor} shadow-sm`}>
             {batteryConfig.status === 'Empty' ? t('dashboard.status.empty') :
              batteryConfig.status === 'Normal' ? t('dashboard.status.normal') :
-             batteryConfig.status === 'Warning' ? t('dashboard.status.warning') :
              batteryConfig.status === 'Critical' ? t('dashboard.status.critical') :
              batteryConfig.status}
           </div>

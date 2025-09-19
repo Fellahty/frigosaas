@@ -30,15 +30,15 @@ export const OccupancyChart: React.FC<OccupancyChartProps> = ({ rooms = [] }) =>
     }
     if (percentage >= 60) {
       return {
-        color: 'from-orange-500 to-orange-600',
-        bgColor: 'bg-orange-50',
-        borderColor: 'border-orange-300',
-        textColor: 'text-orange-700',
-        status: 'Warning',
-        statusColor: 'text-orange-600',
-        statusBg: 'bg-orange-100',
-        barColor: 'bg-orange-500',
-        glow: 'shadow-orange-500/30'
+        color: 'from-red-500 to-red-600',
+        bgColor: 'bg-red-50',
+        borderColor: 'border-red-300',
+        textColor: 'text-red-700',
+        status: 'Critical',
+        statusColor: 'text-red-600',
+        statusBg: 'bg-red-100',
+        barColor: 'bg-red-500',
+        glow: 'shadow-red-500/30'
       };
     }
     if (percentage >= 40) {
@@ -193,8 +193,7 @@ export const OccupancyChart: React.FC<OccupancyChartProps> = ({ rooms = [] }) =>
               { label: 'Vide (0-19%)', color: 'from-green-500 to-green-600', bg: 'bg-green-100', text: 'text-green-700', count: rooms.filter(r => getOccupancyPercentage(r.currentOccupancy, r.capacity) < 20).length },
               { label: 'Faible (20-39%)', color: 'from-blue-500 to-blue-600', bg: 'bg-blue-100', text: 'text-blue-700', count: rooms.filter(r => getOccupancyPercentage(r.currentOccupancy, r.capacity) >= 20 && getOccupancyPercentage(r.currentOccupancy, r.capacity) < 40).length },
               { label: 'Modéré (40-59%)', color: 'from-yellow-500 to-yellow-600', bg: 'bg-yellow-100', text: 'text-yellow-700', count: rooms.filter(r => getOccupancyPercentage(r.currentOccupancy, r.capacity) >= 40 && getOccupancyPercentage(r.currentOccupancy, r.capacity) < 60).length },
-              { label: 'Attention (60-79%)', color: 'from-orange-500 to-orange-600', bg: 'bg-orange-100', text: 'text-orange-700', count: rooms.filter(r => getOccupancyPercentage(r.currentOccupancy, r.capacity) >= 60 && getOccupancyPercentage(r.currentOccupancy, r.capacity) < 80).length },
-              { label: 'Critique (80-100%)', color: 'from-red-500 to-red-600', bg: 'bg-red-100', text: 'text-red-700', count: rooms.filter(r => getOccupancyPercentage(r.currentOccupancy, r.capacity) >= 80).length },
+              { label: 'Critique (60-100%)', color: 'from-red-500 to-red-600', bg: 'bg-red-100', text: 'text-red-700', count: rooms.filter(r => getOccupancyPercentage(r.currentOccupancy, r.capacity) >= 60).length },
             ].map((status, index) => (
               <div key={index} className={`${status.bg} rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow duration-200`}>
                 <div className="flex items-center justify-between">

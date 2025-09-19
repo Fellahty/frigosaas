@@ -1114,23 +1114,33 @@ export const ReceptionPage: React.FC = () => {
 
   // Filter rooms by client reservations
   const filteredRooms = React.useMemo(() => {
+    console.log('🔍 Filtering rooms for client:', form.clientId);
+    console.log('📋 Available rooms:', rooms?.length);
+    console.log('📋 Available reservations:', reservations?.length);
+    
     // If no client selected or no data available, show all rooms
     if (!form.clientId || !rooms || rooms.length === 0) {
+      console.log('❌ No client selected or no rooms available');
       return rooms || [];
     }
     
     // If no reservations available, show all rooms
     if (!reservations || reservations.length === 0) {
+      console.log('❌ No reservations available');
       return rooms;
     }
     
-    // Get all reservations for this client (any status)
+    // Get all APPROVED reservations for this client
     const clientReservations = reservations.filter((reservation: any) => 
-      reservation.clientId === form.clientId
+      reservation.clientId === form.clientId && reservation.status === 'APPROVED'
     );
+    
+    console.log('👤 Client reservations:', clientReservations.length);
+    console.log('📋 Client reservations data:', clientReservations);
     
     // If no reservations for this client, show all rooms
     if (clientReservations.length === 0) {
+      console.log('❌ No reservations found for this client');
       return rooms;
     }
     
@@ -1138,20 +1148,27 @@ export const ReceptionPage: React.FC = () => {
     const reservedRoomIds = new Set();
     
     clientReservations.forEach((reservation: any) => {
+      console.log('🔍 Processing reservation:', reservation.id, 'selectedRooms:', reservation.selectedRooms);
       if (reservation.selectedRooms && Array.isArray(reservation.selectedRooms)) {
         reservation.selectedRooms.forEach((roomId: string) => {
           reservedRoomIds.add(roomId);
+          console.log('➕ Added room ID:', roomId);
         });
       }
     });
     
+    console.log('🏠 Reserved room IDs:', Array.from(reservedRoomIds));
+    
     // If no rooms found in reservations, show all rooms
     if (reservedRoomIds.size === 0) {
+      console.log('❌ No rooms found in reservations');
       return rooms;
     }
     
     // Filter rooms to only show reserved ones
-    return rooms.filter(room => reservedRoomIds.has(room.id));
+    const filtered = rooms.filter(room => reservedRoomIds.has(room.id));
+    console.log('✅ Filtered rooms:', filtered.length, filtered.map(r => r.room));
+    return filtered;
   }, [form.clientId, reservations, rooms]);
 
   const { data: receptions, isLoading, error } = useQuery({
