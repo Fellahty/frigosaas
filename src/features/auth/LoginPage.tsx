@@ -65,31 +65,36 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center p-3 sm:p-4 lg:p-6">
-      <div className="w-full max-w-xs sm:max-w-sm lg:max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+      {/* Subtle background pattern */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
+      </div>
+      
+      <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg relative z-10">
         {/* Language Switcher */}
         <div className="flex justify-end mb-2 sm:mb-3">
           <LangSwitcher />
         </div>
         
         {/* Logo Section */}
-        <div className="text-center mb-6 sm:mb-8">
-          <div className="mb-4 sm:mb-6">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 tracking-tight leading-tight">
-              LYAZAMI
-            </h1>
-            <div className="mt-1.5 h-0.5 w-12 sm:w-16 bg-gradient-to-r from-blue-600 to-indigo-600 mx-auto rounded-full"></div>
-          </div>
-          <h2 className="text-base sm:text-lg text-gray-700 font-medium mb-1.5">
-            Entrepôt Frigorifique
-          </h2>
-          <p className="text-gray-500 text-xs sm:text-sm font-light max-w-xs mx-auto leading-relaxed">
+        <div className="text-center mb-10 sm:mb-12">
+          {/* Clean Apple-style title */}
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-light text-gray-900 tracking-tight leading-tight mb-4">
+            Domaine <span className="font-bold">LYAZAMI</span>
+          </h1>
+          
+          {/* Minimalist welcome message */}
+          <p className="text-gray-500 text-base sm:text-lg font-light max-w-md mx-auto leading-relaxed">
             {t('auth.welcome')}
           </p>
         </div>
 
         {/* Login Form */}
-        <div className="bg-white/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-gray-200/50 p-4 sm:p-6 lg:p-8">
+        <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 p-6 sm:p-8 lg:p-10 relative overflow-hidden">
+          {/* Subtle inner glow */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent rounded-3xl"></div>
+          <div className="relative z-10">
           <form className="space-y-3 sm:space-y-4" onSubmit={handleSubmit(onSubmit)}>
             {error && (
               <div className="bg-red-50 border-l-4 border-red-400 p-3 sm:p-4 rounded-lg">
@@ -263,7 +268,7 @@ export const LoginPage: React.FC = () => {
               type="submit"
               disabled={isSubmitting}
               onClick={() => console.log('🔘 Button clicked!')}
-              className="w-full flex justify-center items-center py-2.5 sm:py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full flex justify-center items-center py-3 sm:py-4 px-6 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-xl"
             >
               {isSubmitting ? (
                 <>
@@ -280,11 +285,12 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-6">
-          <p className="text-xs text-gray-500">
+        <div className="text-center mt-8">
+          <p className="text-xs text-gray-500 font-light">
             {t('auth.copyright')}
           </p>
         </div>
