@@ -4,11 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
+import { Room } from '../../types/settings';
 import { Card } from '../../components/Card';
-import { Table } from '../../components/Table';
+import { DataTable } from '../../components/DataTable';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { Spinner } from '../../components/Spinner';
 import { FormCard } from '../../components/FormCard';
+import { PrintButton } from '../../components/PrintButton';
 
 // Types for hygiene records
 interface VehicleControlRecord {
@@ -29,6 +31,7 @@ interface CleaningControlRecord {
   operator: string;
   responsible: string;
   notes?: string;
+  photoUrl?: string;
 }
 
 interface Truck {
@@ -110,15 +113,17 @@ export const HygienePage: React.FC = () => {
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'vehicle' | 'cleaning' | 'trucks'>('vehicle');
-  const [vehicleRecords, setVehicleRecords] = useState<VehicleControlRecord[]>([]);
-  const [cleaningRecords, setCleaningRecords] = useState<CleaningControlRecord[]>([]);
+  // Remove local state - use data directly from useQuery hooks
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
+  const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
   
   // Add form states
   const [isAddingVehicle, setIsAddingVehicle] = useState(false);
   const [isAddingCleaning, setIsAddingCleaning] = useState(false);
   const [isAddingTruck, setIsAddingTruck] = useState(false);
+  const [isQuickCleaning, setIsQuickCleaning] = useState(false);
   
   // Form data states
   const [vehicleForm, setVehicleForm] = useState({
@@ -135,8 +140,9 @@ export const HygienePage: React.FC = () => {
     elementToClean: '',
     operation: 'cleaning' as 'cleaning' | 'disinfection' | 'maintenance',
     operator: '',
-    responsible: '',
-    notes: ''
+    responsible: 'Soufiane',
+    notes: '',
+    photoUrl: ''
   });
   
   const [truckForm, setTruckForm] = useState({
@@ -176,6 +182,41 @@ export const HygienePage: React.FC = () => {
         return trucksData;
       } catch (error) {
         console.error('Error fetching trucks:', error);
+        return [];
+      }
+    },
+    enabled: !!tenantId,
+  });
+
+  // Fetch rooms from Firebase
+  const { data: rooms = [], isLoading: roomsLoading } = useQuery({
+    queryKey: ['rooms', tenantId],
+    queryFn: async (): Promise<Room[]> => {
+      if (!tenantId) {
+        console.warn('No tenant ID available for rooms query');
+        return [];
+      }
+      
+      try {
+        console.log('Fetching rooms for tenant:', tenantId);
+        const q = query(collection(db, 'rooms'), where('tenantId', '==', tenantId), where('active', '==', true));
+        const snap = await getDocs(q);
+        const roomsData = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            room: data.room || '',
+            capacity: data.capacity || 0,
+            capacityCrates: data.capacityCrates || 0,
+            capacityPallets: data.capacityPallets || 0,
+            sensorId: data.sensorId || '',
+            active: data.active !== false,
+          };
+        });
+        console.log('Rooms loaded:', roomsData.length, 'rooms');
+        return roomsData;
+      } catch (error) {
+        console.error('Error fetching rooms:', error);
         return [];
       }
     },
@@ -226,14 +267,10 @@ export const HygienePage: React.FC = () => {
     enabled: !!tenantId,
   });
 
-  // Update local state when data changes
+  // Clear selected records when switching tabs
   useEffect(() => {
-    setVehicleRecords(vehicleRecordsData);
-  }, [vehicleRecordsData]);
-
-  useEffect(() => {
-    setCleaningRecords(cleaningRecordsData);
-  }, [cleaningRecordsData]);
+    setSelectedRecords([]);
+  }, [activeTab]);
 
   // Form handlers
   // Add vehicle control record mutation
@@ -304,8 +341,9 @@ export const HygienePage: React.FC = () => {
         elementToClean: '',
         operation: 'cleaning',
         operator: '',
-        responsible: '',
-        notes: ''
+        responsible: 'Soufiane',
+        notes: '',
+        photoUrl: ''
       });
       setIsAddingCleaning(false);
     },
@@ -353,9 +391,110 @@ export const HygienePage: React.FC = () => {
     },
   });
 
+  // Delete vehicle control record mutation
+  const deleteVehicleRecordMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      await deleteDoc(doc(db, 'vehicle_control_records', recordId));
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['vehicle-control-records', tenantId] });
+    },
+  });
+
+  // Delete cleaning control record mutation
+  const deleteCleaningRecordMutation = useMutation({
+    mutationFn: async (recordId: string) => {
+      await deleteDoc(doc(db, 'cleaning_control_records', recordId));
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['cleaning-control-records', tenantId] });
+    },
+  });
+
+  // Bulk delete mutations
+  const bulkDeleteVehicleRecordsMutation = useMutation({
+    mutationFn: async (recordIds: string[]) => {
+      const promises = recordIds.map(id => deleteDoc(doc(db, 'vehicle_control_records', id)));
+      await Promise.all(promises);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['vehicle-control-records', tenantId] });
+      setSelectedRecords([]);
+    },
+  });
+
+  const bulkDeleteCleaningRecordsMutation = useMutation({
+    mutationFn: async (recordIds: string[]) => {
+      const promises = recordIds.map(id => deleteDoc(doc(db, 'cleaning_control_records', id)));
+      await Promise.all(promises);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['cleaning-control-records', tenantId] });
+      setSelectedRecords([]);
+    },
+  });
+
+  const bulkDeleteTrucksMutation = useMutation({
+    mutationFn: async (truckIds: string[]) => {
+      const promises = truckIds.map(id => updateDoc(doc(db, 'trucks', id), { isActive: false }));
+      await Promise.all(promises);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['trucks', tenantId] });
+      setSelectedRecords([]);
+    },
+  });
+
   const handleTruckSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     addTruckMutation.mutate(truckForm);
+  };
+
+  // Quick cleaning function - add all cleaning elements for today
+  const quickCleaningMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error('No tenant ID available');
+      
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get room names from database
+      const roomNames = rooms.map(room => room.room);
+      
+      // Add common areas + rooms from database and sort alphabetically
+      const cleaningElements = [
+        'Salle de triage pommes',
+        'Couloir 1',
+        'Couloir 2',
+        'Le Quai',
+        'Passage entre les chambres',
+        'Toilettes',
+        'Vestiaires',
+        ...roomNames // Add all rooms from database
+      ].sort();
+      
+      const promises = cleaningElements.map(element => 
+        addDoc(collection(db, 'cleaning_control_records'), {
+          tenantId,
+          date: today,
+          elementToClean: element,
+          operation: 'cleaning',
+          operator: 'Équipe Frigo',
+          responsible: 'Soufiane',
+          notes: 'Nettoyage quotidien automatique',
+          createdAt: Timestamp.fromDate(new Date()),
+        })
+      );
+      
+      await Promise.all(promises);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['cleaning-control-records', tenantId] });
+      setIsQuickCleaning(false);
+    },
+  });
+
+  const handleQuickCleaning = () => {
+    quickCleaningMutation.mutate();
   };
 
   const handleDelete = (recordId: string) => {
@@ -366,9 +505,9 @@ export const HygienePage: React.FC = () => {
   const confirmDelete = () => {
     if (recordToDelete) {
       if (activeTab === 'vehicle') {
-        setVehicleRecords(prev => prev.filter(record => record.id !== recordToDelete));
+        deleteVehicleRecordMutation.mutate(recordToDelete);
       } else if (activeTab === 'cleaning') {
-        setCleaningRecords(prev => prev.filter(record => record.id !== recordToDelete));
+        deleteCleaningRecordMutation.mutate(recordToDelete);
       } else if (activeTab === 'trucks') {
         deleteTruckMutation.mutate(recordToDelete);
       }
@@ -377,7 +516,58 @@ export const HygienePage: React.FC = () => {
     setRecordToDelete(null);
   };
 
+  const handleBulkDelete = () => {
+    if (selectedRecords.length === 0) return;
+    
+    if (activeTab === 'vehicle') {
+      bulkDeleteVehicleRecordsMutation.mutate(selectedRecords);
+    } else if (activeTab === 'cleaning') {
+      bulkDeleteCleaningRecordsMutation.mutate(selectedRecords);
+    } else if (activeTab === 'trucks') {
+      bulkDeleteTrucksMutation.mutate(selectedRecords);
+    }
+    setBulkDeleteModalOpen(false);
+  };
+
+  const handleSelectRecord = (recordId: string) => {
+    setSelectedRecords(prev => 
+      prev.includes(recordId) 
+        ? prev.filter(id => id !== recordId)
+        : [...prev, recordId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const currentData = activeTab === 'vehicle' ? vehicleRecordsData : 
+                       activeTab === 'cleaning' ? cleaningRecordsData : trucks;
+    
+    if (selectedRecords.length === currentData.length) {
+      setSelectedRecords([]);
+    } else {
+      setSelectedRecords(currentData.map((item: any) => item.id));
+    }
+  };
+
   const getTruckTableColumns = () => [
+    {
+      key: 'select',
+      label: (
+        <input
+          type="checkbox"
+          checked={selectedRecords.length === trucks.length && trucks.length > 0}
+          onChange={handleSelectAll}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+      ),
+      render: (truck: Truck) => (
+        <input
+          type="checkbox"
+          checked={selectedRecords.includes(truck.id)}
+          onChange={() => handleSelectRecord(truck.id)}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+      )
+    },
     {
       key: 'number',
       label: t('hygiene.vehicleNumber'),
@@ -449,6 +639,25 @@ export const HygienePage: React.FC = () => {
 
   const getVehicleTableColumns = () => [
     {
+      key: 'select',
+      label: (
+        <input
+          type="checkbox"
+          checked={selectedRecords.length === vehicleRecordsData.length && vehicleRecordsData.length > 0}
+          onChange={handleSelectAll}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+      ),
+      render: (record: VehicleControlRecord) => (
+        <input
+          type="checkbox"
+          checked={selectedRecords.includes(record.id)}
+          onChange={() => handleSelectRecord(record.id)}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+      )
+    },
+    {
       key: 'date',
       label: t('hygiene.date'),
       render: (record: VehicleControlRecord) => (
@@ -511,6 +720,25 @@ export const HygienePage: React.FC = () => {
 
   const getCleaningTableColumns = () => [
     {
+      key: 'select',
+      label: (
+        <input
+          type="checkbox"
+          checked={selectedRecords.length === cleaningRecordsData.length && cleaningRecordsData.length > 0}
+          onChange={handleSelectAll}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+      ),
+      render: (record: CleaningControlRecord) => (
+        <input
+          type="checkbox"
+          checked={selectedRecords.includes(record.id)}
+          onChange={() => handleSelectRecord(record.id)}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+      )
+    },
+    {
       key: 'date',
       label: t('hygiene.date'),
       render: (record: CleaningControlRecord) => (
@@ -558,6 +786,26 @@ export const HygienePage: React.FC = () => {
       )
     },
     {
+      key: 'photo',
+      label: 'Photo',
+      render: (record: CleaningControlRecord) => (
+        record.photoUrl ? (
+          <div className="flex items-center">
+            <img
+              src={record.photoUrl}
+              alt="Photo du nettoyage"
+              className="w-12 h-12 object-cover rounded-lg border border-gray-200"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          </div>
+        ) : (
+          <span className="text-xs text-gray-400">Aucune photo</span>
+        )
+      )
+    },
+    {
       key: 'actions',
       label: t('hygiene.actions'),
       render: (record: CleaningControlRecord) => (
@@ -573,7 +821,7 @@ export const HygienePage: React.FC = () => {
     }
   ];
 
-  const isLoading = trucksLoading || vehicleLoading || cleaningLoading;
+  const isLoading = trucksLoading || vehicleLoading || cleaningLoading || roomsLoading;
 
   if (isLoading) {
     return (
@@ -643,34 +891,37 @@ export const HygienePage: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900">
                   {t('hygiene.vehicleControlTitle')}
                 </h3>
-                <button 
-                  onClick={() => setIsAddingVehicle(true)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-                >
-                  {t('hygiene.addRecord')}
-                </button>
+                <div className="flex space-x-2">
+                  <PrintButton
+                    data={vehicleRecordsData}
+                    columns={getVehicleTableColumns()}
+                    title="Procédure de contrôle qualité"
+                    subtitle="Fiche de contrôle : Etat de moyen de transport à la réception"
+                    type="vehicle"
+                    className="mr-2"
+                  />
+                  {selectedRecords.length > 0 && (
+                    <button
+                      onClick={() => setBulkDeleteModalOpen(true)}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700"
+                    >
+                      Supprimer ({selectedRecords.length})
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setIsAddingVehicle(true)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+                  >
+                    {t('hygiene.addRecord')}
+                  </button>
+                </div>
               </div>
               
-              {vehicleRecords.length > 0 ? (
-                <Table
-                  data={vehicleRecords}
-                  columns={getVehicleTableColumns()}
-                />
-              ) : (
-                <div className="text-center py-12">
-                  <div className="text-gray-500">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">
-                      {t('hygiene.noRecords')}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Commencez par ajouter des enregistrements de contrôle des véhicules.
-                    </p>
-                  </div>
-                </div>
-              )}
+              <DataTable
+                data={vehicleRecordsData}
+                columns={getVehicleTableColumns()}
+                emptyMessage={t('hygiene.noRecords')}
+              />
             </div>
           ) : activeTab === 'cleaning' ? (
             <div className="space-y-4">
@@ -678,34 +929,44 @@ export const HygienePage: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900">
                   {t('hygiene.cleaningControlTitle')}
                 </h3>
-                <button 
-                  onClick={() => setIsAddingCleaning(true)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-                >
-                  {t('hygiene.addRecord')}
-                </button>
+                <div className="flex space-x-2">
+                  <PrintButton
+                    data={cleaningRecordsData}
+                    columns={getCleaningTableColumns()}
+                    title="Procédure de Nettoyage et désinfection"
+                    subtitle="Fiche de réalisation des taches de Nettoyage et Désinfection des locaux"
+                    type="cleaning"
+                    className="mr-2"
+                  />
+                  {selectedRecords.length > 0 && (
+                    <button
+                      onClick={() => setBulkDeleteModalOpen(true)}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700"
+                    >
+                      Supprimer ({selectedRecords.length})
+                    </button>
+                  )}
+                  <button 
+                    onClick={handleQuickCleaning}
+                    disabled={quickCleaningMutation.isPending}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {quickCleaningMutation.isPending ? 'Ajout...' : 'Nettoyage rapide aujourd\'hui'}
+                  </button>
+                  <button 
+                    onClick={() => setIsAddingCleaning(true)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+                  >
+                    {t('hygiene.addRecord')}
+                  </button>
+                </div>
               </div>
               
-              {cleaningRecords.length > 0 ? (
-                <Table
-                  data={cleaningRecords}
-                  columns={getCleaningTableColumns()}
-                />
-              ) : (
-                <div className="text-center py-12">
-                  <div className="text-gray-500">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">
-                      {t('hygiene.noRecords')}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Commencez par ajouter des enregistrements de contrôle de nettoyage.
-                    </p>
-                  </div>
-                </div>
-              )}
+              <DataTable
+                data={cleaningRecordsData}
+                columns={getCleaningTableColumns()}
+                emptyMessage={t('hygiene.noRecords')}
+              />
             </div>
           ) : (
             <div className="space-y-4">
@@ -713,34 +974,37 @@ export const HygienePage: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900">
                   Liste des camions et leurs visites
                 </h3>
-                <button 
-                  onClick={() => setIsAddingTruck(true)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-                >
-                  Ajouter un camion
-                </button>
+                <div className="flex space-x-2">
+                  <PrintButton
+                    data={trucks}
+                    columns={getTruckTableColumns()}
+                    title="Liste des camions"
+                    subtitle="Suivi des visites et statut des camions"
+                    type="trucks"
+                    className="mr-2"
+                  />
+                  {selectedRecords.length > 0 && (
+                    <button
+                      onClick={() => setBulkDeleteModalOpen(true)}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700"
+                    >
+                      Supprimer ({selectedRecords.length})
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setIsAddingTruck(true)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+                  >
+                    Ajouter un camion
+                  </button>
+                </div>
               </div>
               
-              {trucks.length > 0 ? (
-                <Table
-                  data={trucks}
-                  columns={getTruckTableColumns()}
-                />
-              ) : (
-                <div className="text-center py-12">
-                  <div className="text-gray-500">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">
-                      Aucun camion enregistré
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Commencez par ajouter des camions au système.
-                    </p>
-                  </div>
-                </div>
-              )}
+              <DataTable
+                data={trucks}
+                columns={getTruckTableColumns()}
+                emptyMessage="Aucun camion enregistré"
+              />
             </div>
           )}
         </div>
@@ -903,13 +1167,20 @@ export const HygienePage: React.FC = () => {
                     required
                   >
                     <option value="">Sélectionner un élément</option>
-                    <option value="Salle de triage pommes">Salle de triage pommes</option>
-                    <option value="Couloir">Couloir</option>
-                    <option value="Le Quai">Le Quai</option>
-                    <option value="Chambre 1">Chambre 1</option>
-                    <option value="Chambre 2">Chambre 2</option>
-                    <option value="Passage entre les chambres">Passage entre les chambres</option>
-                    <option value="Compte Tech 1">Compte Tech 1</option>
+                    {[
+                      'Salle de triage pommes',
+                      'Couloir 1',
+                      'Couloir 2',
+                      'Le Quai',
+                      'Passage entre les chambres',
+                      'Toilettes',
+                      'Vestiaires',
+                      ...rooms.map(room => room.room)
+                    ].sort().map((element, index) => (
+                      <option key={index} value={element}>
+                        {element}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 
@@ -945,9 +1216,23 @@ export const HygienePage: React.FC = () => {
                     value={cleaningForm.responsible}
                     onChange={(e) => setCleaningForm(prev => ({ ...prev, responsible: e.target.value }))}
                     className="w-full border rounded-md px-3 py-2"
-                    placeholder="Ex: Samia"
+                    placeholder="Ex: Soufiane"
                     required
                   />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Photo du nettoyage (optionnel)</label>
+                  <input
+                    type="url"
+                    value={cleaningForm.photoUrl}
+                    onChange={(e) => setCleaningForm(prev => ({ ...prev, photoUrl: e.target.value }))}
+                    className="w-full border rounded-md px-3 py-2"
+                    placeholder="https://example.com/photo.jpg"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ajoutez l'URL d'une photo du travail de nettoyage effectué
+                  </p>
                 </div>
                 
                 <div>
@@ -1069,6 +1354,18 @@ export const HygienePage: React.FC = () => {
         message="Cette action ne peut pas être annulée."
         confirmText={t('hygiene.delete')}
         cancelText={t('hygiene.cancel')}
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+
+      {/* Bulk Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={bulkDeleteModalOpen}
+        onClose={() => setBulkDeleteModalOpen(false)}
+        onConfirm={handleBulkDelete}
+        title="Confirmer la suppression multiple"
+        message={`Êtes-vous sûr de vouloir supprimer ${selectedRecords.length} élément(s) ? Cette action ne peut pas être annulée.`}
+        confirmText="Supprimer tout"
+        cancelText="Annuler"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
     </div>

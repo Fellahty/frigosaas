@@ -47,7 +47,7 @@ interface ReceptionInfo {
 }
 
 const PalletScannerPage: React.FC = () => {
-  // const { t } = useTranslation(); // Unused for now
+  const { t } = useTranslation();
   const hookTenantId = useTenantId();
   const tenantId = hookTenantId || 'YAZAMI'; // Fallback to hardcoded value
   const [isScanning, setIsScanning] = useState(false);
@@ -62,10 +62,10 @@ const PalletScannerPage: React.FC = () => {
 
   // Check if camera is supported
   const checkCameraSupport = () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setError('Votre navigateur ne supporte pas l\'accès à la caméra. Veuillez utiliser un navigateur moderne.');
-      return false;
-    }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError(t('palletScanner.errors.cameraNotSupported', 'Votre navigateur ne supporte pas l\'accès à la caméra. Veuillez utiliser un navigateur moderne.') as string);
+        return false;
+      }
     return true;
   };
 
@@ -91,7 +91,7 @@ const PalletScannerPage: React.FC = () => {
       }
       
       if (!videoRef.current) {
-        setError('Élément vidéo non trouvé. Veuillez réessayer.');
+        setError(t('palletScanner.errors.videoNotFound', 'Élément vidéo non trouvé. Veuillez réessayer.') as string);
         setIsScanning(false);
         return;
       }
@@ -100,7 +100,7 @@ const PalletScannerPage: React.FC = () => {
       
       // Additional check to ensure video element is properly mounted
       if (!videoRef.current.parentNode) {
-        setError('Élément vidéo non correctement monté. Veuillez réessayer.');
+        setError(t('palletScanner.errors.videoNotMounted', 'Élément vidéo non correctement monté. Veuillez réessayer.') as string);
         setIsScanning(false);
         return;
       }
@@ -160,20 +160,20 @@ const PalletScannerPage: React.FC = () => {
 
     } catch (err) {
       console.error('Error accessing camera:', err);
-      let errorMessage = 'Impossible d\'accéder à la caméra. ';
+      let errorMessage = t('palletScanner.errors.cameraError', 'Impossible d\'accéder à la caméra. ');
       
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError') {
-          errorMessage += 'Veuillez autoriser l\'accès à la caméra dans les paramètres de votre navigateur.';
+          errorMessage += t('palletScanner.errors.cameraAccessDenied', 'Veuillez autoriser l\'accès à la caméra dans les paramètres de votre navigateur.');
         } else if (err.name === 'NotFoundError') {
-          errorMessage += 'Aucune caméra trouvée sur cet appareil.';
+          errorMessage += t('palletScanner.errors.cameraNotFound', 'Aucune caméra trouvée sur cet appareil.');
         } else if (err.name === 'NotSupportedError') {
-          errorMessage += 'Votre navigateur ne supporte pas l\'accès à la caméra.';
+          errorMessage += t('palletScanner.errors.cameraNotSupported', 'Votre navigateur ne supporte pas l\'accès à la caméra.');
         } else {
           errorMessage += `Erreur: ${err.message}`;
         }
       } else {
-        errorMessage += 'Veuillez réessayer.';
+        errorMessage += t('common.retry', 'Veuillez réessayer.');
       }
       
       setError(errorMessage);
@@ -224,7 +224,7 @@ const PalletScannerPage: React.FC = () => {
       
       if (!reference) {
         console.error('❌ Empty QR code data');
-        setError('QR code vide détecté');
+        setError(t('palletScanner.errors.emptyQRCode', 'QR code vide détecté') as string);
         return;
       }
       
@@ -451,7 +451,7 @@ const PalletScannerPage: React.FC = () => {
                   console.log('Found reception info in tenant-filtered receptions:', receptionData);
                 } else {
                   console.log('Reception not found in any collection for ID:', foundPallet.receptionId);
-                  setError('Informations de réception non trouvées pour cette palette.');
+                  setError(t('palletScanner.errors.receptionNotFound', 'Informations de réception non trouvées pour cette palette.') as string);
                   return;
                 }
               }
@@ -463,18 +463,18 @@ const PalletScannerPage: React.FC = () => {
           }
         } catch (receptionErr) {
           console.error('Error fetching reception:', receptionErr);
-          setError('Erreur lors de la récupération des informations de réception.');
+          setError(t('palletScanner.errors.receptionNotFound', 'Erreur lors de la récupération des informations de réception.') as string);
         }
       } else {
         console.log('No pallet found with reference:', reference);
-        setError('Palette non trouvée. Vérifiez le QR code et réessayez.');
+        setError(t('palletScanner.errors.palletNotFound', 'Palette non trouvée. Vérifiez le QR code et réessayez.') as string);
       }
     } catch (err) {
       console.error('Error searching for pallet:', err);
       if (err instanceof Error) {
-        setError(`Erreur lors de la recherche de la palette: ${err.message}`);
+        setError(t('palletScanner.errors.searchError', `Erreur lors de la recherche de la palette: ${err.message}`) as string);
       } else {
-        setError('Erreur lors de la recherche de la palette.');
+        setError(t('palletScanner.errors.searchError', 'Erreur lors de la recherche de la palette.') as string);
       }
     } finally {
       setLoading(false);
@@ -538,10 +538,10 @@ const PalletScannerPage: React.FC = () => {
             </svg>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-3">
-            Scanner QR
+            {t('palletScanner.title', 'Scanner de Palettes')}
           </h1>
           <p className="text-base md:text-lg text-gray-600 max-w-md mx-auto leading-relaxed">
-            Scannez le QR code d'une palette pour voir ses informations
+            {t('palletScanner.subtitle', 'Scannez le QR code d\'une palette pour voir ses informations')}
           </p>
         </div>
 
@@ -555,7 +555,7 @@ const PalletScannerPage: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1 1v2a1 1 0 001 1z" />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Scanner</h2>
+              <h2 className="text-xl font-bold text-gray-900">{t('palletScanner.scanner', 'Scanner')}</h2>
             </div>
           
           {!isScanning ? (
@@ -566,10 +566,10 @@ const PalletScannerPage: React.FC = () => {
                 </svg>
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                Scanner QR Code
+                {t('palletScanner.title', 'Scanner de Palettes')}
               </h3>
               <p className="text-base text-gray-600 mb-8 max-w-sm mx-auto leading-relaxed">
-                Appuyez sur le bouton ci-dessous pour démarrer le scanner
+                {t('palletScanner.clickToStart', 'Appuyez sur le bouton ci-dessous pour démarrer le scanner')}
               </p>
               <button
                 onClick={startCamera}
@@ -578,7 +578,7 @@ const PalletScannerPage: React.FC = () => {
                 <svg className="w-6 h-6 mr-3 group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1 1v2a1 1 0 001 1z" />
                 </svg>
-                Démarrer le scanner
+{t('palletScanner.startScanner', 'Démarrer le scanner')}
               </button>
               <div className="mt-8 space-y-3">
                 <div className="flex items-center p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200">
@@ -586,7 +586,7 @@ const PalletScannerPage: React.FC = () => {
                     <span className="text-amber-600 text-sm">💡</span>
                   </div>
                   <p className="text-sm text-amber-800 font-medium">
-                    Autorisez l'accès à la caméra quand votre navigateur le demande
+                    {t('palletScanner.tips.tip1', 'Autorisez l\'accès à la caméra quand votre navigateur le demande')}
                   </p>
                 </div>
                 <div className="flex items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200">
@@ -594,7 +594,7 @@ const PalletScannerPage: React.FC = () => {
                     <span className="text-blue-600 text-sm">📱</span>
                   </div>
                   <p className="text-sm text-blue-800 font-medium">
-                    Utilisez la caméra arrière pour un meilleur scan
+                    {t('palletScanner.tips.tip5', 'Utilisez la caméra arrière pour un meilleur scan')}
                   </p>
                 </div>
                 <div className="flex items-center p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200">
@@ -602,7 +602,7 @@ const PalletScannerPage: React.FC = () => {
                     <span className="text-green-600 text-sm">✅</span>
                   </div>
                   <p className="text-sm text-green-800 font-medium">
-                    Compatible avec tous les téléphones modernes
+                    {t('palletScanner.tips.tip5', 'Compatible avec tous les téléphones modernes')}
                   </p>
                 </div>
               </div>
@@ -629,15 +629,15 @@ const PalletScannerPage: React.FC = () => {
                       isDetecting ? 'bg-yellow-400 animate-ping' : 'bg-green-400 animate-pulse'
                     }`}></div>
                     <span className="text-sm font-medium">
-                      {isDetecting ? 'Détection en cours...' : 'Scanner actif'}
+                      {isDetecting ? t('palletScanner.detecting', 'Détection en cours...') : t('palletScanner.scannerActive', 'Scanner actif')}
                     </span>
                   </div>
                 </div>
                 <div className="absolute bottom-4 left-4 right-4 bg-black/80 backdrop-blur-sm text-white px-4 py-3 rounded-2xl text-center">
-                  <p className="text-sm font-medium">Pointez la caméra vers le QR code</p>
+                  <p className="text-sm font-medium">{t('palletScanner.pointCamera', 'Pointez la caméra vers le QR code')}</p>
                   {scannedCode && (
                     <p className="text-xs text-yellow-300 mt-1">
-                      Dernier scan: {scannedCode.substring(0, 20)}...
+                      {t('palletScanner.lastScan', 'Dernier scan')}: {scannedCode.substring(0, 20)}...
                     </p>
                   )}
                 </div>
@@ -652,7 +652,7 @@ const PalletScannerPage: React.FC = () => {
                     <svg className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                    Arrêter le scanner
+{t('palletScanner.stopScanner', 'Arrêter le scanner')}
                   </div>
                 </button>
                 <button
@@ -668,7 +668,7 @@ const PalletScannerPage: React.FC = () => {
                     <svg className="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    Nouveau scan
+{t('palletScanner.newScan', 'Nouveau scan')}
                   </div>
                 </button>
                 <button
@@ -701,7 +701,7 @@ const PalletScannerPage: React.FC = () => {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-gray-900">
-                Saisie manuelle
+                {t('palletScanner.manualInput', 'Saisie manuelle')}
               </h3>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -710,7 +710,7 @@ const PalletScannerPage: React.FC = () => {
                   type="text"
                   value={scannedCode}
                   onChange={handleManualInput}
-                  placeholder="Entrez le QR code de la palette"
+                  placeholder={t('palletScanner.enterPalletQR', 'Entrez le QR code de la palette') as string}
                   className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base placeholder-gray-500 transition-all duration-200 focus:bg-white"
                 />
               </div>
@@ -727,7 +727,7 @@ const PalletScannerPage: React.FC = () => {
                       <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
-                      Rechercher
+{t('palletScanner.searchPallet', 'Rechercher')}
                     </>
                   )}
                 </div>
@@ -833,31 +833,31 @@ const PalletScannerPage: React.FC = () => {
                     </svg>
                   </div>
                   <h3 className="text-lg font-bold text-gray-900">
-                    Détails de la palette
+                    {t('palletScanner.palletDetails', 'Détails de la palette')}
                   </h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="bg-white p-4 rounded-xl border border-blue-200">
-                    <p className="text-sm text-gray-600 mb-1">Caisses sur cette palette</p>
+                    <p className="text-sm text-gray-600 mb-1">{t('palletScanner.crateCount', 'Caisses sur cette palette')}</p>
                     <p className="text-2xl font-bold text-blue-600">
                       {palletInfo.pallets?.find(p => p.reference === scannedCode)?.crates || 'N/A'}
                     </p>
                   </div>
                   <div className="bg-white p-4 rounded-xl border border-blue-200">
-                    <p className="text-sm text-gray-600 mb-1">Type de palette</p>
+                    <p className="text-sm text-gray-600 mb-1">{t('palletScanner.palletType', 'Type de palette')}</p>
                     <div className="flex items-center">
                       <div className={`w-4 h-4 rounded-full mr-3 ${palletInfo.pallets?.find(p => p.reference === scannedCode)?.isFull ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
                       <p className="text-lg font-bold text-gray-900">
-                        {palletInfo.pallets?.find(p => p.reference === scannedCode)?.isFull ? 'Complète' : 'Partielle'}
+                        {palletInfo.pallets?.find(p => p.reference === scannedCode)?.isFull ? t('palletScanner.fullPallet', 'Complète') : t('palletScanner.partialPallet', 'Partielle')}
                       </p>
                     </div>
                   </div>
                   <div className="bg-white p-4 rounded-xl border border-blue-200">
-                    <p className="text-sm text-gray-600 mb-1">Total caisses réception</p>
+                    <p className="text-sm text-gray-600 mb-1">{t('palletScanner.totalCrates', 'Total caisses réception')}</p>
                     <p className="text-2xl font-bold text-blue-600">{palletInfo.totalCrates}</p>
                   </div>
                   <div className="bg-white p-4 rounded-xl border border-blue-200">
-                    <p className="text-sm text-gray-600 mb-1">Capacité par palette</p>
+                    <p className="text-sm text-gray-600 mb-1">{t('palletScanner.cratesPerPallet', 'Capacité par palette')}</p>
                     <p className="text-2xl font-bold text-blue-600">{palletInfo.cratesPerPallet}</p>
                   </div>
                 </div>
@@ -903,8 +903,8 @@ const PalletScannerPage: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">Aucune donnée à afficher</h3>
-              <p className="text-gray-500">Scannez un QR code pour voir les informations de la palette</p>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">{t('palletScanner.noData', 'Aucune donnée à afficher')}</h3>
+              <p className="text-gray-500">{t('palletScanner.scanToSeeInfo', 'Scannez un QR code pour voir les informations de la palette')}</p>
             </div>
           )}
         </div>
