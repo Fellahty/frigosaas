@@ -493,6 +493,91 @@ export const ReceptionPage: React.FC = () => {
     }
   }, [existingPalletData]);
 
+  // Generate QR codes for pallets when modal is shown or pallet data changes
+  React.useEffect(() => {
+    if (showPalletModal && selectedReception && palletCalculation.pallets.length > 0) {
+      const generateQRCodeForPallet = async (pallet: any) => {
+        const qrData = {
+          palletNumber: pallet.number,
+          palletReference: pallet.reference,
+          crates: pallet.crates,
+          clientName: selectedReception.clientName,
+          receptionId: selectedReception.id,
+          timestamp: new Date().toISOString(),
+          type: 'pallet_collection'
+        };
+        const qrDataString = JSON.stringify(qrData);
+        console.log('Generating QR code for pallet:', pallet.number, 'Data:', qrDataString);
+        
+        try {
+          const qrElement = document.getElementById(`qr-pallet-${pallet.number}`);
+          console.log('QR element found:', qrElement);
+          if (qrElement) {
+            // Clear existing content
+            qrElement.innerHTML = '';
+            
+            // Generate QR code
+            const canvas = document.createElement('canvas');
+            qrElement.appendChild(canvas);
+            
+            console.log('About to generate QR code with QRCode.toCanvas');
+            console.log('QRCode library available:', typeof QRCode);
+            console.log('QRCode.toCanvas available:', typeof QRCode.toCanvas);
+            
+            if (typeof QRCode === 'undefined' || typeof QRCode.toCanvas !== 'function') {
+              throw new Error('QRCode library not available');
+            }
+            
+            await QRCode.toCanvas(canvas, qrDataString, {
+              width: 64,
+              margin: 1,
+              color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+              }
+            });
+            
+            console.log('QR code generated successfully');
+            console.log('Canvas dimensions after generation:', canvas.width, 'x', canvas.height);
+            
+            // Style the canvas
+            canvas.style.width = '64px';
+            canvas.style.height = '64px';
+            canvas.style.backgroundColor = 'white';
+            canvas.style.border = '2px solid #000000';
+            canvas.style.borderRadius = '4px';
+            canvas.style.display = 'block';
+            canvas.style.position = 'absolute';
+            canvas.style.zIndex = '10';
+            
+            // Add a test to see if canvas has content
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const hasContent = imageData.data.some(pixel => pixel !== 255); // Check if not all white
+              console.log('Canvas has content (not all white):', hasContent);
+            }
+          }
+        } catch (error) {
+          console.error('Error generating QR code for pallet', pallet.number, error);
+          const qrElement = document.getElementById(`qr-pallet-${pallet.number}`);
+          if (qrElement) {
+            qrElement.innerHTML = '<div class="text-xs text-gray-400">QR Error</div>';
+          }
+        }
+      };
+
+      // Generate QR codes for all pallets with a small delay to ensure DOM is ready
+      console.log('Generating QR codes for pallets:', palletCalculation.pallets);
+      setTimeout(() => {
+        palletCalculation.pallets.forEach((pallet) => {
+          console.log('Processing pallet for QR:', pallet);
+          generateQRCodeForPallet(pallet);
+        });
+      }, 100);
+    }
+  }, [showPalletModal, selectedReception, palletCalculation.pallets, customPalletCrates, cratesPerPallet]);
+
   // Reset room selection when client changes
   React.useEffect(() => {
     setForm(prev => ({ ...prev, roomId: '' }));
@@ -504,14 +589,34 @@ export const ReceptionPage: React.FC = () => {
       ...prev,
       [palletNumber]: crateCount
     }));
-    setIsPalletDataSaved(false); // Mark as unsaved when changes are made
+    // Auto-save will be triggered by useEffect
   };
 
   // Reset custom crate counts
   const resetCustomCrates = () => {
     setCustomPalletCrates({});
-    setIsPalletDataSaved(false); // Mark as unsaved when reset
+    setCratesPerPallet(42);
+    // Auto-save will be triggered by useEffect
   };
+
+  // Auto-save pallet data when changes are made
+  React.useEffect(() => {
+    if (selectedReception) {
+      const autoSave = async () => {
+        try {
+          console.log('Auto-saving pallet data...');
+          await savePalletCollection.mutateAsync();
+          console.log('Pallet data auto-saved successfully');
+        } catch (error) {
+          console.error('Error auto-saving pallet data:', error);
+        }
+      };
+
+      // Debounce auto-save to avoid too many saves
+      const timeoutId = setTimeout(autoSave, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [customPalletCrates, cratesPerPallet, selectedReception]);
 
   // Save pallet collection data
   const savePalletCollection = useMutation({
@@ -552,6 +657,144 @@ export const ReceptionPage: React.FC = () => {
     },
   });
 
+  // Function to get existing QR code data from canvas
+  const getExistingQRCodeDataURL = (palletNumber: number): string | null => {
+    const elementId = `qr-pallet-${palletNumber}`;
+    console.log('Looking for QR element with ID:', elementId);
+    const qrElement = document.getElementById(elementId);
+    console.log('QR element found:', qrElement);
+    
+    if (qrElement) {
+      const canvas = qrElement.querySelector('canvas');
+      console.log('Canvas found in QR element:', canvas);
+      if (canvas) {
+        const dataURL = canvas.toDataURL('image/png');
+        console.log('QR code data URL generated for pallet', palletNumber);
+        return dataURL;
+      }
+    }
+    console.log('No QR code found for pallet', palletNumber);
+    return null;
+  };
+
+  // Function to print single pallet ticket
+  const printSinglePalletTicket = async (pallet: any) => {
+    if (!selectedReception) return;
+
+    console.log('Printing single pallet ticket for:', pallet);
+    
+    // Get existing QR code data
+    const qrCodeDataURL = getExistingQRCodeDataURL(pallet.number);
+    
+    const ticket = {
+      palletNumber: pallet.number,
+      crateCount: pallet.crates,
+      isFull: pallet.isFull,
+      reference: pallet.reference,
+      reception: selectedReception,
+      qrCodeDataURL: qrCodeDataURL || undefined
+    };
+
+    // Generate single ticket HTML for thermal printer
+    const printContent = `
+      <div style="width: 80mm; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.2; padding: 2mm;">
+        <div style="text-align: center; border: 1px solid #000; padding: 2mm; background: #fff;">
+          <!-- Header -->
+          <div style="text-align: center; margin-bottom: 3mm; border-bottom: 1px solid #000; padding-bottom: 2mm;">
+            <div style="font-size: 16px; font-weight: bold; margin-bottom: 2mm;">DOMAINE LYAZAMI</div>
+            <div style="font-size: 10px; margin-bottom: 1mm;">Palette #${ticket.palletNumber} - ${ticket.isFull ? 'Complète' : 'Partielle'}</div>
+            <div style="font-size: 10px; font-family: monospace;">REF: ${ticket.reference}</div>
+          </div>
+          
+          <!-- Data -->
+          <div style="margin-bottom: 3mm;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1mm;">
+              <span>DATE:</span>
+              <span>${ticket.reception.arrivalTime.getDate()}/${ticket.reception.arrivalTime.getMonth() + 1}/${ticket.reception.arrivalTime.getFullYear()}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1mm;">
+              <span>CARRE:</span>
+              <span>${ticket.reception.clientName}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1mm;">
+              <span>VARIETE:</span>
+              <span>${ticket.reception.productVariety || 'GOLD'}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1mm;">
+              <span>PALETTE:</span>
+              <span>#${ticket.palletNumber}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1mm;">
+              <span>CAISSES:</span>
+              <span>${ticket.crateCount}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2mm;">
+              <span>CHAMBRE:</span>
+              <span>${ticket.reception.roomName || '3'}</span>
+            </div>
+          </div>
+          
+          <!-- QR Code -->
+          <div style="text-align: center; margin-bottom: 3mm;">
+            ${ticket.qrCodeDataURL ? 
+              `<img src="${ticket.qrCodeDataURL}" style="width: 30mm; height: 30mm; object-fit: contain;" alt="QR Code" />` :
+              `<div style="width: 30mm; height: 30mm; border: 1px solid #ccc; display: inline-flex; align-items: center; justify-content: center; background: #f8f8f8; font-size: 8px;">QR Code</div>`
+            }
+          </div>
+          
+          <!-- Footer -->
+          <div style="text-align: center; border-top: 1px solid #000; padding-top: 2mm; font-size: 10px;">
+            <div>Domaine Lyazami</div>
+            <div>${new Date().toLocaleDateString('fr-FR')}</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Create and open print window
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Ticket Palette #${pallet.number}</title>
+          <style>
+            @media print {
+              body { margin: 0; padding: 0; }
+              @page { 
+                margin: 0; 
+                size: 80mm auto;
+              }
+              * { 
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+              }
+            }
+            body { 
+              font-family: 'Courier New', monospace; 
+              margin: 0; 
+              padding: 0;
+              background: white;
+            }
+          </style>
+        </head>
+        <body>
+          ${printContent}
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      
+      // Wait for content to load then print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      };
+    }
+  };
+
   // Generate pallet collection tickets with 8-section format
   const generatePalletTickets = async () => {
     if (!selectedReception) return;
@@ -563,16 +806,23 @@ export const ReceptionPage: React.FC = () => {
       isFull: boolean;
       reference: string;
       reception: any;
+      qrCodeDataURL?: string;
     }> = [];
     
     // Generate tickets for all pallets with sequential numbering
+    console.log('Generating tickets for pallets:', pallets);
     pallets.forEach((pallet, index) => {
+      console.log('Processing pallet for ticket:', pallet.number, 'index:', index);
+      const qrCodeDataURL = getExistingQRCodeDataURL(pallet.number);
+      console.log('QR code data URL for pallet', pallet.number, ':', qrCodeDataURL ? 'Found' : 'Not found');
+      
       tickets.push({
         palletNumber: index + 1, // Sequential numbering starting from 1
         crateCount: pallet.crates,
         isFull: pallet.isFull,
         reference: pallet.reference,
-        reception: selectedReception
+        reception: selectedReception,
+        qrCodeDataURL: qrCodeDataURL || undefined
       });
     });
 
@@ -599,94 +849,6 @@ export const ReceptionPage: React.FC = () => {
       `;
       
       pageTickets.forEach((ticket) => {
-        const qrData = JSON.stringify({
-          date: ticket.reception.arrivalTime.toISOString(),
-          client: ticket.reception.clientName,
-          culture: ticket.reception.productName,
-          variety: ticket.reception.productVariety,
-          palletNumber: ticket.palletNumber,
-          palletReference: ticket.reference,
-          crateCount: ticket.crateCount,
-          room: ticket.reception.roomName,
-          isFull: ticket.isFull
-        });
-        
-        // Generate QR Code using the qrcode library
-        const generateQRCode = async (data: string) => {
-          try {
-            const qrDataURL = await QRCode.toDataURL(data, {
-              width: 200,
-              margin: 1,
-              color: {
-                dark: '#000000',
-                light: '#FFFFFF'
-              }
-            });
-            return `<img src="${qrDataURL}" style="width: 100%; height: 100%; object-fit: contain;" />`;
-          } catch (error) {
-            console.error('QR Code generation failed:', error);
-            // Fallback to simple pattern
-            return generateQRPattern(data);
-          }
-        };
-
-        // Generate working barcode-style pattern
-        const generateBarcodePattern = (data: string) => {
-          let pattern = '';
-          let hash = 0;
-          
-          // Create hash from data
-          for (let i = 0; i < data.length; i++) {
-            hash = ((hash << 5) - hash + data.charCodeAt(i)) & 0xffffffff;
-          }
-          
-          // Generate barcode-like pattern (vertical bars)
-          for (let i = 0; i < 8; i++) {
-            for (let j = 0; j < 20; j++) {
-              const index = (i * 20 + j) % 32;
-              const isBlack = (hash >> index) & 1;
-              pattern += isBlack ? '█' : '░';
-            }
-            pattern += '<br/>';
-          }
-          return pattern;
-        };
-
-        // Generate QR-like pattern for pallet reference
-        const generateQRPattern = (data: string) => {
-          const size = 9;
-          let pattern = '';
-          let hash = 0;
-          
-          // Create hash from data
-          for (let i = 0; i < data.length; i++) {
-            hash = ((hash << 5) - hash + data.charCodeAt(i)) & 0xffffffff;
-          }
-          
-          for (let i = 0; i < size; i++) {
-            for (let j = 0; j < size; j++) {
-              let isBlack = false;
-              
-              // Corner markers (QR code style)
-              if ((i < 3 && j < 3) || (i < 3 && j >= size - 3) || (i >= size - 3 && j < 3)) {
-                if (i === 0 || i === 2 || j === 0 || j === 2) {
-                  isBlack = true;
-                }
-                if (i === 1 && j === 1) {
-                  isBlack = true;
-                }
-              } else {
-                // Data area - use hash to determine pattern
-                const index = (i * size + j) % 32;
-                isBlack = (hash >> index) & 1;
-              }
-              
-              pattern += isBlack ? '█' : '░';
-            }
-            pattern += '<br/>';
-          }
-          return pattern;
-        };
 
 
         printContent += `
@@ -742,12 +904,14 @@ export const ReceptionPage: React.FC = () => {
                 </div>
               </div>
               
-              <!-- Barcode - Centered -->
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #000000; border-radius: 3px; padding: 0.5mm; background: #ffffff; width: 100%; max-width: 50mm;">
-                <div class="barcode-container" data-reference="${ticket.reference}" style="width: 100%; height: 8mm; border: 1px solid #000000; border-radius: 2px; display: flex; align-items: center; justify-content: center; background: #ffffff; margin-bottom: 0.3mm; padding: 0.2mm;">
-                  <div style="color: #000000; font-size: 10px; text-align: center; font-family: monospace; font-weight: bold; letter-spacing: 3px;">${ticket.reference}</div>
+              <!-- QR Code - Centered -->
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; max-width: 50mm;">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #000000; border-radius: 3px; padding: 0.5mm; background: #ffffff; width: 100%;">
+                  ${ticket.qrCodeDataURL ? 
+                    `<img src="${ticket.qrCodeDataURL}" style="width: 20mm; height: 20mm; object-fit: contain;" alt="QR Code" />` :
+                    `<div style="width: 20mm; height: 20mm; border: 1px solid #cccccc; display: flex; align-items: center; justify-content: center; background: #f8f9fa; color: #666666; font-size: 8pt;">QR Code</div>`
+                  }
                 </div>
-                <div style="font-size: 6pt; color: #000000; text-align: center; font-weight: 700; font-family: monospace;">REF: ${ticket.reference}</div>
               </div>
             </div>
             
@@ -3271,9 +3435,6 @@ export const ReceptionPage: React.FC = () => {
                   {/* All Pallets with Custom Editing */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {t('reception.palletVisualization', 'Visualisation des palettes')}
-                      </h3>
                       <button
                         onClick={resetCustomCrates}
                         className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -3283,63 +3444,87 @@ export const ReceptionPage: React.FC = () => {
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {palletCalculation.pallets.map((pallet, i) => (
-                        <div
-                          key={`pallet-${i}`}
-                          className={`p-4 rounded-xl border-2 transition-all duration-300 ${
-                            pallet.isCustom 
-                              ? 'border-blue-300 bg-blue-50' 
-                              : pallet.isFull 
-                                ? 'border-green-300 bg-green-50' 
-                                : 'border-orange-300 bg-orange-50'
-                          }`}
-                          style={{
-                            animation: `fadeInUp 0.6s ease-out ${i * 0.1}s both`,
-                            animationFillMode: 'both'
-                          }}
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center space-x-2">
-                              <div className={`w-3 h-3 rounded-full ${
-                                pallet.isCustom ? 'bg-blue-500' : pallet.isFull ? 'bg-green-500' : 'bg-orange-500'
-                              }`}></div>
-                              <span className="font-semibold text-gray-800">
-                                Palette #{pallet.number}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500 font-mono">
-                              {pallet.reference}
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <label className="text-sm font-medium text-gray-700">
-                                {t('reception.crates', 'Caisses')}:
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                max={selectedReception?.totalCrates || 1000}
-                                value={pallet.crates}
-                                onChange={(e) => handleCustomCrateChange(pallet.number, parseInt(e.target.value) || 0)}
-                                className="w-20 px-2 py-1 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
+                      {palletCalculation.pallets.map((pallet, i) => {
+                        
+                        return (
+                          <div
+                            key={`pallet-${i}`}
+                            className={`p-4 rounded-xl border-2 transition-all duration-300 ${
+                              pallet.isCustom 
+                                ? 'border-blue-300 bg-blue-50' 
+                                : pallet.isFull 
+                                  ? 'border-green-300 bg-green-50' 
+                                  : 'border-orange-300 bg-orange-50'
+                            }`}
+                            style={{
+                              animation: `fadeInUp 0.6s ease-out ${i * 0.1}s both`,
+                              animationFillMode: 'both'
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-3 h-3 rounded-full ${
+                                  pallet.isCustom ? 'bg-blue-500' : pallet.isFull ? 'bg-green-500' : 'bg-orange-500'
+                                }`}></div>
+                                <span className="font-semibold text-gray-800">
+                                  Palette #{pallet.number}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <div className="text-xs text-gray-500 font-mono">
+                                  {pallet.reference}
+                                </div>
+                                {/* QR Code */}
+                                <div 
+                                  id={`qr-pallet-${pallet.number}`}
+                                  className="w-16 h-16 bg-white rounded border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 hover:border-blue-300 cursor-pointer relative"
+                                  style={{ maxWidth: '64px', maxHeight: '64px', minWidth: '64px', minHeight: '64px' }}
+                                  title={`Palette #${pallet.number} - ${pallet.crates} caisses`}
+                                >
+                                  <div className="text-xs text-gray-400">QR</div>
+                                </div>
+                                {/* Print Button */}
+                                <button
+                                  onClick={() => printSinglePalletTicket(pallet)}
+                                  className="w-8 h-8 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center"
+                                  title={`Imprimer ticket palette #${pallet.number}`}
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                             
-                            <div className="text-center">
-                              <div className={`text-2xl font-bold ${
-                                pallet.isCustom ? 'text-blue-600' : pallet.isFull ? 'text-green-600' : 'text-orange-600'
-                              }`}>
-                                {pallet.crates}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-gray-700">
+                                  {t('reception.crates', 'Caisses')}:
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={selectedReception?.totalCrates || 1000}
+                                  value={pallet.crates}
+                                  onChange={(e) => handleCustomCrateChange(pallet.number, parseInt(e.target.value) || 0)}
+                                  className="w-20 px-2 py-1 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
                               </div>
-                              <div className="text-xs text-gray-500">
-                                {pallet.isCustom ? 'Personnalisé' : pallet.isFull ? 'Complète' : 'Partielle'}
+                              
+                              <div className="text-center">
+                                <div className={`text-2xl font-bold ${
+                                  pallet.isCustom ? 'text-blue-600' : pallet.isFull ? 'text-green-600' : 'text-orange-600'
+                                }`}>
+                                  {pallet.crates}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {pallet.isCustom ? 'Personnalisé' : pallet.isFull ? 'Complète' : 'Partielle'}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -3375,41 +3560,53 @@ export const ReceptionPage: React.FC = () => {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">
-                <button
-                  onClick={() => setShowPalletModal(false)}
-                  className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
-                >
-                  {t('common.close', 'Fermer')}
-                </button>
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                {/* Auto-save indicator - Full width on mobile */}
+                <div className="mb-4 sm:mb-0">
+                  <div className={`inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                    savePalletCollection.isLoading 
+                      ? 'text-blue-700 bg-blue-100 border border-blue-200' 
+                      : 'text-green-700 bg-green-100 border border-green-200'
+                  }`}>
+                    <div className={`w-2 h-2 rounded-full mr-2 ${
+                      savePalletCollection.isLoading ? 'bg-blue-500 animate-pulse' : 'bg-green-500'
+                    }`}></div>
+                    {savePalletCollection.isLoading 
+                      ? 'Sauvegarde en cours...' 
+                      : 'Sauvegarde automatique ✓'
+                    }
+                  </div>
+                </div>
                 
-                {/* Save Button */}
-                <button
-                  onClick={() => savePalletCollection.mutate()}
-                  disabled={isPalletDataSaved || savePalletCollection.isLoading}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
-                    isPalletDataSaved
-                      ? 'text-green-700 bg-green-100 cursor-not-allowed'
-                      : 'text-white bg-blue-600 hover:bg-blue-700 transform hover:scale-105 active:scale-95'
-                  }`}
-                >
-                  {savePalletCollection.isLoading 
-                    ? t('common.saving', 'Sauvegarde...') 
-                    : isPalletDataSaved 
-                      ? t('reception.saved', 'Sauvegardé ✓') 
-                      : t('reception.savePalletData', 'Sauvegarder')
-                  }
-                </button>
-                
-                <button
-                  onClick={async () => {
-                    await generatePalletTickets();
-                    setShowPalletModal(false);
-                  }}
-                  className="flex-1 px-4 py-3 text-white bg-orange-600 hover:bg-orange-700 rounded-lg font-medium transition-colors transform hover:scale-105 active:scale-95"
-                >
-                  {t('reception.generatePalletTicket', 'Générer ticket palette')}
-                </button>
+                {/* Action buttons - Responsive layout */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={() => setShowPalletModal(false)}
+                    className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-all duration-200 hover:shadow-md active:scale-95 border border-gray-200"
+                  >
+                    <div className="flex items-center justify-center">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      {t('common.close', 'Fermer')}
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={async () => {
+                      await generatePalletTickets();
+                      setShowPalletModal(false);
+                    }}
+                    className="flex-1 px-6 py-3 text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg font-medium transition-all duration-200 hover:shadow-lg hover:shadow-orange-500/25 active:scale-95 border border-orange-500"
+                  >
+                    <div className="flex items-center justify-center">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      {t('reception.generatePalletTicket', 'Générer ticket palette')}
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
