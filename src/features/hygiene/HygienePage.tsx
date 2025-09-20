@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Room } from '../../types/settings';
 import { Card } from '../../components/Card';
@@ -118,6 +119,9 @@ export const HygienePage: React.FC = () => {
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
   const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   // Add form states
   const [isAddingVehicle, setIsAddingVehicle] = useState(false);
@@ -321,12 +325,20 @@ export const HygienePage: React.FC = () => {
 
   // Add cleaning control record mutation
   const addCleaningRecordMutation = useMutation({
-    mutationFn: async (payload: typeof cleaningForm) => {
+    mutationFn: async (payload: typeof cleaningForm & { selectedImage?: File | null }) => {
       if (!tenantId) throw new Error('No tenant ID available');
+      
+      let photoUrl = payload.photoUrl;
+      
+      // Upload image if selected
+      if (payload.selectedImage) {
+        photoUrl = await uploadImageToFirebase(payload.selectedImage);
+      }
       
       const recordData = {
         tenantId,
         ...payload,
+        photoUrl,
         date: payload.date || new Date().toISOString().split('T')[0],
         createdAt: Timestamp.fromDate(new Date()),
       };
@@ -345,13 +357,18 @@ export const HygienePage: React.FC = () => {
         notes: '',
         photoUrl: ''
       });
+      setSelectedImage(null);
+      setImagePreview(null);
       setIsAddingCleaning(false);
     },
   });
 
   const handleCleaningSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addCleaningRecordMutation.mutate(cleaningForm);
+    addCleaningRecordMutation.mutate({
+      ...cleaningForm,
+      selectedImage
+    });
   };
 
   // Add truck mutation
@@ -546,6 +563,56 @@ export const HygienePage: React.FC = () => {
     } else {
       setSelectedRecords(currentData.map((item: any) => item.id));
     }
+  };
+
+  // Image upload functions
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Veuillez sélectionner un fichier image valide');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('La taille du fichier ne doit pas dépasser 5MB');
+        return;
+      }
+      
+      setSelectedImage(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadImageToFirebase = async (file: File): Promise<string> => {
+    if (!tenantId) throw new Error('No tenant ID available');
+    
+    const timestamp = Date.now();
+    const fileName = `cleaning_photos/${tenantId}/${timestamp}_${file.name}`;
+    const storageRef = ref(storage, fileName);
+    
+    setUploadingImage(true);
+    try {
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeSelectedImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    setCleaningForm(prev => ({ ...prev, photoUrl: '' }));
   };
 
   const getTruckTableColumns = () => [
@@ -1223,16 +1290,61 @@ export const HygienePage: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Photo du nettoyage (optionnel)</label>
-                  <input
-                    type="url"
-                    value={cleaningForm.photoUrl}
-                    onChange={(e) => setCleaningForm(prev => ({ ...prev, photoUrl: e.target.value }))}
-                    className="w-full border rounded-md px-3 py-2"
-                    placeholder="https://example.com/photo.jpg"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Ajoutez l'URL d'une photo du travail de nettoyage effectué
-                  </p>
+                  
+                  {!selectedImage ? (
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                        id="image-upload"
+                      />
+                      <label
+                        htmlFor="image-upload"
+                        className="cursor-pointer flex flex-col items-center"
+                      >
+                        <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span className="text-sm text-gray-600">Cliquez pour sélectionner une image</span>
+                        <span className="text-xs text-gray-400 mt-1">JPG, PNG, GIF (max 5MB)</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <img
+                          src={imagePreview || ''}
+                          alt="Aperçu"
+                          className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={removeSelectedImage}
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between text-sm text-gray-600">
+                        <span>{selectedImage.name}</span>
+                        <span>{(selectedImage.size / 1024 / 1024).toFixed(2)} MB</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {uploadingImage && (
+                    <div className="mt-2 flex items-center text-blue-600">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Upload en cours...
+                    </div>
+                  )}
                 </div>
                 
                 <div>
@@ -1256,9 +1368,10 @@ export const HygienePage: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    disabled={addCleaningRecordMutation.isPending || uploadingImage}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Ajouter
+                    {addCleaningRecordMutation.isPending || uploadingImage ? 'Ajout en cours...' : 'Ajouter'}
                   </button>
                 </div>
               </form>
