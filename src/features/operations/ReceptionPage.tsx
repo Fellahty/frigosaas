@@ -497,17 +497,9 @@ export const ReceptionPage: React.FC = () => {
   React.useEffect(() => {
     if (showPalletModal && selectedReception && palletCalculation.pallets.length > 0) {
       const generateQRCodeForPallet = async (pallet: any) => {
-        const qrData = {
-          palletNumber: pallet.number,
-          palletReference: pallet.reference,
-          crates: pallet.crates,
-          clientName: selectedReception.clientName,
-          receptionId: selectedReception.id,
-          timestamp: new Date().toISOString(),
-          type: 'pallet_collection'
-        };
-        const qrDataString = JSON.stringify(qrData);
-        console.log('Generating QR code for pallet:', pallet.number, 'Data:', qrDataString);
+        // Simple QR code with just the reference
+        const qrDataString = pallet.reference;
+        console.log('Generating QR code for pallet:', pallet.number, 'Reference:', qrDataString);
         
         try {
           const qrElement = document.getElementById(`qr-pallet-${pallet.number}`);
@@ -528,8 +520,13 @@ export const ReceptionPage: React.FC = () => {
               throw new Error('QRCode library not available');
             }
             
+            // Calculate appropriate size based on container
+            const containerWidth = qrElement.offsetWidth || 64;
+            const containerHeight = qrElement.offsetHeight || 64;
+            const qrSize = Math.min(containerWidth - 4, containerHeight - 4, 60); // Leave some padding
+            
             await QRCode.toCanvas(canvas, qrDataString, {
-              width: 64,
+              width: qrSize,
               margin: 1,
               color: {
                 dark: '#000000',
@@ -540,15 +537,15 @@ export const ReceptionPage: React.FC = () => {
             console.log('QR code generated successfully');
             console.log('Canvas dimensions after generation:', canvas.width, 'x', canvas.height);
             
-            // Style the canvas
-            canvas.style.width = '64px';
-            canvas.style.height = '64px';
+            // Style the canvas to fit the container
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.maxWidth = '60px';
+            canvas.style.maxHeight = '60px';
             canvas.style.backgroundColor = 'white';
-            canvas.style.border = '2px solid #000000';
             canvas.style.borderRadius = '4px';
             canvas.style.display = 'block';
-            canvas.style.position = 'absolute';
-            canvas.style.zIndex = '10';
+            canvas.style.objectFit = 'contain';
             
             // Add a test to see if canvas has content
             const ctx = canvas.getContext('2d');
@@ -567,14 +564,17 @@ export const ReceptionPage: React.FC = () => {
         }
       };
 
-      // Generate QR codes for all pallets with a small delay to ensure DOM is ready
+      // Generate QR codes for all pallets with a delay to ensure DOM is ready
       console.log('Generating QR codes for pallets:', palletCalculation.pallets);
       setTimeout(() => {
-        palletCalculation.pallets.forEach((pallet) => {
+        palletCalculation.pallets.forEach((pallet, index) => {
           console.log('Processing pallet for QR:', pallet);
-          generateQRCodeForPallet(pallet);
+          // Stagger the generation to avoid DOM conflicts
+          setTimeout(() => {
+            generateQRCodeForPallet(pallet);
+          }, index * 50);
         });
-      }, 100);
+      }, 200);
     }
   }, [showPalletModal, selectedReception, palletCalculation.pallets, customPalletCrates, cratesPerPallet]);
 
@@ -3461,7 +3461,8 @@ export const ReceptionPage: React.FC = () => {
                               animationFillMode: 'both'
                             }}
                           >
-                            <div className="flex items-center justify-between mb-3">
+                            {/* Header with palette info and reference */}
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
                               <div className="flex items-center space-x-2">
                                 <div className={`w-3 h-3 rounded-full ${
                                   pallet.isCustom ? 'bg-blue-500' : pallet.isFull ? 'bg-green-500' : 'bg-orange-500'
@@ -3470,23 +3471,35 @@ export const ReceptionPage: React.FC = () => {
                                   Palette #{pallet.number}
                                 </span>
                               </div>
+                              <div className="text-xs text-gray-500 font-mono break-all">
+                                {pallet.reference}
+                              </div>
+                            </div>
+
+                            {/* QR Code and Actions Row */}
+                            <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center space-x-2">
-                                <div className="text-xs text-gray-500 font-mono">
-                                  {pallet.reference}
-                                </div>
                                 {/* QR Code */}
                                 <div 
                                   id={`qr-pallet-${pallet.number}`}
-                                  className="w-16 h-16 bg-white rounded border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 hover:border-blue-300 cursor-pointer relative"
-                                  style={{ maxWidth: '64px', maxHeight: '64px', minWidth: '64px', minHeight: '64px' }}
+                                  className="w-12 h-12 sm:w-16 sm:h-16 bg-white rounded border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 hover:border-blue-300 cursor-pointer relative flex-shrink-0"
+                                  style={{ 
+                                    maxWidth: '64px', 
+                                    maxHeight: '64px', 
+                                    minWidth: '48px', 
+                                    minHeight: '48px',
+                                    overflow: 'hidden'
+                                  }}
                                   title={`Palette #${pallet.number} - ${pallet.crates} caisses`}
                                 >
-                                  <div className="text-xs text-gray-400">QR</div>
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="text-xs text-gray-400">QR</div>
+                                  </div>
                                 </div>
                                 {/* Print Button */}
                                 <button
                                   onClick={() => printSinglePalletTicket(pallet)}
-                                  className="w-8 h-8 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center"
+                                  className="w-8 h-8 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center flex-shrink-0"
                                   title={`Imprimer ticket palette #${pallet.number}`}
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
