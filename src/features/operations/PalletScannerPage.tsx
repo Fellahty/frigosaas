@@ -47,7 +47,7 @@ interface ReceptionInfo {
 }
 
 const PalletScannerPage: React.FC = () => {
-  const { t } = useTranslation();
+  // const { t } = useTranslation(); // Unused for now
   const hookTenantId = useTenantId();
   const tenantId = hookTenantId || 'YAZAMI'; // Fallback to hardcoded value
   const [isScanning, setIsScanning] = useState(false);
@@ -56,6 +56,7 @@ const PalletScannerPage: React.FC = () => {
   const [receptionInfo, setReceptionInfo] = useState<ReceptionInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [isDetecting, setIsDetecting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
 
@@ -120,7 +121,11 @@ const PalletScannerPage: React.FC = () => {
       qrScannerRef.current = new QrScanner(
         videoRef.current,
         (result) => {
-          console.log('QR Code detected:', result.data);
+          console.log('🎯 QR Code detected successfully!');
+          console.log('📱 Raw QR data:', result.data);
+          console.log('📱 QR data type:', typeof result.data);
+          console.log('📱 QR data length:', result.data?.length);
+          
           vibrateOnScan(); // Vibration feedback on mobile
           setScannedCode(result.data);
           stopCamera();
@@ -128,13 +133,25 @@ const PalletScannerPage: React.FC = () => {
         },
         {
           onDecodeError: (error) => {
-            // Silently handle decode errors - they're normal during scanning
-            console.log('QR decode error (normal):', error);
+            // Log decode errors for debugging
+            console.log('⚠️ QR decode error:', error);
+            setIsDetecting(true);
+            // Reset detection indicator after a short delay
+            setTimeout(() => setIsDetecting(false), 100);
           },
           highlightScanRegion: true,
           highlightCodeOutline: true,
           preferredCamera: 'environment', // Use back camera on mobile
-          maxScansPerSecond: 5, // Reduce scanning frequency for better performance
+          maxScansPerSecond: 10, // Increase scanning frequency for better detection
+          calculateScanRegion: (video) => {
+            // Use full video area for scanning
+            return {
+              x: 0,
+              y: 0,
+              width: video.videoWidth,
+              height: video.videoHeight
+            };
+          }
         }
       );
 
@@ -198,24 +215,43 @@ const PalletScannerPage: React.FC = () => {
     setReceptionInfo(null);
 
     try {
-      console.log('Searching for pallet with QR data:', qrData, 'tenantId:', tenantId);
+      console.log('🔍 Searching for pallet with QR data:', qrData);
+      console.log('🏢 Tenant ID:', tenantId);
+      console.log('📝 QR data type:', typeof qrData);
+      console.log('📏 QR data length:', qrData?.length);
       
-      let reference = qrData;
+      let reference = qrData?.toString().trim();
+      
+      if (!reference) {
+        console.error('❌ Empty QR code data');
+        setError('QR code vide détecté');
+        return;
+      }
       
       // Try to parse QR code data as JSON (if it contains pallet info)
       try {
         const qrCodeData = JSON.parse(qrData);
+        console.log('📋 Parsed QR code as JSON:', qrCodeData);
+        
         if (qrCodeData.palletReference) {
           reference = qrCodeData.palletReference;
-          console.log('Extracted reference from QR code data:', reference);
+          console.log('✅ Extracted reference from palletReference:', reference);
         } else if (qrCodeData.reference) {
           reference = qrCodeData.reference;
-          console.log('Extracted reference from QR code data:', reference);
+          console.log('✅ Extracted reference from reference:', reference);
+        } else if (qrCodeData.palletNumber) {
+          reference = qrCodeData.palletNumber.toString();
+          console.log('✅ Extracted reference from palletNumber:', reference);
+        } else if (qrCodeData.number) {
+          reference = qrCodeData.number.toString();
+          console.log('✅ Extracted reference from number:', reference);
         }
       } catch (parseError) {
         // If not JSON, use the raw data as reference
-        console.log('QR code data is not JSON, using as reference:', qrData);
+        console.log('📝 QR code data is not JSON, using as reference:', reference);
       }
+      
+      console.log('🎯 Final reference to search for:', reference);
       
       // Search in pallet-collections collection
       const palletQuery = query(
@@ -589,12 +625,21 @@ const PalletScannerPage: React.FC = () => {
                 </div>
                 <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-sm text-white px-4 py-3 rounded-2xl">
                   <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                    <span className="text-sm font-medium">Scanner actif</span>
+                    <div className={`w-3 h-3 rounded-full ${
+                      isDetecting ? 'bg-yellow-400 animate-ping' : 'bg-green-400 animate-pulse'
+                    }`}></div>
+                    <span className="text-sm font-medium">
+                      {isDetecting ? 'Détection en cours...' : 'Scanner actif'}
+                    </span>
                   </div>
                 </div>
                 <div className="absolute bottom-4 left-4 right-4 bg-black/80 backdrop-blur-sm text-white px-4 py-3 rounded-2xl text-center">
                   <p className="text-sm font-medium">Pointez la caméra vers le QR code</p>
+                  {scannedCode && (
+                    <p className="text-xs text-yellow-300 mt-1">
+                      Dernier scan: {scannedCode.substring(0, 20)}...
+                    </p>
+                  )}
                 </div>
               </div>
               
@@ -624,6 +669,23 @@ const PalletScannerPage: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     Nouveau scan
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    // Test with a sample QR code
+                    const testCode = 'TEST123';
+                    console.log('🧪 Testing with sample code:', testCode);
+                    setScannedCode(testCode);
+                    searchPallet(testCode);
+                  }}
+                  className="group px-4 py-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-2xl shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transition-all duration-300 hover:scale-105 active:scale-95"
+                  title="Tester avec un code d'exemple"
+                >
+                  <div className="flex items-center justify-center">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
                   </div>
                 </button>
               </div>
