@@ -79,11 +79,42 @@ const PalletScannerPage: React.FC = () => {
         return;
       }
       
+      // Wait for the video element to be rendered
+      let attempts = 0;
+      const maxAttempts = 20; // Increased for mobile
+      
+      while (!videoRef.current && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+        console.log(`Waiting for video element... attempt ${attempts}/${maxAttempts}`);
+      }
+      
       if (!videoRef.current) {
-        setError('Élément vidéo non trouvé.');
+        setError('Élément vidéo non trouvé. Veuillez réessayer.');
         setIsScanning(false);
         return;
       }
+
+      console.log('Video element found, initializing QR Scanner...');
+      
+      // Additional check to ensure video element is properly mounted
+      if (!videoRef.current.parentNode) {
+        setError('Élément vidéo non correctement monté. Veuillez réessayer.');
+        setIsScanning(false);
+        return;
+      }
+
+      // Ensure video element is visible and has dimensions
+      const videoElement = videoRef.current;
+      if (videoElement.offsetWidth === 0 || videoElement.offsetHeight === 0) {
+        console.log('Video element has no dimensions, waiting...');
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      console.log('Video element dimensions:', {
+        width: videoElement.offsetWidth,
+        height: videoElement.offsetHeight
+      });
 
       // Initialize QR Scanner with mobile-optimized settings
       qrScannerRef.current = new QrScanner(
@@ -426,6 +457,13 @@ const PalletScannerPage: React.FC = () => {
       stopCamera();
     };
   }, []);
+
+  // Ensure video element is ready when scanning starts
+  useEffect(() => {
+    if (isScanning && videoRef.current) {
+      console.log('Video element is ready for scanning');
+    }
+  }, [isScanning]);
 
   // Add vibration feedback on successful scan (mobile)
   const vibrateOnScan = () => {
