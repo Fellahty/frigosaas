@@ -869,10 +869,18 @@ export const ReceptionPage: React.FC = () => {
               </div>
             </div>
             
-            <!-- Main Content - Compact Layout -->
-            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4mm;">
-              <!-- Data Table - Compact -->
-              <div style="display: flex; flex-direction: column; gap: 0.3mm; width: 100%; max-width: 60mm;">
+            <!-- Main Content - 1:4 Ratio Layout -->
+            <div style="flex: 1; display: flex; align-items: center; gap: 2mm; padding: 0 1mm;">
+              <!-- QR Code - Left Side, 1 part -->
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; max-width: 20%;">
+                ${ticket.qrCodeDataURL ? 
+                  `<img src="${ticket.qrCodeDataURL}" style="width: 15mm; height: 15mm; object-fit: contain;" alt="QR Code" />` :
+                  `<div style="width: 15mm; height: 15mm; display: flex; align-items: center; justify-content: center; background: #f8f9fa; color: #666666; font-size: 6pt;">QR</div>`
+                }
+              </div>
+              
+              <!-- Data Table - Right Side, 4 parts -->
+              <div style="display: flex; flex-direction: column; gap: 0.3mm; flex: 4; max-width: 80%;">
                 <!-- Row 1: DATE -->
                 <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.3mm; border-radius: 2px; border: 1px solid #e9ecef;">
                   <div style="width: 12mm; font-weight: 600; font-size: 8pt; color: #495057; text-align: center;">DATE</div>
@@ -908,14 +916,6 @@ export const ReceptionPage: React.FC = () => {
                   <div style="width: 12mm; font-weight: 600; font-size: 8pt; color: #495057; text-align: center;">CHAMBRE</div>
                   <div style="flex: 1; font-size: 9pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.roomName || '3'}</div>
                 </div>
-              </div>
-              
-              <!-- QR Code - No border, no margin -->
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; max-width: 50mm;">
-                ${ticket.qrCodeDataURL ? 
-                  `<img src="${ticket.qrCodeDataURL}" style="width: 20mm; height: 20mm; object-fit: contain;" alt="QR Code" />` :
-                  `<div style="width: 20mm; height: 20mm; display: flex; align-items: center; justify-content: center; background: #f8f9fa; color: #666666; font-size: 8pt;">QR Code</div>`
-                }
               </div>
             </div>
             
