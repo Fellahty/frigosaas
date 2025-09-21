@@ -58,7 +58,7 @@ const PalletScannerPage: React.FC = () => {
   const [receptionInfo, setReceptionInfo] = useState<ReceptionInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [isDetecting, setIsDetecting] = useState(false);
+  const [scanSuccess, setScanSuccess] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
 
@@ -130,16 +130,18 @@ const PalletScannerPage: React.FC = () => {
           
           vibrateOnScan(); // Vibration feedback on mobile
           setScannedCode(result.data);
+          setScanSuccess(true);
+          // Automatically stop camera and search for pallet
           stopCamera();
           searchPallet(result.data);
+          
+          // Hide success message after 3 seconds
+          setTimeout(() => setScanSuccess(false), 3000);
         },
         {
           onDecodeError: (error) => {
-            // Log decode errors for debugging
+            // Silently handle decode errors - no visual feedback needed
             console.log('⚠️ QR decode error:', error);
-            setIsDetecting(true);
-            // Reset detection indicator after a short delay
-            setTimeout(() => setIsDetecting(false), 100);
           },
           highlightScanRegion: true,
           highlightCodeOutline: true,
@@ -628,23 +630,8 @@ const PalletScannerPage: React.FC = () => {
                     <div className="absolute bottom-0 right-0 w-8 h-8 sm:w-10 sm:h-10 border-b-4 border-r-4 border-white rounded-br-2xl"></div>
                   </div>
                 </div>
-                <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-sm text-white px-4 py-3 rounded-2xl">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${
-                      isDetecting ? 'bg-yellow-400 animate-ping' : 'bg-green-400 animate-pulse'
-                    }`}></div>
-                    <span className="text-sm font-medium">
-                      {isDetecting ? t('palletScanner.detecting', 'Détection en cours...') : t('palletScanner.scannerActive', 'Scanner actif')}
-                    </span>
-                  </div>
-                </div>
                 <div className="absolute bottom-4 left-4 right-4 bg-black/80 backdrop-blur-sm text-white px-4 py-3 rounded-2xl text-center">
                   <p className="text-sm font-medium">{t('palletScanner.pointCamera', 'Pointez la caméra vers le QR code')}</p>
-                  {scannedCode && (
-                    <p className="text-xs text-yellow-300 mt-1">
-                      {t('palletScanner.lastScan', 'Dernier scan')}: {scannedCode.substring(0, 20)}...
-                    </p>
-                  )}
                 </div>
               </div>
               
@@ -666,6 +653,7 @@ const PalletScannerPage: React.FC = () => {
                     setError('');
                     setPalletInfo(null);
                     setReceptionInfo(null);
+                    setScanSuccess(false);
                   }}
                   className="group flex-1 px-6 py-4 bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-2xl shadow-lg shadow-gray-500/25 hover:shadow-xl hover:shadow-gray-500/30 transition-all duration-300 hover:scale-105 active:scale-95"
                 >
@@ -693,6 +681,22 @@ const PalletScannerPage: React.FC = () => {
                     </svg>
                   </div>
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {scanSuccess && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl animate-pulse">
+              <div className="flex items-center">
+                <div className="w-8 h-8 bg-green-100 rounded-xl flex items-center justify-center mr-3">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-green-800 font-semibold">
+                  QR Code scanné avec succès ! Recherche en cours...
+                </p>
               </div>
             </div>
           )}
@@ -882,6 +886,7 @@ const PalletScannerPage: React.FC = () => {
                     setReceptionInfo(null);
                     setScannedCode('');
                     setError('');
+                    setScanSuccess(false);
                   }}
                   className="group flex-1 px-6 py-4 bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-2xl shadow-lg shadow-gray-500/25 hover:shadow-xl hover:shadow-gray-500/30 transition-all duration-300 hover:scale-105 active:scale-95"
                 >
