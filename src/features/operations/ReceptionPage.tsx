@@ -85,6 +85,7 @@ interface Reception {
   arrivalTime: Date;
   status: 'pending' | 'in_progress' | 'completed';
   notes?: string;
+  source?: string;
   createdAt: Date;
 }
 
@@ -110,14 +111,12 @@ const printTicketInCurrentWindow = (reception: Reception, ticketNumber: string, 
       
       <div style="margin: 2mm 0; border: 1px solid #000; padding: 2mm;">
         <div style="font-weight: bold; font-size: 10px; margin-bottom: 1mm; text-decoration: underline; text-transform: uppercase;">INFORMATIONS</div>
+        ${reception.source ? `
         <div style="display: flex; justify-content: space-between; margin: 1mm 0; padding: 0.5mm 0; font-size: 9px;">
-          <span style="font-weight: bold; flex: 1;">Date:</span>
-          <span style="text-align: right; flex: 1; font-weight: normal;">${reception.arrivalTime.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+          <span style="font-weight: bold; flex: 1;">Source:</span>
+          <span style="text-align: right; flex: 1; font-weight: normal;">${reception.source}</span>
         </div>
-        <div style="display: flex; justify-content: space-between; margin: 1mm 0; padding: 0.5mm 0; font-size: 9px;">
-          <span style="font-weight: bold; flex: 1;">Heure:</span>
-          <span style="text-align: right; flex: 1; font-weight: normal;">${reception.arrivalTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-        </div>
+        ` : ''}
       </div>
       
       <div style="margin: 2mm 0; border: 1px solid #000; padding: 2mm;">
@@ -315,6 +314,7 @@ export const ReceptionPage: React.FC = () => {
     totalCrates: 0,
     crateType: '',
     notes: '',
+    source: '',
     arrivalTime: new Date(),
   });
   const [truckForm, setTruckForm] = React.useState({
@@ -340,12 +340,13 @@ export const ReceptionPage: React.FC = () => {
   // Filter states
   const [clientFilter, setClientFilter] = React.useState<string>('');
   const [nameFilter, setNameFilter] = React.useState<string>('');
-  const [sortBy, setSortBy] = React.useState<'date' | 'client' | 'crates' | 'truck' | 'cumulative'>('date');
+  const [sortBy, setSortBy] = React.useState<'source' | 'client' | 'crates' | 'truck' | 'cumulative'>('source');
   const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('desc');
   
   // Pallet modal states
   const [showPalletModal, setShowPalletModal] = React.useState(false);
   const [selectedReception, setSelectedReception] = React.useState<any>(null);
+  const isAutoSavingRef = React.useRef(false);
   const [cratesPerPallet, setCratesPerPallet] = React.useState(42);
   const [customPalletCrates, setCustomPalletCrates] = React.useState<{[key: number]: number}>({});
   const [palletCollectionId, setPalletCollectionId] = React.useState<string | null>(null);
@@ -428,7 +429,7 @@ export const ReceptionPage: React.FC = () => {
 
   // Pallet calculation logic with custom crate support
   const palletCalculation = React.useMemo(() => {
-    if (!selectedReception) return { fullPallets: 0, remainingCrates: 0, totalPallets: 0, pallets: [] };
+    if (!selectedReception?.totalCrates) return { fullPallets: 0, remainingCrates: 0, totalPallets: 0, pallets: [] };
     
     const totalCrates = selectedReception.totalCrates;
     const fullPallets = Math.floor(totalCrates / cratesPerPallet);
@@ -472,7 +473,7 @@ export const ReceptionPage: React.FC = () => {
       pallets,
       totalCratesUsed: totalCrates - remainingCratesToDistribute
     };
-  }, [selectedReception, cratesPerPallet, customPalletCrates]);
+  }, [selectedReception?.totalCrates, selectedReception?.id, cratesPerPallet, customPalletCrates]);
 
   // Handle pallet modal
   const handlePalletCollection = (reception: any) => {
@@ -601,22 +602,27 @@ export const ReceptionPage: React.FC = () => {
 
   // Auto-save pallet data when changes are made
   React.useEffect(() => {
-    if (selectedReception) {
+    if (selectedReception?.id && !isAutoSavingRef.current) {
       const autoSave = async () => {
+        if (isAutoSavingRef.current) return; // Prevent multiple simultaneous saves
+        
         try {
+          isAutoSavingRef.current = true;
           console.log('Auto-saving pallet data...');
           await savePalletCollection.mutateAsync();
           console.log('Pallet data auto-saved successfully');
         } catch (error) {
           console.error('Error auto-saving pallet data:', error);
+        } finally {
+          isAutoSavingRef.current = false;
         }
       };
 
       // Debounce auto-save to avoid too many saves
-      const timeoutId = setTimeout(autoSave, 1000);
+      const timeoutId = setTimeout(autoSave, 2000);
       return () => clearTimeout(timeoutId);
     }
-  }, [customPalletCrates, cratesPerPallet, selectedReception]);
+  }, [customPalletCrates, cratesPerPallet, selectedReception?.id]);
 
   // Save pallet collection data
   const savePalletCollection = useMutation({
@@ -845,78 +851,76 @@ export const ReceptionPage: React.FC = () => {
       
       printContent += `
         <div style="page-break-after: ${page < pages - 1 ? 'always' : 'avoid'}; width: 210mm; height: 297mm; padding: 10mm; font-family: Arial, sans-serif;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr 1fr; gap: 11mm; height: 100%;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr 1fr; gap: 15mm; height: 100%;">
       `;
       
       pageTickets.forEach((ticket) => {
 
 
         printContent += `
-          <div style="border: 1px solid #333333; border-radius: 3px; padding: 0.6mm; background: #ffffff; font-family: 'Arial', sans-serif; height: 100%; display: flex; flex-direction: column; justify-content: center;">
+          <div style="border: 1px solid #333333; border-radius: 3px; padding: 0.3mm; background: #ffffff; font-family: 'Arial', sans-serif; height: 100%; display: flex; flex-direction: column;">
             <!-- Header -->
-            <div style="text-align: center; margin-bottom: 0.4mm; border-bottom: 1px solid #cccccc; padding-bottom: 0.3mm;">
-              <div style="color: #000000; font-size: 11pt; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 0.4mm;">DOMAINE LYAZAMI</div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9pt; color: #333333;">
-                <div style="font-weight: 700; background: #f0f0f0; color: #000000; padding: 1px 3px; border-radius: 2px;">#${ticket.palletNumber}</div>
-                <div style="background: #e0e0e0; color: #000000; padding: 1px 3px; border-radius: 2px; font-size: 8pt; font-weight: 600;">${ticket.isFull ? 'Complète' : 'Partielle'}</div>
-                <div style="font-family: monospace; font-size: 8pt; font-weight: 600; color: #666666;">${ticket.reference}</div>
+            <div style="text-align: center; margin-bottom: 0.2mm; border-bottom: 1px solid #cccccc; padding-bottom: 0.2mm;">
+              <div style="color: #000000; font-size: 10pt; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 0.2mm;">DOMAINE LYAZAMI</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 8pt; color: #333333;">
+                <div style="font-weight: 700; background: #f0f0f0; color: #000000; padding: 1px 2px; border-radius: 2px;">#${ticket.palletNumber}</div>
+                <div style="background: #e0e0e0; color: #000000; padding: 1px 2px; border-radius: 2px; font-size: 7pt; font-weight: 600;">${ticket.palletNumber === 42 ? 'Complète' : ''}</div>
+                <div style="font-family: monospace; font-size: 7pt; font-weight: 600; color: #666666;">${ticket.reference}</div>
               </div>
             </div>
             
-            <!-- Main Content - Centered Layout -->
-            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8mm;">
-              <!-- Data Table - Centered -->
-              <div style="display: flex; flex-direction: column; gap: 0.7mm; width: 100%; max-width: 60mm;">
+            <!-- Main Content - Compact Layout -->
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4mm;">
+              <!-- Data Table - Compact -->
+              <div style="display: flex; flex-direction: column; gap: 0.3mm; width: 100%; max-width: 60mm;">
                 <!-- Row 1: DATE -->
-                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.5mm; border-radius: 2px; border: 1px solid #e9ecef;">
-                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">DATE</div>
-                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.arrivalTime.getDate()}/${ticket.reception.arrivalTime.getMonth() + 1}/${ticket.reception.arrivalTime.getFullYear()}</div>
+                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.3mm; border-radius: 2px; border: 1px solid #e9ecef;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 8pt; color: #495057; text-align: center;">DATE</div>
+                  <div style="flex: 1; font-size: 9pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.arrivalTime.getDate()}/${ticket.reception.arrivalTime.getMonth() + 1}/${ticket.reception.arrivalTime.getFullYear()}</div>
                 </div>
                 
                 <!-- Row 2: CARRE -->
-                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.5mm; border-radius: 2px; border: 1px solid #e9ecef;">
-                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">CARRE</div>
-                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.clientName}</div>
+                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.3mm; border-radius: 2px; border: 1px solid #e9ecef;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 8pt; color: #495057; text-align: center;">CARRE</div>
+                  <div style="flex: 1; font-size: 9pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.clientName}</div>
                 </div>
                 
                 <!-- Row 3: VARIETE -->
-                <div style="display: flex; align-items: center; background: #fff3cd; padding: 0.5mm; border-radius: 2px; border: 1px solid #ffeaa7;">
-                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">VARIETE</div>
-                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.productVariety || 'GOLD'}</div>
+                <div style="display: flex; align-items: center; background: #fff3cd; padding: 0.3mm; border-radius: 2px; border: 1px solid #ffeaa7;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 8pt; color: #495057; text-align: center;">VARIETE</div>
+                  <div style="flex: 1; font-size: 9pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.productVariety || 'GOLD'}</div>
                 </div>
                 
                 <!-- Row 4: PALETTE -->
-                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.5mm; border-radius: 2px; border: 1px solid #e9ecef;">
-                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">PALETTE</div>
-                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.palletNumber}</div>
+                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.3mm; border-radius: 2px; border: 1px solid #e9ecef;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 8pt; color: #495057; text-align: center;">PALETTE</div>
+                  <div style="flex: 1; font-size: 9pt; font-weight: 700; color: #000000; text-align: center;">${ticket.palletNumber}</div>
                 </div>
                 
                 <!-- Row 5: CAISSES -->
-                <div style="display: flex; align-items: center; background: #fff3cd; padding: 0.5mm; border-radius: 2px; border: 1px solid #ffeaa7;">
-                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">CAISSES</div>
-                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.crateCount}</div>
+                <div style="display: flex; align-items: center; background: #fff3cd; padding: 0.3mm; border-radius: 2px; border: 1px solid #ffeaa7;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 8pt; color: #495057; text-align: center;">CAISSES</div>
+                  <div style="flex: 1; font-size: 9pt; font-weight: 700; color: #000000; text-align: center;">${ticket.crateCount}</div>
                 </div>
                 
                 <!-- Row 6: CHAMBRE -->
-                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.5mm; border-radius: 2px; border: 1px solid #e9ecef;">
-                  <div style="width: 12mm; font-weight: 600; font-size: 9pt; color: #495057; text-align: center;">CHAMBRE</div>
-                  <div style="flex: 1; font-size: 10pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.roomName || '3'}</div>
+                <div style="display: flex; align-items: center; background: #f8f9fa; padding: 0.3mm; border-radius: 2px; border: 1px solid #e9ecef;">
+                  <div style="width: 12mm; font-weight: 600; font-size: 8pt; color: #495057; text-align: center;">CHAMBRE</div>
+                  <div style="flex: 1; font-size: 9pt; font-weight: 700; color: #000000; text-align: center;">${ticket.reception.roomName || '3'}</div>
                 </div>
               </div>
               
-              <!-- QR Code - Centered -->
+              <!-- QR Code - No border, no margin -->
               <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; max-width: 50mm;">
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #000000; border-radius: 3px; padding: 0.5mm; background: #ffffff; width: 100%;">
-                  ${ticket.qrCodeDataURL ? 
-                    `<img src="${ticket.qrCodeDataURL}" style="width: 20mm; height: 20mm; object-fit: contain;" alt="QR Code" />` :
-                    `<div style="width: 20mm; height: 20mm; border: 1px solid #cccccc; display: flex; align-items: center; justify-content: center; background: #f8f9fa; color: #666666; font-size: 8pt;">QR Code</div>`
-                  }
-                </div>
+                ${ticket.qrCodeDataURL ? 
+                  `<img src="${ticket.qrCodeDataURL}" style="width: 20mm; height: 20mm; object-fit: contain;" alt="QR Code" />` :
+                  `<div style="width: 20mm; height: 20mm; display: flex; align-items: center; justify-content: center; background: #f8f9fa; color: #666666; font-size: 8pt;">QR Code</div>`
+                }
               </div>
             </div>
             
             <!-- Footer -->
-            <div style="text-align: center; margin-top: 2.5mm; padding-top: 0.8mm; padding-bottom: 0.5mm; border-top: 1px solid #000000; font-size: 7pt; color: #000000; font-weight: 600;">
+            <div style="text-align: center; margin-top: 0.5mm; padding-top: 0.3mm; padding-bottom: 0.2mm; border-top: 1px solid #000000; font-size: 6pt; color: #000000; font-weight: 600;">
               <p style="margin: 0;">Domaine Lyazami • ${new Date().toLocaleDateString('fr-FR')}</p>
             </div>
           </div>
@@ -1468,6 +1472,7 @@ export const ReceptionPage: React.FC = () => {
         totalCrates: payload.totalCrates,
         crateType: payload.crateType,
         notes: payload.notes,
+        source: payload.source || '',
         status: 'pending',
         arrivalTime: Timestamp.fromDate(payload.arrivalTime),
       };
@@ -1500,6 +1505,7 @@ export const ReceptionPage: React.FC = () => {
         totalCrates: 0,
         crateType: '',
         notes: '',
+        source: '',
         arrivalTime: new Date(),
       });
     },
@@ -1552,8 +1558,6 @@ export const ReceptionPage: React.FC = () => {
 
   // Get selected client info
   const selectedClient = clients?.find(client => client.id === form.clientId);
-  console.log('👤 Selected client:', selectedClient);
-  console.log('📊 Client loans:', clientLoans);
 
   const selectedClientReservations = React.useMemo(() => {
     if (!selectedClient?.id || !reservations) return [];
@@ -1571,12 +1575,10 @@ export const ReceptionPage: React.FC = () => {
 
   // Calculate total empty crates taken by client (only active loans)
   const totalEmptyCratesTaken = clientLoans?.filter(loan => loan.status === 'open').reduce((sum, loan) => sum + loan.crates, 0) || 0;
-  console.log('🔢 Total empty crates taken:', totalEmptyCratesTaken);
 
   // Force refetch client loans when form.clientId changes
   React.useEffect(() => {
     if (form.clientId) {
-      console.log('🔄 Refetching client loans for client:', form.clientId);
       queryClient.invalidateQueries({ 
         queryKey: ['clientLoans', form.clientId, tenantId] 
       });
@@ -1641,8 +1643,8 @@ export const ReceptionPage: React.FC = () => {
       let comparison = 0;
       
       switch (sortBy) {
-        case 'date':
-          comparison = a.arrivalTime.getTime() - b.arrivalTime.getTime();
+        case 'source':
+          comparison = (a.source || '').localeCompare(b.source || '');
           break;
         case 'client':
           comparison = a.clientName.localeCompare(b.clientName);
@@ -1733,6 +1735,7 @@ export const ReceptionPage: React.FC = () => {
       totalCrates: reception.totalCrates,
       crateType: (reception as any).crateType || '',
       notes: reception.notes || '',
+      source: (reception as any).source || '',
       arrivalTime: reception.arrivalTime,
     });
     setIsAdding(true);
@@ -1924,21 +1927,12 @@ export const ReceptionPage: React.FC = () => {
 
             <div class="section">
               <div class="section-title">Informations</div>
+              ${reception.source ? `
               <div class="row">
-                <span class="label">Date:</span>
-                <span class="value">${reception.arrivalTime.toLocaleDateString('fr-FR', { 
-                  day: '2-digit', 
-                  month: '2-digit', 
-                  year: '2-digit'
-                })}</span>
+                <span class="label">Source:</span>
+                <span class="value">${reception.source}</span>
               </div>
-              <div class="row">
-                <span class="label">Heure:</span>
-                <span class="value">${reception.arrivalTime.toLocaleTimeString('fr-FR', { 
-                  hour: '2-digit', 
-                  minute: '2-digit'
-                })}</span>
-              </div>
+              ` : ''}
             </div>
 
             <div class="section">
@@ -2125,6 +2119,7 @@ export const ReceptionPage: React.FC = () => {
               totalCrates: 0,
               crateType: '',
               notes: '',
+              source: '',
               arrivalTime: new Date(),
             });
             setIsAdding(true);
@@ -2282,7 +2277,7 @@ export const ReceptionPage: React.FC = () => {
                       onChange={(e) => setSortBy(e.target.value as any)}
                       className="block w-full pl-4 pr-10 py-3 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none touch-manipulation"
                     >
-                      <option value="date">{t('reception.sortByDate', 'Date')}</option>
+                      <option value="source">{t('reception.sortBySource', 'Source')}</option>
                       <option value="client">{t('reception.sortByClient', 'Client')}</option>
                       <option value="crates">{t('reception.sortByCrates', 'Caisses')}</option>
                       <option value="truck">{t('reception.sortByTruck', 'Camion')}</option>
@@ -2564,50 +2559,16 @@ export const ReceptionPage: React.FC = () => {
                 ))}
               </select>
             </div>
-            <div>
+            <div className="md:col-span-2 lg:col-span-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('reception.arrivalDate', 'Date d\'arrivée')} <span className="text-red-500">*</span>
+                {t('reception.source', 'Source/Localisation')}
               </label>
               <input
-                type="date"
-                value={form.arrivalTime.toISOString().split('T')[0]}
-                onChange={(e) => {
-                  const selectedDate = new Date(e.target.value);
-                  const currentTime = form.arrivalTime;
-                  const newDateTime = new Date(
-                    selectedDate.getFullYear(),
-                    selectedDate.getMonth(),
-                    selectedDate.getDate(),
-                    currentTime.getHours(),
-                    currentTime.getMinutes()
-                  );
-                  setForm((f) => ({ ...f, arrivalTime: newDateTime }));
-                }}
+                type="text"
+                value={form.source}
+                onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}
                 className="w-full border rounded-md px-3 py-2"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('reception.arrivalTime', 'Heure d\'arrivée')} <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                value={form.arrivalTime.toTimeString().slice(0, 5)}
-                onChange={(e) => {
-                  const [hours, minutes] = e.target.value.split(':').map(Number);
-                  const currentDate = form.arrivalTime;
-                  const newDateTime = new Date(
-                    currentDate.getFullYear(),
-                    currentDate.getMonth(),
-                    currentDate.getDate(),
-                    hours,
-                    minutes
-                  );
-                  setForm((f) => ({ ...f, arrivalTime: newDateTime }));
-                }}
-                className="w-full border rounded-md px-3 py-2"
-                required
+                placeholder={t('reception.sourcePlaceholder', 'Origine ou localisation du produit (optionnel)') as string}
               />
             </div>
             <div className="md:col-span-2 lg:col-span-3">
@@ -2642,6 +2603,7 @@ export const ReceptionPage: React.FC = () => {
                   totalCrates: 0,
                   crateType: '',
                   notes: '',
+                  source: '',
                   arrivalTime: new Date(),
                 });
               }}
@@ -2967,7 +2929,7 @@ export const ReceptionPage: React.FC = () => {
                   <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.client', 'Client')}</TableHeader>
                   <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.totalCrates', 'Caisses')}</TableHeader>
                   <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.cumulative', 'Cumulatif')}</TableHeader>
-                  <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.arrivalTime', 'Date/Heure')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.source', 'Source')}</TableHeader>
                   <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.truckNumber', 'Camion')}</TableHeader>
                   <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.driverName', 'Chauffeur')}</TableHeader>
                   <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.product', 'Produit')}</TableHeader>
@@ -3032,13 +2994,7 @@ export const ReceptionPage: React.FC = () => {
                       </div>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-center text-[11px] font-medium text-slate-500">
-                      {r.arrivalTime.toLocaleDateString('fr-FR', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {r.source || '-'}
                     </TableCell>
                     <TableCell className="px-3 py-2 text-sm text-slate-600 font-mono">
                       <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
@@ -3107,7 +3063,7 @@ export const ReceptionPage: React.FC = () => {
       </Card>
 
       {/* Mobile Card View */}
-      <div className="lg:hidden space-y-4">
+      <div className="lg:hidden space-y-6">
         {Array.isArray(filteredAndSortedReceptions) && filteredAndSortedReceptions.length > 0 ? (
           filteredAndSortedReceptions.map((r) => (
             <Card key={r.id} className="p-5 rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur shadow-md shadow-slate-900/5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl">
@@ -3117,13 +3073,7 @@ export const ReceptionPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-semibold text-gray-900 leading-snug break-words">{r.clientName}</h3>
                     <div className="mt-1 text-sm text-gray-500">
-                      {r.arrivalTime.toLocaleDateString('fr-FR', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {r.source || 'Aucune source'}
                     </div>
                   </div>
                   <div className="flex gap-2">

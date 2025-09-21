@@ -29,6 +29,7 @@ interface PalletInfo {
   productVariety?: string;
   roomName?: string;
   arrivalTime?: any;
+  source?: string;
 }
 
 interface ReceptionInfo {
@@ -44,6 +45,7 @@ interface ReceptionInfo {
   clientId?: string;
   palletsCount?: number;
   palletReferences?: string[];
+  source?: string;
 }
 
 const PalletScannerPage: React.FC = () => {
@@ -338,7 +340,8 @@ const PalletScannerPage: React.FC = () => {
                 productName: data.productName || '',
                 productVariety: data.productVariety || '',
                 roomName: data.roomName || '',
-                arrivalTime: data.arrivalTime || null
+                arrivalTime: data.arrivalTime || null,
+                source: data.source || ''
               };
               break;
             }
@@ -385,7 +388,8 @@ const PalletScannerPage: React.FC = () => {
                 productName: data.productName || '',
                 productVariety: data.productVariety || '',
                 roomName: data.roomName || '',
-                arrivalTime: data.arrivalTime || null
+                arrivalTime: data.arrivalTime || null,
+                source: data.source || ''
               };
               break;
             }
@@ -410,6 +414,7 @@ const PalletScannerPage: React.FC = () => {
               productVariety: foundPallet.productVariety || '',
               roomName: foundPallet.roomName || '',
               arrivalTime: foundPallet.arrivalTime || null,
+              source: foundPallet.source || '',
               crateCount: foundPallet.totalCrates,
               totalCrates: foundPallet.totalCrates,
               palletsCount: foundPallet.pallets?.length || 0,
@@ -815,6 +820,12 @@ const PalletScannerPage: React.FC = () => {
                     <p className="text-sm text-gray-600 mb-1">Chambre</p>
                     <p className="text-lg font-bold text-gray-900">{receptionInfo.roomName}</p>
                   </div>
+                  {receptionInfo.source && (
+                    <div className="bg-white p-4 rounded-xl border border-gray-200">
+                      <p className="text-sm text-gray-600 mb-1">Source</p>
+                      <p className="text-lg font-bold text-gray-900">{receptionInfo.source}</p>
+                    </div>
+                  )}
                   <div className="bg-white p-4 rounded-xl border border-gray-200">
                     <p className="text-sm text-gray-600 mb-1">Date</p>
                     <p className="text-lg font-bold text-gray-900">
