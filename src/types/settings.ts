@@ -24,6 +24,7 @@ export const roomSchema = z.object({
   capacity: z.number().min(0, 'La capacité doit être positive'),
   sensorId: z.string().min(1, 'ID du capteur requis'),
   active: z.boolean().default(true),
+  capteurInstalled: z.boolean().default(false), // Whether sensor is installed in the room
 });
 
 // Pool Settings Schema
@@ -78,6 +79,7 @@ export interface RoomDoc {
   capacityPallets?: number;
   sensorId: string;
   active: boolean;
+  capteurInstalled: boolean; // Whether sensor is installed in the room
 }
 
 export interface PoolSettingsDoc {

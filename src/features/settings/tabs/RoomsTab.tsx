@@ -38,6 +38,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     capacityPallets: 0,
     sensorId: '',
     active: true,
+    capteurInstalled: false,
   });
   const [sensorIdError, setSensorIdError] = useState<string>('');
   const [sortField, setSortField] = useState<keyof RoomDoc | null>(null);
@@ -73,6 +74,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
         return {
           id: doc.id,
           ...data,
+          capteurInstalled: data.capteurInstalled || false,
           createdAt: data.createdAt ? data.createdAt.toDate() : new Date()
         } as RoomDoc;
       });
@@ -92,6 +94,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
       capacityPallets: 0,
       sensorId: '',
       active: true,
+      capteurInstalled: false,
     });
     setSensorIdError('');
     setShowModal(true);
@@ -106,6 +109,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
       capacityPallets: room.capacityPallets || 0,
       sensorId: room.sensorId,
       active: room.active,
+      capteurInstalled: room.capteurInstalled || false,
     });
     setSensorIdError('');
     setShowModal(true);
@@ -134,6 +138,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
         capacityPallets: formData.capacityPallets,
         sensorId: formData.sensorId,
         active: formData.active,
+        capteurInstalled: formData.capteurInstalled,
         tenantId,
         createdAt: serverTimestamp(),
       };
@@ -388,6 +393,15 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('capteurInstalled')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.capteurInstalled', 'Capteur Installé')}</span>
+                      {getSortIcon('capteurInstalled')}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     onClick={() => handleSort('active')}
                   >
                     <div className="flex items-center space-x-1">
@@ -423,6 +437,15 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {room.sensorId}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        room.capteurInstalled 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {room.capteurInstalled ? t('common.yes', 'Oui') : t('common.no', 'Non')}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -538,6 +561,19 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                       {sensorIdError}
                     </p>
                   )}
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="capteurInstalled"
+                    checked={formData.capteurInstalled}
+                    onChange={(e) => handleInputChange('capteurInstalled', e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="capteurInstalled" className="ml-2 block text-sm text-gray-900">
+                    {t('settings.rooms.capteurInstalled', 'Capteur installé')}
+                  </label>
                 </div>
 
                 <div className="flex items-center">

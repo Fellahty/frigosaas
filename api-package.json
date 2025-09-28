@@ -1,0 +1,29 @@
+{
+  "name": "frigo-saas-api",
+  "version": "1.0.0",
+  "description": "API server for Frigo SaaS room settings",
+  "main": "api-server.js",
+  "scripts": {
+    "start": "node api-server.js",
+    "dev": "nodemon api-server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "firebase": "^10.7.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "api",
+    "frigo",
+    "saas",
+    "sensors",
+    "rooms",
+    "settings"
+  ],
+  "author": "Frigo SaaS Team",
+  "license": "MIT"
+}

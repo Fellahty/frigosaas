@@ -340,7 +340,7 @@ export const ReceptionPage: React.FC = () => {
   // Filter states
   const [clientFilter, setClientFilter] = React.useState<string>('');
   const [nameFilter, setNameFilter] = React.useState<string>('');
-  const [sortBy, setSortBy] = React.useState<'source' | 'client' | 'crates' | 'truck' | 'cumulative'>('source');
+  const [sortBy, setSortBy] = React.useState<'source' | 'client' | 'crates' | 'truck' | 'cumulative' | 'date'>('source');
   const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('desc');
   
   // Pallet modal states
@@ -1658,6 +1658,9 @@ export const ReceptionPage: React.FC = () => {
         case 'cumulative':
           comparison = a.cumulativeCrates - b.cumulativeCrates;
           break;
+        case 'date':
+          comparison = a.arrivalTime.getTime() - b.arrivalTime.getTime();
+          break;
         default:
           comparison = 0;
       }
@@ -2282,6 +2285,7 @@ export const ReceptionPage: React.FC = () => {
                       <option value="crates">{t('reception.sortByCrates', 'Caisses')}</option>
                       <option value="truck">{t('reception.sortByTruck', 'Camion')}</option>
                       <option value="cumulative">{t('reception.sortByCumulative', 'Cumulatif')}</option>
+                      <option value="date">{t('reception.sortByDate', 'Date')}</option>
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
                       <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2926,6 +2930,7 @@ export const ReceptionPage: React.FC = () => {
               <TableHead>
                 <TableRow className="bg-gradient-to-r from-slate-100 to-slate-200/80">
                   <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.exitReceipt', 'Bon de sortie')}</TableHeader>
+                  <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.date', 'Date')}</TableHeader>
                   <TableHeader className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.client', 'Client')}</TableHeader>
                   <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.totalCrates', 'Caisses')}</TableHeader>
                   <TableHeader className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-600">{t('reception.cumulative', 'Cumulatif')}</TableHeader>
@@ -2975,6 +2980,21 @@ export const ReceptionPage: React.FC = () => {
                             <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                           </div>
                         </button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-center">
+                      <div className="text-xs font-medium text-slate-600">
+                        {safeToDate(r.arrivalTime)?.toLocaleDateString('fr-FR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        }) || '-'}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {safeToDate(r.arrivalTime)?.toLocaleTimeString('fr-FR', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) || '-'}
                       </div>
                     </TableCell>
                     <TableCell className="px-3 py-3 text-sm font-semibold text-slate-900">
@@ -3051,7 +3071,7 @@ export const ReceptionPage: React.FC = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-gray-500 text-sm">
+                  <TableCell colSpan={10} className="text-center py-8 text-gray-500 text-sm">
                     {t('reception.noReceptions', 'Aucune réception')}
                   </TableCell>
                 </TableRow>
@@ -3074,6 +3094,16 @@ export const ReceptionPage: React.FC = () => {
                     <h3 className="text-lg font-semibold text-gray-900 leading-snug break-words">{r.clientName}</h3>
                     <div className="mt-1 text-sm text-gray-500">
                       {r.source || 'Aucune source'}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-400">
+                      {safeToDate(r.arrivalTime)?.toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                      }) || '-'} à {safeToDate(r.arrivalTime)?.toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) || '-'}
                     </div>
                   </div>
                   <div className="flex gap-2">

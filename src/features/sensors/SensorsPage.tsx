@@ -7,6 +7,7 @@ import { Card } from '../../components/Card';
 import { Spinner } from '../../components/Spinner';
 import { useTranslation } from 'react-i18next';
 import { SensorHistoryModal } from './SensorHistoryModal';
+import SensorChart from '../../components/SensorChart';
 import { RoomDoc } from '../../types/settings';
 
 // Types
@@ -45,6 +46,7 @@ const SensorsPage: React.FC = () => {
   const tenantId = useTenantId();
   const [selectedSensor, setSelectedSensor] = useState<Sensor | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   // Fetch rooms from Firebase
   const { data: rooms, isLoading: roomsLoading } = useQuery({
@@ -61,9 +63,10 @@ const SensorsPage: React.FC = () => {
       const roomsData: Room[] = [];
       
       // Filter and sort on client side to avoid Firebase index issues
+      // Only show rooms that have sensors installed (capteurInstalled: true)
       const filteredRooms = roomsSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() as RoomDoc }))
-        .filter(room => room.active === true)
+        .filter(room => room.active === true && room.capteurInstalled === true)
         .sort((a, b) => a.room.localeCompare(b.room));
       
       for (const roomDoc of filteredRooms) {
@@ -189,7 +192,14 @@ const SensorsPage: React.FC = () => {
 
   const handleSensorClick = (sensor: Sensor) => {
     setSelectedSensor(sensor);
-    setIsHistoryModalOpen(true);
+    
+    // Show chart for temperature and humidity sensors
+    if (sensor.type === 'temperature' || sensor.type === 'humidity') {
+      setIsChartModalOpen(true);
+    } else {
+      // Show history modal for other sensor types
+      setIsHistoryModalOpen(true);
+    }
   };
 
   if (roomsLoading) {
@@ -220,7 +230,7 @@ const SensorsPage: React.FC = () => {
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                   DEMO
                 </span>
-                <span className="text-sm text-gray-500">0 chambres</span>
+                <span className="text-sm text-gray-500">0 chambres avec capteurs</span>
               </div>
             </div>
           </div>
@@ -231,13 +241,13 @@ const SensorsPage: React.FC = () => {
               <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
                 <span className="text-4xl">🏠</span>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Aucune chambre configurée</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Aucune chambre avec capteurs installés</h3>
               <p className="text-gray-600 text-lg max-w-md mx-auto">
-                Configurez des chambres dans les paramètres pour voir leurs capteurs ici.
+                Aucune chambre n'a de capteurs installés. Configurez des capteurs dans les paramètres des chambres pour les voir ici.
               </p>
               <div className="mt-6">
-                <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200">
-                  En attente de configuration
+                <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-100 text-yellow-600 border border-yellow-200">
+                  Capteurs non installés
                 </span>
               </div>
             </div>
@@ -266,7 +276,7 @@ const SensorsPage: React.FC = () => {
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                 DEMO
               </span>
-              <span className="text-sm text-gray-500">{rooms.length} chambres</span>
+              <span className="text-sm text-gray-500">{rooms.length} chambres avec capteurs</span>
             </div>
           </div>
         </div>
@@ -325,6 +335,13 @@ const SensorsPage: React.FC = () => {
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(sensor.status)}`}>
                             {getStatusLabel(sensor.status)}
                           </span>
+                          {(sensor.type === 'temperature' || sensor.type === 'humidity') && (
+                            <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center group-hover/sensor:scale-110 transition-transform duration-200">
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                              </svg>
+                            </div>
+                          )}
                           <div className="w-1 h-1 bg-gray-300 rounded-full group-hover/sensor:bg-blue-400 transition-colors duration-200"></div>
                         </div>
                       </div>
@@ -365,6 +382,16 @@ const SensorsPage: React.FC = () => {
             isOpen={isHistoryModalOpen}
             onClose={() => setIsHistoryModalOpen(false)}
             sensor={selectedSensor}
+          />
+        )}
+
+        {/* Sensor Chart Modal */}
+        {selectedSensor && (
+          <SensorChart
+            sensorId={selectedSensor.id}
+            sensorName={selectedSensor.name}
+            isOpen={isChartModalOpen}
+            onClose={() => setIsChartModalOpen(false)}
           />
         )}
       </div>
