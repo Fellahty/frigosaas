@@ -603,7 +603,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
   // Temperature chart configuration
   const temperatureChartOption = {
     backgroundColor: 'transparent',
-    title: [
+/*     title: [
       {
         text: 'Température',
         left: 'center',
@@ -614,7 +614,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
           fontWeight: 'bold'
         }
       }
-    ],
+    ], */
     tooltip: {
       trigger: 'axis',
       axisPointer: {
@@ -839,7 +839,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
   // Humidity chart configuration
   const humidityChartOption = {
     backgroundColor: 'transparent',
-    title: [
+/*     title: [
       {
         text: 'Humidité',
         left: 'center',
@@ -850,7 +850,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
           fontWeight: 'bold'
         }
       }
-    ],
+    ], */
     tooltip: {
       trigger: 'axis',
       axisPointer: {
@@ -1179,18 +1179,20 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-1 sm:p-4">
       <div className="bg-white rounded-lg sm:rounded-2xl shadow-2xl max-w-7xl w-full max-h-[98vh] sm:max-h-[90vh] overflow-hidden mx-1 sm:mx-4 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-sm sm:text-lg">📊</span>
+        <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100/60 bg-white/80 backdrop-blur-xl">
+          <div className="flex items-center space-x-3 min-w-0 flex-1">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-gray-900 to-gray-700 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Analyse des Données</h2>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">{sensorName}</p>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Analyse des Données</h2>
+              <p className="text-xs text-gray-500 font-medium truncate">{sensorName}</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            {/* Live/Historical Toggle - REACTIVATED */}
+          <div className="flex items-center space-x-1.5">
+            {/* Live/Historical Toggle - Apple Style */}
             <button
               onClick={() => {
                 setIsLiveMode(!isLiveMode);
@@ -1201,14 +1203,17 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                   console.log('🔄 [SensorChart] Switching to live mode - will load historical data first');
                 }
               }}
-              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-colors duration-200 flex-shrink-0 ${
+              className={`px-3 py-1.5 rounded-full flex items-center space-x-1.5 transition-all duration-200 flex-shrink-0 ${
                 isLiveMode 
-                  ? 'bg-green-100 hover:bg-green-200' 
-                  : 'bg-gray-100 hover:bg-gray-200'
+                  ? 'bg-green-500 text-white shadow-sm hover:bg-green-600' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
               }`}
-              title={isLiveMode ? "Mode Live Actif" : "Basculer en mode Live"}
+              title={isLiveMode ? "Mode temps réel actif" : "Activer le mode temps réel"}
             >
-              <div className={`w-2 h-2 rounded-full ${isLiveMode ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${isLiveMode ? 'bg-white animate-pulse' : 'bg-gray-400'}`} />
+              <span className="text-xs font-medium">
+                {isLiveMode ? 'Live' : 'Live'}
+              </span>
             </button>
 
             {/* Refresh Button (only in historical mode) */}
@@ -1216,30 +1221,32 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
               <button
                 onClick={debouncedRefresh}
                 disabled={loading}
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-colors duration-200 flex-shrink-0 ${
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
                   loading 
-                    ? 'bg-gray-100 cursor-not-allowed' 
-                    : 'bg-blue-100 hover:bg-blue-200'
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-500 text-white shadow-sm hover:bg-blue-600'
                 }`}
                 title="Actualiser les données"
               >
                 {loading ? (
-                  <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 ) : (
-                  <svg className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 )}
               </button>
             )}
-            {/* Close Button */}
+            {/* Close Button - Apple Style */}
             <button
               onClick={onClose}
-              className="w-7 h-7 sm:w-8 sm:h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors duration-200 flex-shrink-0"
+              className="w-8 h-8 bg-gray-100/80 hover:bg-gray-200/80 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 border border-gray-200/60"
             >
-              <span className="text-gray-600 text-base sm:text-lg">×</span>
+              <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>
@@ -1780,12 +1787,12 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                     notMerge={true}
                   />
                   {/* Temperature Range Info - Small without icon */}
-                  <div className="mt-1 sm:mt-2 p-1 sm:p-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-300 rounded-md sm:rounded-lg">
+                  <div className="mt-1 sm:mt-2 p-1 sm:p-2 bg-gradient-to-r from-yellow-50 to-red-100 border border-yellow-300 rounded-md sm:rounded-lg">
                     <div className="text-center">
-                      <p className="text-xs font-bold text-blue-800">
+                      <p className="text-xs font-bold text-red-800">
                         ZONE OPTIMALE
                       </p>
-                      <p className="text-xs text-blue-700 font-medium">
+                      <p className="text-xs text-red-700 font-medium">
                         0°C - 4°C Température
                       </p>
                     </div>
@@ -1801,12 +1808,12 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                     notMerge={true}
                   />
                   {/* Humidity Range Info - Small without icon */}
-                  <div className="mt-1 sm:mt-2 p-1 sm:p-2 bg-gradient-to-r from-green-50 to-green-100 border border-green-300 rounded-md sm:rounded-lg">
+                  <div className="mt-1 sm:mt-2 p-1 sm:p-2 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-300 rounded-md sm:rounded-lg">
                     <div className="text-center">
-                      <p className="text-xs font-bold text-green-800">
+                      <p className="text-xs font-bold text-blue-800">
                         ZONE OPTIMALE
                       </p>
-                      <p className="text-xs text-green-700 font-medium">
+                      <p className="text-xs text-blue-700 font-medium">
                         85% - 95% Humidité
                       </p>
                     </div>
