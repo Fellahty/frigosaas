@@ -378,7 +378,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <li>
                 <Link
                   to="/sensors"
-                  className={`${buildNavClass(isActive('/sensors'))} w-full`}
+                  className={buildNavClass(isActive('/sensors'))}
                 >
                   <span className={buildIndicatorClass(isActive('/sensors'))} aria-hidden />
                   <span className={buildIconWrapperClass(isActive('/sensors'))}>
@@ -387,9 +387,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </svg>
                   </span>
                   <span className="flex-1 text-left">{t('sidebar.sensors', 'Capteurs')}</span>
-                  <span className={`${inlineEndClass} inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide bg-gradient-to-r from-amber-100 to-orange-200 text-orange-700 border border-orange-200/60 shadow-sm`}>
-                    DEMO
-                  </span>
                 </Link>
               </li>
 

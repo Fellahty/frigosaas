@@ -57,10 +57,6 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [mqttConnected, setMqttConnected] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [viewMode, setViewMode] = useState<'basic' | 'kpi'>('basic');
-  const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  const [kpiCalculating, setKpiCalculating] = useState(false);
-  const [cachedKPIs, setCachedKPIs] = useState<any>(null);
   
   // Date range state - default to last 30 minutes
   const [dateRange, setDateRange] = useState(() => {
@@ -103,166 +99,6 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
   const isRangeSelected = (type: string) => {
     return dateRange.type === type;
   };
-
-  // Advanced KPI Calculation Functions for Apple Storage
-  const calculateKPIs = useCallback(() => {
-    if (data.length === 0) return null;
-
-    // Sort data by timestamp (oldest first for calculations)
-    const sortedData = [...data].sort((a, b) => a.timestamp - b.timestamp);
-    
-    // Calculate time range in minutes
-    const startTime = sortedData[0].timestamp;
-    const endTime = sortedData[sortedData.length - 1].timestamp;
-    const totalMinutes = Math.max(1, Math.floor((endTime - startTime) / (1000 * 60)));
-
-    // 1. Heures de maturation pondérées (Q10) - HMP
-    // Q10 = 2.2 pour les pommes, température de référence = 0°C
-    const Q10 = 2.2;
-    const T_ref = 0; // Température de référence pour les pommes
-    const RR_ref = Math.pow(Q10, (T_ref - T_ref) / 10); // = 1
-    let hmp = 0;
-    
-    sortedData.forEach(d => {
-      const RR_T = Math.pow(Q10, (d.temperature - T_ref) / 10);
-      hmp += Math.max(0, RR_T - RR_ref);
-    });
-    hmp = hmp / totalMinutes * 24; // Convert to per day
-
-    // 2. Indice de dessiccation (VPD) - ID
-    // VPD = es * (1 - RH/100) où es = pression de vapeur saturante
-    let id = 0;
-    sortedData.forEach(d => {
-      // Formule de Magnus pour la pression de vapeur saturante
-      const es = 0.6108 * Math.exp((17.27 * d.temperature) / (d.temperature + 237.3));
-      const vpd = es * (1 - d.humidity / 100);
-      // Seuil de 0.1 kPa pour les pommes (plus strict que 0.05)
-      id += Math.max(0, vpd - 0.1);
-    });
-    id = id / totalMinutes * 60; // Convert to kPa·min/h
-
-    // 3. Condensation (point de rosée)
-    let condensationEvents = 0;
-    let minMargin = Infinity;
-    sortedData.forEach(d => {
-      // Formule de Magnus pour le point de rosée
-      const gamma = (17.62 * d.temperature) / (243.12 + d.temperature) + Math.log(d.humidity / 100);
-      const tRosee = (243.12 * gamma) / (17.62 - gamma);
-      const marge = d.temperature - tRosee;
-      minMargin = Math.min(minMargin, marge);
-      // Seuil de 1°C pour les pommes (plus strict que 0.5°C)
-      if (marge <= 1.0) condensationEvents++;
-    });
-    const condensationRate = condensationEvents / totalMinutes * 24 * 60; // Events per day
-
-    // 4. Impact des ouvertures (thermique) - AOT_15
-    let aot15 = 0;
-    let returnTimes = [];
-    let currentOpening = false;
-    let openingStart = 0;
-    let baseline = 0; // Température de référence pour les pommes
-
-    for (let i = 0; i < sortedData.length; i++) {
-      const d = sortedData[i];
-      
-      if (d.magnet === 0 && !currentOpening) {
-        // Door opening starts
-        currentOpening = true;
-        openingStart = i;
-        baseline = d.temperature;
-      } else if (d.magnet === 1 && currentOpening) {
-        // Door closing
-        currentOpening = false;
-        const openingDuration = Math.min(15, i - openingStart);
-        
-        // Calculate AOT_15 - impact thermique cumulé
-        for (let j = openingStart; j < Math.min(openingStart + openingDuration, sortedData.length); j++) {
-          // Seuil de 2°C pour les pommes
-          aot15 += Math.max(0, sortedData[j].temperature - 2);
-        }
-        
-        // Calculate return time to baseline + 0.5°C
-        const returnThreshold = Math.max(2, baseline + 0.5);
-        let returnTime = 0;
-        for (let j = i; j < Math.min(i + 30, sortedData.length); j++) {
-          if (sortedData[j].temperature <= returnThreshold) {
-            returnTime = j - i;
-            break;
-          }
-        }
-        if (returnTime > 0) returnTimes.push(returnTime);
-      }
-    }
-
-    const medianAOT15 = returnTimes.length > 0 ? 
-      returnTimes.sort((a, b) => a - b)[Math.floor(returnTimes.length / 2)] : 0;
-    const medianReturn = returnTimes.length > 0 ? 
-      returnTimes.sort((a, b) => a - b)[Math.floor(returnTimes.length / 2)] : 0;
-
-    // 5. Stabilité dynamique - P95 des variations
-    const tempChanges = [];
-    const humidityChanges = [];
-    
-    for (let i = 1; i < sortedData.length; i++) {
-      const timeDiff = (sortedData[i].timestamp - sortedData[i-1].timestamp) / (1000 * 60); // minutes
-      if (timeDiff > 0) {
-        tempChanges.push(Math.abs(sortedData[i].temperature - sortedData[i-1].temperature) / timeDiff);
-        humidityChanges.push(Math.abs(sortedData[i].humidity - sortedData[i-1].humidity) / timeDiff);
-      }
-    }
-
-    const p95Temp = tempChanges.length > 0 ? 
-      tempChanges.sort((a, b) => a - b)[Math.floor(tempChanges.length * 0.95)] : 0;
-    const p95Humidity = humidityChanges.length > 0 ? 
-      humidityChanges.sort((a, b) => a - b)[Math.floor(humidityChanges.length * 0.95)] : 0;
-
-    // 6. Conformité fine aux consignes pour pommes
-    // Température: 0-2°C, Humidité: 90-95%
-    let maxOutOfRangeSequence = 0;
-    let currentSequence = 0;
-    
-    sortedData.forEach(d => {
-      const outOfRange = d.temperature < 0 || d.temperature > 2 || d.humidity < 90 || d.humidity > 95;
-      if (outOfRange) {
-        currentSequence++;
-        maxOutOfRangeSequence = Math.max(maxOutOfRangeSequence, currentSequence);
-      } else {
-        currentSequence = 0;
-      }
-    });
-
-    return {
-      hmp: Math.round(hmp * 100) / 100,
-      id: Math.round(id * 100) / 100,
-      condensationEvents: Math.round(condensationRate * 10) / 10,
-      minMargin: Math.round(minMargin * 10) / 10,
-      aot15: Math.round(medianAOT15 * 10) / 10,
-      returnTime: Math.round(medianReturn * 10) / 10,
-      p95Temp: Math.round(p95Temp * 1000) / 1000,
-      p95Humidity: Math.round(p95Humidity * 10) / 10,
-      maxOutOfRange: maxOutOfRangeSequence,
-      totalMinutes,
-      dataPoints: sortedData.length
-    };
-  }, [data]);
-
-  // Calculate KPIs only when switching to KPI view mode
-  useEffect(() => {
-    if (viewMode === 'kpi' && data.length > 0 && !cachedKPIs) {
-      setKpiCalculating(true);
-      // Use setTimeout to make calculation non-blocking
-      setTimeout(() => {
-        const kpis = calculateKPIs();
-        setCachedKPIs(kpis);
-        setKpiCalculating(false);
-      }, 100);
-    }
-  }, [viewMode, data, cachedKPIs, calculateKPIs]);
-
-  // Clear cached KPIs when data changes
-  useEffect(() => {
-    setCachedKPIs(null);
-  }, [data]);
 
   const fetchSensorData = useCallback(async (forceRefresh = false) => {
     // Generate cache key based on date range
@@ -689,6 +525,16 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
           color: '#EF4444'
         }
       },
+      splitLine: {
+        show: true,
+        lineStyle: {
+          color: '#E5E7EB',
+          type: 'dashed',
+          width: 1
+        }
+      },
+      splitNumber: 4
+    },
       axisLabel: {
         color: '#EF4444',
         formatter: '{value}°C'
@@ -749,7 +595,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
             borderColor: '#fff',
             borderWidth: 2
           }
-        },
+        }
       },
       // Port status as stacked bar chart
       {
@@ -918,8 +764,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
           color: '#F3F4F6',
           type: 'dashed'
         }
-      },
-      splitNumber: 4
+      }
     },
     yAxis: {
       type: 'value',
@@ -932,6 +777,16 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
           color: '#3B82F6'
         }
       },
+      splitLine: {
+        show: true,
+        lineStyle: {
+          color: '#E5E7EB',
+          type: 'dashed',
+          width: 1
+        }
+      },
+      splitNumber: 4
+    },
       axisLabel: {
         color: '#3B82F6',
         formatter: '{value}%'
@@ -941,7 +796,6 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
           color: '#DBEAFE'
         }
       },
-      splitNumber: 4,
       axisPointer: {
         snap: true,
         lineStyle: {
@@ -1185,7 +1039,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
               <span className="text-white text-sm sm:text-lg">📊</span>
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Analyse des Données</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Historique des Capteurs</h2>
               <p className="text-xs sm:text-sm text-gray-600 truncate">{sensorName}</p>
             </div>
           </div>
@@ -1266,11 +1120,11 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                 </div>
               ) : (
                 <>
-                  {/* Quick Range Buttons - Compact French Design */}
-                  <div className="flex justify-center flex-wrap gap-1 sm:gap-1.5">
+                  {/* Quick Range Buttons - Apple-inspired Design */}
+                  <div className="flex justify-center flex-wrap gap-1.5 sm:gap-2">
                 <button
                   onClick={setLast30Minutes}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ease-out backdrop-blur-sm ${
+                  className={`px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-2xl transition-all duration-300 ease-out backdrop-blur-sm ${
                     isRangeSelected('30min')
                       ? 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 transform scale-105 border border-blue-400/20'
                       : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90 hover:border-slate-300/80 hover:shadow-md hover:scale-102 active:scale-98'
@@ -1280,7 +1134,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                 </button>
                 <button
                   onClick={() => setQuickRange(1, '24h')}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ease-out backdrop-blur-sm ${
+                  className={`px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-2xl transition-all duration-300 ease-out backdrop-blur-sm ${
                     isRangeSelected('24h')
                       ? 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 transform scale-105 border border-blue-400/20'
                       : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90 hover:border-slate-300/80 hover:shadow-md hover:scale-102 active:scale-98'
@@ -1290,7 +1144,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                 </button>
                 <button
                   onClick={() => setQuickRange(7, '7j')}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ease-out backdrop-blur-sm ${
+                  className={`px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-2xl transition-all duration-300 ease-out backdrop-blur-sm ${
                     isRangeSelected('7j')
                       ? 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 transform scale-105 border border-blue-400/20'
                       : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90 hover:border-slate-300/80 hover:shadow-md hover:scale-102 active:scale-98'
@@ -1300,7 +1154,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                 </button>
                 <button
                   onClick={() => setQuickRange(30, '30j')}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ease-out backdrop-blur-sm ${
+                  className={`px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-2xl transition-all duration-300 ease-out backdrop-blur-sm ${
                     isRangeSelected('30j')
                       ? 'bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 transform scale-105 border border-blue-400/20'
                       : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90 hover:border-slate-300/80 hover:shadow-md hover:scale-102 active:scale-98'
@@ -1308,45 +1162,33 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                 >
                   30j
                 </button>
-                <button
-                  onClick={() => setQuickRange(0, 'custom')}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ease-out backdrop-blur-sm ${
-                    isRangeSelected('custom')
-                      ? 'bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25 transform scale-105 border border-purple-400/20'
-                      : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90 hover:border-slate-300/80 hover:shadow-md hover:scale-102 active:scale-98'
-                  }`}
-                >
-                  Perso
-                </button>
                   </div>
                   
                   {/* Apple-style Divider */}
                   <div className="w-12 sm:w-16 h-px bg-gradient-to-r from-transparent via-slate-300/60 to-transparent"></div>
               
-              {/* Custom Date Range - Compact French - Hidden until Perso is selected */}
-              {isRangeSelected('custom') && (
-                <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-2 transition-all duration-300 ease-in-out opacity-100 transform translate-y-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-600 font-medium text-xs">Du:</span>
-                    <input
-                      type="date"
-                      value={dateRange.start}
-                      onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value, type: 'custom' }))}
-                      className="px-2 py-1 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white shadow-sm"
-                    />
-                  </div>
-                  <span className="text-slate-400 text-xs">→</span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-600 font-medium text-xs">Au:</span>
-                    <input
-                      type="date"
-                      value={dateRange.end}
-                      onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value, type: 'custom' }))}
-                      className="px-2 py-1 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white shadow-sm"
-                    />
-                  </div>
+              {/* Custom Date Range - Centered */}
+              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <span className="text-slate-600 font-medium text-xs sm:text-sm">📅 Du:</span>
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="px-2 sm:px-3 py-1 sm:py-2 border border-slate-300 rounded-md sm:rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                  />
                 </div>
-              )}
+                <span className="text-slate-400 hidden sm:block">→</span>
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <span className="text-slate-600 font-medium text-xs sm:text-sm">📅 Au:</span>
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="px-2 sm:px-3 py-1 sm:py-2 border border-slate-300 rounded-md sm:rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+                  />
+                </div>
+                </div>
                 </>
               )}
             </div>
@@ -1383,390 +1225,69 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
 
           {!loading && !error && data.length > 0 && (
             <div className="space-y-4 sm:space-y-8 transition-all duration-500 ease-in-out opacity-100">
-              {/* View Mode Toggle Buttons - Compact Professional Design */}
-              <div className="flex justify-center mb-4">
-                <div className="inline-flex bg-gray-100 rounded-lg p-1 shadow-sm">
-                  <button
-                    onClick={() => setViewMode('basic')}
-                    className={`px-4 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
-                      viewMode === 'basic'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Basique
-                  </button>
-                  <button
-                    onClick={() => setViewMode('kpi')}
-                    className={`px-4 py-2 text-xs font-medium rounded-md transition-all duration-200 ${
-                      viewMode === 'kpi'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Avancés
-                  </button>
+              {/* Compact Summary Cards - Mobile Optimized */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-3 sm:mb-6">
+                <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-2 sm:p-3 border border-red-200">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-red-600 text-xs font-medium truncate">Temp</p>
+                      <p className="text-sm sm:text-lg font-bold text-red-700">
+                        {data.length > 0 ? data[data.length - 1].temperature.toFixed(1) : '0.0'}°C
+                      </p>
+                      <p className="text-xs text-red-600 mt-0.5">
+                        {data.length > 0 ? getTimeAgo(new Date(data[data.length - 1].timestamp)) : 'N/A'}
+                      </p>
+                    </div>
+                    <span className="text-red-500 text-lg sm:text-xl flex-shrink-0 ml-1">🌡️</span>
+                  </div>
                 </div>
-              </div>
-
-              {/* Summary Cards - Basic or KPI View */}
-              <div className={`grid gap-2 sm:gap-3 mb-3 sm:mb-6 ${
-                viewMode === 'basic' 
-                  ? 'grid-cols-2 lg:grid-cols-4' 
-                  : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
-              }`}>
-                {viewMode === 'basic' ? (
-                  <>
-                    {/* Basic View - Current Values */}
-                    <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-2 sm:p-3 border border-red-200">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-red-600 text-xs font-medium truncate">Temp</p>
-                          <p className="text-sm sm:text-lg font-bold text-red-700">
-                            {data.length > 0 ? data[data.length - 1].temperature.toFixed(1) : '0.0'}°C
-                          </p>
-                          <p className="text-xs text-red-600 mt-0.5">
-                            {data.length > 0 ? getTimeAgo(new Date(data[data.length - 1].timestamp)) : 'N/A'}
-                          </p>
-                        </div>
-                        <span className="text-red-500 text-lg sm:text-xl flex-shrink-0 ml-1">🌡️</span>
-                      </div>
+                
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-2 sm:p-3 border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-blue-600 text-xs font-medium truncate">Humidité</p>
+                      <p className="text-sm sm:text-lg font-bold text-blue-700">
+                        {data.length > 0 ? data[data.length - 1].humidity.toFixed(1) : '0.0'}%
+                      </p>
+                      <p className="text-xs text-blue-600 mt-0.5">
+                        {data.length > 0 ? getTimeAgo(new Date(data[data.length - 1].timestamp)) : 'N/A'}
+                      </p>
                     </div>
-                    
-                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-2 sm:p-3 border border-blue-200">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-blue-600 text-xs font-medium truncate">Humidité</p>
-                          <p className="text-sm sm:text-lg font-bold text-blue-700">
-                            {data.length > 0 ? data[data.length - 1].humidity.toFixed(1) : '0.0'}%
-                          </p>
-                          <p className="text-xs text-blue-600 mt-0.5">
-                            {data.length > 0 ? getTimeAgo(new Date(data[data.length - 1].timestamp)) : 'N/A'}
-                          </p>
-                        </div>
-                        <span className="text-blue-500 text-lg sm:text-xl flex-shrink-0 ml-1">💧</span>
-                      </div>
+                    <span className="text-blue-500 text-lg sm:text-xl flex-shrink-0 ml-1">💧</span>
+                  </div>
+                </div>
+                
+                <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-2 sm:p-3 border border-purple-200">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-purple-600 text-xs font-medium truncate">Port</p>
+                      <p className="text-sm sm:text-lg font-bold text-purple-700">
+                        {data.length > 0 ? (data[data.length - 1].magnet === 1 ? 'Fermé' : 'Ouvert') : 'N/A'}
+                      </p>
+                      <p className="text-xs text-purple-600 mt-0.5">
+                        {data.length > 0 ? getTimeAgo(new Date(data[data.length - 1].timestamp)) : 'N/A'}
+                      </p>
                     </div>
-                    
-                    <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-2 sm:p-3 border border-purple-200">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-purple-600 text-xs font-medium truncate">Port</p>
-                          <p className="text-sm sm:text-lg font-bold text-purple-700">
-                            {data.length > 0 ? (data[data.length - 1].magnet === 1 ? 'Fermé' : 'Ouvert') : 'N/A'}
-                          </p>
-                          <p className="text-xs text-purple-600 mt-0.5">
-                            {data.length > 0 ? getTimeAgo(new Date(data[data.length - 1].timestamp)) : 'N/A'}
-                          </p>
-                        </div>
-                        <span className="text-purple-500 text-lg sm:text-xl flex-shrink-0 ml-1">
-                          {data.length > 0 ? (data[data.length - 1].magnet === 1 ? '🔒' : '🔓') : '❓'}
-                        </span>
-                      </div>
+                    <span className="text-purple-500 text-lg sm:text-xl flex-shrink-0 ml-1">
+                      {data.length > 0 ? (data[data.length - 1].magnet === 1 ? '🔒' : '🔓') : '❓'}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-2 sm:p-3 border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-green-600 text-xs font-medium truncate">Batterie</p>
+                      <p className="text-sm sm:text-lg font-bold text-green-700">
+                        {data.length > 0 ? data[data.length - 1].battery.toFixed(1) : '0.0'}V
+                      </p>
+                      <p className="text-xs text-green-600 mt-0.5">
+                        {data.length > 0 ? getTimeAgo(new Date(data[data.length - 1].timestamp)) : 'N/A'}
+                      </p>
                     </div>
-                    
-                    <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-2 sm:p-3 border border-green-200">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-green-600 text-xs font-medium truncate">Batterie</p>
-                          <p className="text-sm sm:text-lg font-bold text-green-700">
-                            {data.length > 0 ? data[data.length - 1].battery.toFixed(1) : '0.0'}V
-                          </p>
-                          <p className="text-xs text-green-600 mt-0.5">
-                            {data.length > 0 ? getTimeAgo(new Date(data[data.length - 1].timestamp)) : 'N/A'}
-                          </p>
-                        </div>
-                        <span className="text-green-500 text-lg sm:text-xl flex-shrink-0 ml-1">🔋</span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* KPI View - Advanced Apple Storage Calculations */}
-                    {(() => {
-                      // Show loading state while calculating KPIs
-                      if (kpiCalculating) {
-                        return (
-                          <div className="col-span-full flex items-center justify-center py-8">
-                            <div className="flex items-center space-x-2">
-                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
-                              <span className="text-sm text-gray-600">Calcul des KPI avancés...</span>
-                            </div>
-                          </div>
-                        );
-                      }
-                      
-                      // Use cached KPIs
-                      const kpis = cachedKPIs;
-                      if (!kpis) return null;
-                      
-                      return (
-                        <>
-                          <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-2 sm:p-3 border border-red-200 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <p className="text-red-600 text-xs font-medium truncate">HMP Q10</p>
-                                  <button
-                                    onClick={() => setExpandedCard(expandedCard === 'hmp' ? null : 'hmp')}
-                                    className="w-5 h-5 rounded-full bg-red-200 hover:bg-red-300 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                                  >
-                                    <span className="text-red-600 text-xs font-bold">!</span>
-                                  </button>
-                                </div>
-                                <p className="text-sm sm:text-lg font-bold text-red-700">
-                                  {kpis.hmp}
-                                </p>
-                                <p className="text-xs text-red-600 mt-0.5">
-                                  Maturation/j
-                                </p>
-                                {expandedCard === 'hmp' && (
-                                  <div className="mt-2 p-2 bg-red-100/50 rounded-md border border-red-200/50 animate-fadeIn">
-                                    <p className="text-xs text-red-700 font-medium">
-                                      Plus la valeur est élevée, plus les pommes vieillissent rapidement
-                                    </p>
-                                    <p className="text-xs text-red-600 mt-1">
-                                      Optimal: 0/jour | Alerte: &gt;5/jour
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-red-500 text-lg sm:text-xl flex-shrink-0 ml-1">🍎</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-2 sm:p-3 border border-blue-200 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <p className="text-blue-600 text-xs font-medium truncate">ID VPD</p>
-                                  <button
-                                    onClick={() => setExpandedCard(expandedCard === 'id' ? null : 'id')}
-                                    className="w-5 h-5 rounded-full bg-blue-200 hover:bg-blue-300 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                                  >
-                                    <span className="text-blue-600 text-xs font-bold">!</span>
-                                  </button>
-                                </div>
-                                <p className="text-sm sm:text-lg font-bold text-blue-700">
-                                  {kpis.id}
-                                </p>
-                                <p className="text-xs text-blue-600 mt-0.5">
-                                  kPa·min/h
-                                </p>
-                                {expandedCard === 'id' && (
-                                  <div className="mt-2 p-2 bg-blue-100/50 rounded-md border border-blue-200/50 animate-fadeIn">
-                                    <p className="text-xs text-blue-700 font-medium">
-                                      Mesure le risque de perte de poids par dessiccation
-                                    </p>
-                                    <p className="text-xs text-blue-600 mt-1">
-                                      Optimal: 0 | Alerte: ≥1 kPa·min/h
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-blue-500 text-lg sm:text-xl flex-shrink-0 ml-1">💧</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg p-2 sm:p-3 border border-purple-200 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <p className="text-purple-600 text-xs font-medium truncate">Condensation</p>
-                                  <button
-                                    onClick={() => setExpandedCard(expandedCard === 'condensation' ? null : 'condensation')}
-                                    className="w-5 h-5 rounded-full bg-purple-200 hover:bg-purple-300 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                                  >
-                                    <span className="text-purple-600 text-xs font-bold">!</span>
-                                  </button>
-                                </div>
-                                <p className="text-sm sm:text-lg font-bold text-purple-700">
-                                  {kpis.condensationEvents}
-                                </p>
-                                <p className="text-xs text-purple-600 mt-0.5">
-                                  {kpis.minMargin}°C marge
-                                </p>
-                                {expandedCard === 'condensation' && (
-                                  <div className="mt-2 p-2 bg-purple-100/50 rounded-md border border-purple-200/50 animate-fadeIn">
-                                    <p className="text-xs text-purple-700 font-medium">
-                                      Risque de moisissures quand l'air atteint le point de rosée
-                                    </p>
-                                    <p className="text-xs text-purple-600 mt-1">
-                                      Optimal: Marge ≥1°C, 0 événements | Alerte: Marge &lt;1°C
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-purple-500 text-lg sm:text-xl flex-shrink-0 ml-1">💨</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-2 sm:p-3 border border-orange-200 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <p className="text-orange-600 text-xs font-medium truncate">AOT15</p>
-                                  <button
-                                    onClick={() => setExpandedCard(expandedCard === 'aot15' ? null : 'aot15')}
-                                    className="w-5 h-5 rounded-full bg-orange-200 hover:bg-orange-300 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                                  >
-                                    <span className="text-orange-600 text-xs font-bold">!</span>
-                                  </button>
-                                </div>
-                                <p className="text-sm sm:text-lg font-bold text-orange-700">
-                                  {kpis.aot15}
-                                </p>
-                                <p className="text-xs text-orange-600 mt-0.5">
-                                  {kpis.returnTime}min retour
-                                </p>
-                                {expandedCard === 'aot15' && (
-                                  <div className="mt-2 p-2 bg-orange-100/50 rounded-md border border-orange-200/50 animate-fadeIn">
-                                    <p className="text-xs text-orange-700 font-medium">
-                                      Impact thermique des ouvertures de porte sur 15 minutes
-                                    </p>
-                                    <p className="text-xs text-orange-600 mt-1">
-                                      Optimal: Retour ≤15min, AOT15 faible | Alerte: Retour &gt;15min
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-orange-500 text-lg sm:text-xl flex-shrink-0 ml-1">🚪</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-2 sm:p-3 border border-green-200 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <p className="text-green-600 text-xs font-medium truncate">Stabilité</p>
-                                  <button
-                                    onClick={() => setExpandedCard(expandedCard === 'stability' ? null : 'stability')}
-                                    className="w-5 h-5 rounded-full bg-green-200 hover:bg-green-300 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                                  >
-                                    <span className="text-green-600 text-xs font-bold">!</span>
-                                  </button>
-                                </div>
-                                <p className="text-sm sm:text-lg font-bold text-green-700">
-                                  {kpis.p95Temp}
-                                </p>
-                                <p className="text-xs text-green-600 mt-0.5">
-                                  °C/min P95
-                                </p>
-                                {expandedCard === 'stability' && (
-                                  <div className="mt-2 p-2 bg-green-100/50 rounded-md border border-green-200/50 animate-fadeIn">
-                                    <p className="text-xs text-green-700 font-medium">
-                                      Variations brusques de température = mauvaise régulation
-                                    </p>
-                                    <p className="text-xs text-green-600 mt-1">
-                                      Optimal: &lt;0.05°C/min | Alerte: ≥0.05°C/min
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-green-500 text-lg sm:text-xl flex-shrink-0 ml-1">📊</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gradient-to-r from-cyan-50 to-cyan-100 rounded-lg p-2 sm:p-3 border border-cyan-200 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <p className="text-cyan-600 text-xs font-medium truncate">RH Stabilité</p>
-                                  <button
-                                    onClick={() => setExpandedCard(expandedCard === 'rh-stability' ? null : 'rh-stability')}
-                                    className="w-5 h-5 rounded-full bg-cyan-200 hover:bg-cyan-300 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                                  >
-                                    <span className="text-cyan-600 text-xs font-bold">!</span>
-                                  </button>
-                                </div>
-                                <p className="text-sm sm:text-lg font-bold text-cyan-700">
-                                  {kpis.p95Humidity}
-                                </p>
-                                <p className="text-xs text-cyan-600 mt-0.5">
-                                  %/min P95
-                                </p>
-                                {expandedCard === 'rh-stability' && (
-                                  <div className="mt-2 p-2 bg-cyan-100/50 rounded-md border border-cyan-200/50 animate-fadeIn">
-                                    <p className="text-xs text-cyan-700 font-medium">
-                                      Variations brusques d'humidité = dégivrage mal calibré
-                                    </p>
-                                    <p className="text-xs text-cyan-600 mt-1">
-                                      Optimal: &lt;0.5%/min | Alerte: ≥0.5%/min
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-cyan-500 text-lg sm:text-xl flex-shrink-0 ml-1">🌡️</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-lg p-2 sm:p-3 border border-indigo-200 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <p className="text-indigo-600 text-xs font-medium truncate">Hors Plage</p>
-                                  <button
-                                    onClick={() => setExpandedCard(expandedCard === 'out-of-range' ? null : 'out-of-range')}
-                                    className="w-5 h-5 rounded-full bg-indigo-200 hover:bg-indigo-300 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                                  >
-                                    <span className="text-indigo-600 text-xs font-bold">!</span>
-                                  </button>
-                                </div>
-                                <p className="text-sm sm:text-lg font-bold text-indigo-700">
-                                  {kpis.maxOutOfRange}
-                                </p>
-                                <p className="text-xs text-indigo-600 mt-0.5">
-                                  min max séquence
-                                </p>
-                                {expandedCard === 'out-of-range' && (
-                                  <div className="mt-2 p-2 bg-indigo-100/50 rounded-md border border-indigo-200/50 animate-fadeIn">
-                                    <p className="text-xs text-indigo-700 font-medium">
-                                      Plus longue période hors des consignes optimales
-                                    </p>
-                                    <p className="text-xs text-indigo-600 mt-1">
-                                      Optimal: &lt;15min | Alerte: ≥15min
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-indigo-500 text-lg sm:text-xl flex-shrink-0 ml-1">⚠️</span>
-                            </div>
-                          </div>
-                          
-                          <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 rounded-lg p-2 sm:p-3 border border-emerald-200 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <p className="text-emerald-600 text-xs font-medium truncate">Données</p>
-                                  <button
-                                    onClick={() => setExpandedCard(expandedCard === 'data' ? null : 'data')}
-                                    className="w-5 h-5 rounded-full bg-emerald-200 hover:bg-emerald-300 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                                  >
-                                    <span className="text-emerald-600 text-xs font-bold">!</span>
-                                  </button>
-                                </div>
-                                <p className="text-sm sm:text-lg font-bold text-emerald-700">
-                                  {kpis.dataPoints}
-                                </p>
-                                <p className="text-xs text-emerald-600 mt-0.5">
-                                  {kpis.totalMinutes} min
-                                </p>
-                                {expandedCard === 'data' && (
-                                  <div className="mt-2 p-2 bg-emerald-100/50 rounded-md border border-emerald-200/50 animate-fadeIn">
-                                    <p className="text-xs text-emerald-700 font-medium">
-                                      "Nombre de mesures et durée d'analyse"
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                              <span className="text-emerald-500 text-lg sm:text-xl flex-shrink-0 ml-1">📈</span>
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </>
-                )}
+                    <span className="text-green-500 text-lg sm:text-xl flex-shrink-0 ml-1">🔋</span>
+                  </div>
+                </div>
               </div>
 
               {/* Separate Charts - Mobile Optimized */}

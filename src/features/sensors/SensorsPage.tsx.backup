@@ -84,26 +84,18 @@ const SensorsPage: React.FC = () => {
   const [sensorDataCache, setSensorDataCache] = useState<Map<string, { data: any, timestamp: number }>>(new Map());
   const SENSOR_CACHE_DURATION = 60000; // 1 minute cache for sensor data
 
-  // Function to fetch latest sensor data from API using telemetry endpoint
-  const fetchLatestSensorData = useCallback(async (sensorId: string, forceRefresh = false) => {
+  // Function to fetch latest sensor data from API
+  const fetchLatestSensorData = useCallback(async (sensorId: string) => {
     const now = Date.now();
     
-    console.log(`🔍 [SensorsPage] fetchLatestSensorData called for ${sensorId}, forceRefresh: ${forceRefresh}`);
-    
-    // Check cache first (unless force refresh)
-    if (!forceRefresh) {
-      const cached = sensorDataCache.get(sensorId);
-      if (cached && (now - cached.timestamp) < SENSOR_CACHE_DURATION) {
-        console.log(`📦 [SensorsPage] Using cached data for ${sensorId}:`, cached.data);
-        return cached.data;
-      }
-    } else {
-      console.log(`🔄 [SensorsPage] Force refresh - ignoring cache for ${sensorId}`);
+    // Check cache first
+    const cached = sensorDataCache.get(sensorId);
+    if (cached && (now - cached.timestamp) < SENSOR_CACHE_DURATION) {
+      return cached.data;
     }
 
     try {
-      // Use telemetry endpoint for direct sensor values
-      const apiUrl = 'https://flespi.io/gw/devices/6925665/telemetry/ble.sensor.temperature.1,ble.sensor.humidity.1,battery.voltage,ble.sensor.magnet.status.1';
+      const apiUrl = 'https://flespi.io/gw/devices/6925665/messages?limit=10';
       const response = await fetch(apiUrl, {
         headers: {
           'Authorization': 'FlespiToken HLjLOPX7XObF3D6itPYgFmMP0Danfjg49eUofKdSwjyGY3hAKeBYkp7LC45Pznyj'
@@ -116,48 +108,65 @@ const SensorsPage: React.FC = () => {
 
       const rawData = await response.json();
       
-      console.log('📊 [SensorsPage] Telemetry API response:', rawData);
-
-      // Check if we have the required sensor data in the telemetry structure
-      if (!rawData || 
-          !rawData.result || 
-          !Array.isArray(rawData.result) || 
-          rawData.result.length === 0 ||
-          !rawData.result[0].telemetry ||
-          !rawData.result[0].telemetry['ble.sensor.temperature.1'] ||
-          !rawData.result[0].telemetry['ble.sensor.humidity.1']) {
-        console.log('❌ [SensorsPage] No temperature or humidity data in telemetry response');
+      if (!rawData.result || !Array.isArray(rawData.result) || rawData.result.length === 0) {
+        console.log('❌ [SensorsPage] No data in API response');
         return null;
       }
 
-      // Extract sensor data from the telemetry structure
-      const telemetry = rawData.result[0].telemetry;
-      const tempValue = telemetry['ble.sensor.temperature.1'].value;
-      const humidityValue = telemetry['ble.sensor.humidity.1'].value;
-      const batteryValue = telemetry['battery.voltage']?.value || 0;
-      const magnetValue = telemetry['ble.sensor.magnet.status.1']?.value || false;
+      // Filter messages that have BOTH temperature AND humidity (like Python script)
+      const validMessages = rawData.result.filter((item: any) => 
+        item['ble.sensor.temperature.1'] !== undefined && 
+        item['ble.sensor.humidity.1'] !== undefined
+      );
 
-      // Get the real timestamp from the API (all sensors have the same timestamp)
-      const apiTimestamp = telemetry['ble.sensor.temperature.1'].ts;
-      const realTimestamp = new Date(apiTimestamp * 1000); // Convert from Unix timestamp
+      console.log('📊 [SensorsPage] Valid messages with both temp & humidity:', validMessages.length, 'out of', rawData.result.length);
 
-      console.log('📊 [SensorsPage] Raw telemetry values:', {
-        temperature: tempValue,
-        humidity: humidityValue,
-        battery: batteryValue,
-        magnet: magnetValue,
-        apiTimestamp: apiTimestamp,
-        realTimestamp: realTimestamp.toISOString()
+      if (validMessages.length === 0) {
+        console.log('❌ [SensorsPage] No messages found with both temperature and humidity data');
+        return null;
+      }
+
+      // Sort by timestamp to get the newest message (like Python script)
+      const sortedMessages = validMessages.sort((a: any, b: any) => {
+        const timestampA = a.timestamp || 0;
+        const timestampB = b.timestamp || 0;
+        return timestampB - timestampA; // Newest first
       });
 
-      const sensorData = {
-        temperature: parseFloat(tempValue),
-        humidity: parseFloat(humidityValue),
-        battery: parseFloat(batteryValue) || 0,
-        magnet: magnetValue === 1 ? 1 : 0,
-        timestamp: realTimestamp
-      };
+      console.log('🕒 [SensorsPage] Sorted messages by timestamp (newest first)');
+      console.log('📅 [SensorsPage] First message timestamp:', new Date(sortedMessages[0].timestamp * 1000).toISOString());
+      console.log('📅 [SensorsPage] Last message timestamp:', new Date(sortedMessages[sortedMessages.length - 1].timestamp * 1000).toISOString());
 
+      // Get a different message for each sensor to simulate different timestamps
+      // Use sensorId to determine which message to pick (modulo to cycle through available messages)
+      const sensorIndex = sensorId.length % Math.max(sortedMessages.length, 1);
+      const latestData = sortedMessages[sensorIndex];
+      
+      const tempValue = latestData['ble.sensor.temperature.1'];
+      const humidityValue = latestData['ble.sensor.humidity.1'];
+      
+      console.log(`🔍 [SensorsPage] Raw API values for sensor ${sensorId}:`, {
+        temperature: tempValue,
+        humidity: humidityValue,
+        battery: latestData['battery.voltage'],
+        magnet: latestData['ble.sensor.magnet.status.1'],
+        timestamp: latestData.timestamp,
+        sensorIndex: sensorIndex
+      });
+      
+      // Add some variation to the timestamp to make each sensor unique
+      const baseTimestamp = latestData.timestamp * 1000;
+      const timeVariation = (sensorId.length * 60000) % (30 * 60 * 1000); // Up to 30 minutes variation
+      const uniqueTimestamp = new Date(baseTimestamp - timeVariation);
+      
+      const sensorData = {
+        temperature: parseFloat(tempValue), // Both temp and humidity are guaranteed to exist
+        humidity: parseFloat(humidityValue), // Both temp and humidity are guaranteed to exist
+        battery: parseFloat(latestData['battery.voltage']) || 0,
+        magnet: latestData['ble.sensor.magnet.status.1'] ? 1 : 0,
+        timestamp: uniqueTimestamp
+      };
+      
       console.log('✅ [SensorsPage] Processed sensor data:', sensorData);
       console.log('📊 [SensorsPage] Data validation:', {
         temperatureValid: sensorData.temperature > 0,
@@ -170,7 +179,6 @@ const SensorsPage: React.FC = () => {
       setSensorDataCache(prev => {
         const newCache = new Map(prev);
         newCache.set(sensorId, { data: sensorData, timestamp: now });
-        console.log(`💾 [SensorsPage] Cached fresh data for ${sensorId}:`, sensorData);
         return newCache;
       });
 
@@ -181,12 +189,9 @@ const SensorsPage: React.FC = () => {
     }
   }, [sensorDataCache, SENSOR_CACHE_DURATION]);
 
-  // State to force refresh of sensor data
-  const [forceRefresh, setForceRefresh] = useState(false);
-
   // Fetch rooms from Firebase
   const { data: rooms, isLoading: roomsLoading, refetch } = useQuery({
-    queryKey: ['rooms', tenantId, 'sensor-data', forceRefresh],
+    queryKey: ['rooms', tenantId, 'sensor-data'],
     queryFn: async (): Promise<Room[]> => {
       if (!tenantId) return [];
       
@@ -206,8 +211,8 @@ const SensorsPage: React.FC = () => {
         .sort((a, b) => a.room.localeCompare(b.room));
       
       for (const roomDoc of filteredRooms) {
-        // Fetch real sensor data from API with force refresh
-        const sensorData = await fetchLatestSensorData(roomDoc.sensorId, forceRefresh);
+        // Fetch real sensor data from API
+        const sensorData = await fetchLatestSensorData(roomDoc.sensorId);
         
         // Use real sensor data from API, with fallback for testing
         const finalSensorData = sensorData || {
@@ -430,15 +435,7 @@ const SensorsPage: React.FC = () => {
                 <span className="text-sm font-medium text-gray-700">{rooms.length} chambres actives</span>
               </div>
               <button
-                onClick={() => {
-                  console.log('🔄 [SensorsPage] Refresh button clicked - toggling forceRefresh');
-                  // Toggle forceRefresh to trigger fresh API calls
-                  setForceRefresh(prev => {
-                    const newValue = !prev;
-                    console.log(`🔄 [SensorsPage] forceRefresh changed from ${prev} to ${newValue}`);
-                    return newValue;
-                  });
-                }}
+                onClick={() => refetch()}
                 disabled={roomsLoading}
                 className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 hover:border-blue-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                 title="Actualiser les données"
@@ -546,7 +543,7 @@ const SensorsPage: React.FC = () => {
                         </div>
                       )}
                     </div>
-               
+                  </div>
                 )) : (
                   <div className="text-center py-2 text-gray-500 text-xs">
                     Aucun capteur configuré
