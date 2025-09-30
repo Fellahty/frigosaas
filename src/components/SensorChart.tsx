@@ -1176,8 +1176,8 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-1 sm:p-4">
-      <div className="bg-white rounded-lg sm:rounded-2xl shadow-2xl max-w-7xl w-full max-h-[98vh] sm:max-h-[90vh] overflow-hidden mx-1 sm:mx-4 flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-1 sm:p-4 pt-16 sm:pt-4">
+      <div className="bg-white rounded-lg sm:rounded-2xl shadow-2xl max-w-7xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden mx-1 sm:mx-4 flex flex-col mt-4 sm:mt-0">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100/60 bg-white/80 backdrop-blur-xl">
           <div className="flex items-center space-x-3 min-w-0 flex-1">
