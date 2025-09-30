@@ -110,7 +110,7 @@ export const DashboardPage: React.FC = () => {
           totalClients: clients.length,
           averageTemperature: 0, // Not used anymore
           averageHumidity: 0, // Not used anymore
-          alertsCount: 0 // Will be calculated below
+          alertsCount: 0 // Not displayed anymore
         };
 
         // Create room summaries with real occupancy data
@@ -129,46 +129,8 @@ export const DashboardPage: React.FC = () => {
           };
         });
 
-        // Generate alerts based on room conditions
+        // Generate alerts based on room conditions (not displayed anymore)
         const alerts: AlertItem[] = [];
-        roomSummaries.forEach(room => {
-          // Temperature alerts
-          if (room.temperature > 25) {
-            alerts.push({
-              id: `temp-${room.id}`,
-              type: 'warning',
-              message: `Temperature high in ${room.name} (${room.temperature.toFixed(1)}°C)`,
-              timestamp: new Date(),
-              roomId: room.id
-            });
-          }
-          
-          // Humidity alerts
-          if (room.humidity > 60) {
-            alerts.push({
-              id: `humidity-${room.id}`,
-              type: 'warning',
-              message: `Humidity high in ${room.name} (${room.humidity.toFixed(1)}%)`,
-              timestamp: new Date(),
-              roomId: room.id
-            });
-          }
-          
-          // Capacity alerts
-          const occupancyRate = room.capacity > 0 ? (room.currentOccupancy / room.capacity) * 100 : 0;
-          if (occupancyRate > 90) {
-            alerts.push({
-              id: `capacity-${room.id}`,
-              type: 'warning',
-              message: `${room.name} is ${occupancyRate.toFixed(0)}% full`,
-              timestamp: new Date(),
-              roomId: room.id
-            });
-          }
-        });
-
-        // Update alerts count
-        kpis.alertsCount = alerts.length;
 
         // Calculate top clients based on reception history
         const clientUsage = new Map<string, { name: string; totalCrates: number; lastVisit: Date }>();
@@ -235,7 +197,6 @@ export const DashboardPage: React.FC = () => {
         console.log('Dashboard metrics calculated:', {
           totalRooms: metrics.kpis.totalRooms,
           totalClients: metrics.kpis.totalClients,
-          alertsCount: metrics.kpis.alertsCount,
           topClientsCount: metrics.topClients.length,
           recentMovesCount: metrics.recentMoves.length
         });

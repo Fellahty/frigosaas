@@ -1,6 +1,5 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card } from '../../components/Card';
 import { Kpis } from '../../types/metrics';
 
 interface KpiCardsProps {
@@ -31,20 +30,10 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ kpis }) => {
       trend: '+8.1%',
       trendUp: true,
     },
-    {
-      title: t('dashboard.alertsCount'),
-      value: kpis.alertsCount,
-      icon: '⚠️',
-      color: 'from-red-500 to-red-600',
-      bgColor: 'bg-red-50',
-      textColor: 'text-red-700',
-      trend: '-12.5%',
-      trendUp: false,
-    },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+    <div className="grid grid-cols-2 lg:grid-cols-2 gap-3 mb-6">
       {kpiData.map((kpi, index) => (
         <div key={index} className="relative bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md hover:border-gray-300 transition-all duration-200 group">
           
