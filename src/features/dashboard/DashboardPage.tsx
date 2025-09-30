@@ -108,12 +108,8 @@ export const DashboardPage: React.FC = () => {
         const kpis: Kpis = {
           totalRooms: rooms.length,
           totalClients: clients.length,
-          averageTemperature: rooms.length > 0 
-            ? rooms.reduce((sum, room) => sum + (room.temperature || 22), 0) / rooms.length 
-            : 22,
-          averageHumidity: rooms.length > 0 
-            ? rooms.reduce((sum, room) => sum + (room.humidity || 45), 0) / rooms.length 
-            : 45,
+          averageTemperature: 0, // Not used anymore
+          averageHumidity: 0, // Not used anymore
           alertsCount: 0 // Will be calculated below
         };
 

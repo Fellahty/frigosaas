@@ -32,26 +32,6 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ kpis }) => {
       trendUp: true,
     },
     {
-      title: t('dashboard.averageTemperature'),
-      value: `${kpis.averageTemperature.toFixed(1)}°C`,
-      icon: '🌡️',
-      color: 'from-orange-500 to-orange-600',
-      bgColor: 'bg-orange-50',
-      textColor: 'text-orange-700',
-      trend: '-0.3°C',
-      trendUp: false,
-    },
-    {
-      title: t('dashboard.averageHumidity'),
-      value: `${kpis.averageHumidity.toFixed(1)}%`,
-      icon: '💧',
-      color: 'from-purple-500 to-purple-600',
-      bgColor: 'bg-purple-50',
-      textColor: 'text-purple-700',
-      trend: '+1.2%',
-      trendUp: true,
-    },
-    {
       title: t('dashboard.alertsCount'),
       value: kpis.alertsCount,
       icon: '⚠️',
@@ -64,17 +44,9 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ kpis }) => {
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
       {kpiData.map((kpi, index) => (
         <div key={index} className="relative bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md hover:border-gray-300 transition-all duration-200 group">
-          {/* Demo badge - positioned absolutely */}
-          {(index === 2 || index === 3) && (
-            <div className="absolute -top-1 -right-1 z-20">
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
-                {t('dashboard.demo')}
-              </span>
-            </div>
-          )}
           
           {/* Content */}
           <div className="space-y-2">
