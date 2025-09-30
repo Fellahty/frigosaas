@@ -154,7 +154,7 @@ const SensorsPage: React.FC = () => {
         temperature: parseFloat(tempValue),
         humidity: parseFloat(humidityValue),
         battery: parseFloat(batteryValue) || 0,
-        magnet: magnetValue === 1 ? 1 : 0,
+        magnet: magnetValue === true ? 1 : 0,
         timestamp: realTimestamp
       };
 
@@ -533,12 +533,12 @@ const SensorsPage: React.FC = () => {
                           
                           {/* Status and Time Row */}
                           <div className="flex items-center justify-between">
-                         {/*    <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2">
                               <div className={`w-2 h-2 rounded-full ${sensor.additionalData.magnet === 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
                               <span className="text-sm text-gray-600">
                                 {sensor.additionalData.magnet === 0 ? 'Port ouvert' : 'Port fermé'}
                               </span>
-                            </div> */}
+                            </div>
                             <div className="text-sm text-gray-500">
                               {getTimeAgo(sensor.additionalData.timestamp)}
                             </div>
