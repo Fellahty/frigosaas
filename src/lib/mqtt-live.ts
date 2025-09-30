@@ -1,7 +1,7 @@
 // src/lib/mqtt-live.ts
 import mqtt, { MqttClient } from 'mqtt';
 
-const TOKEN = 'HhV7gaTAbCMRSdwh3WID7WZx7XXdaEXoaQB8PjWuH2gsbRRdihgGRcCjKZ6lOa4o';
+const TOKEN = 'HLjLOPX7XObF3D6itPYgFmMP0Danfjg49eUofKdSwjyGY3hAKeBYkp7LC45Pznyj';
 const DEVICE_ID = 6925665;
 
 export interface MQTTMessage {
