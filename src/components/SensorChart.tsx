@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { mqttLiveService, SensorData as MQTTSensorData } from '../lib/mqtt-live';
+import jsPDF from 'jspdf';
 
 // Utility function to calculate time ago
 const getTimeAgo = (timestamp: Date): string => {
@@ -504,6 +505,560 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
     }, 300); // 300ms debounce
     setRefreshTimeout(timeout);
   }, [refreshTimeout, fetchSensorData]);
+
+  // Share data function - WhatsApp style PDF
+  const handleShareData = useCallback(async () => {
+    try {
+      if (data.length === 0) {
+        console.log('❌ [SensorChart] No data to share');
+        return;
+      }
+
+      // Create PDF document
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 15;
+      let yPosition = margin;
+
+      // Helper function to add text with auto-wrap
+      const addText = (text: string, x: number, y: number, options: any = {}) => {
+        const maxWidth = pageWidth - 2 * margin;
+        const lines = doc.splitTextToSize(text, maxWidth);
+        doc.text(lines, x, y);
+        return y + (lines.length * (options.fontSize || 10) * 0.35);
+      };
+
+      // Helper function to add a new page if needed
+      const checkNewPage = (requiredSpace: number) => {
+        if (yPosition + requiredSpace > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+      };
+
+      // Colors
+      const primaryColor: [number, number, number] = [59, 130, 246]; // Blue
+      const successColor: [number, number, number] = [34, 197, 94]; // Green
+      const warningColor: [number, number, number] = [245, 158, 11]; // Orange
+      const grayColor: [number, number, number] = [107, 114, 128]; // Gray
+
+      // Header with LYAZAMI branding
+      doc.setFillColor(...primaryColor);
+      doc.rect(0, 0, pageWidth, 35, 'F');
+      
+      // White overlay for better text contrast
+      doc.setFillColor(255, 255, 255, 0.1);
+      doc.rect(0, 0, pageWidth, 35, 'F');
+      
+      // YAZAMI brand title - Centered and prominent
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(28);
+      doc.setFont('helvetica', 'bold');
+      const brandText = 'YAZAMI';
+      const brandWidth = doc.getTextWidth(brandText);
+      doc.text(brandText, (pageWidth - brandWidth) / 2, 18);
+      
+      // Subtitle - Centered
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'normal');
+      const subtitleText = 'SYSTEME DE SURVEILLANCE IoT';
+      const subtitleWidth = doc.getTextWidth(subtitleText);
+      doc.text(subtitleText, (pageWidth - subtitleWidth) / 2, 25);
+      
+      // Main report title - Centered
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      const reportText = 'Rapport d\'Analyse des Capteurs';
+      const reportWidth = doc.getTextWidth(reportText);
+      doc.text(reportText, (pageWidth - reportWidth) / 2, 30);
+      
+      // Sensor name - Centered
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'normal');
+      const sensorText = sensorName;
+      const sensorWidth = doc.getTextWidth(sensorText);
+      doc.text(sensorText, (pageWidth - sensorWidth) / 2, 35);
+      
+      yPosition = 45;
+
+      // Date and mode section
+      const currentDate = new Date().toLocaleString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      doc.setTextColor(...grayColor);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Genere le ${currentDate}`, margin, yPosition);
+      
+      // Mode indicator with colored background
+      const modeText = isLiveMode ? 'Mode Temps Reel' : 'Mode Historique';
+      const modeColor = isLiveMode ? successColor : primaryColor;
+      
+      doc.setFillColor(...modeColor);
+      doc.rect(pageWidth - 80, yPosition - 6, 75, 8, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(modeText, pageWidth - 77, yPosition - 1);
+      
+      yPosition += 15;
+
+      // Summary section with improved structure
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      yPosition = addText('SYNTHESE DES DONNEES', margin, yPosition + 8, { fontSize: 16 });
+
+      // Add separator line
+      doc.setDrawColor(...primaryColor);
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPosition + 2, pageWidth - margin, yPosition + 2);
+      yPosition += 8;
+
+      // Summary data with better formatting
+      const dataSummary = {
+        totalPoints: data.length,
+        temperatureRange: {
+          min: Math.min(...data.map(d => d.temperature)).toFixed(1),
+          max: Math.max(...data.map(d => d.temperature)).toFixed(1),
+          avg: (data.reduce((sum, d) => sum + d.temperature, 0) / data.length).toFixed(1)
+        },
+        humidityRange: {
+          min: Math.min(...data.map(d => d.humidity)).toFixed(1),
+          max: Math.max(...data.map(d => d.humidity)).toFixed(1),
+          avg: (data.reduce((sum, d) => sum + d.humidity, 0) / data.length).toFixed(1)
+        },
+        timeRange: {
+          start: new Date(data[data.length - 1].timestamp).toLocaleString('fr-FR', { 
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+          }),
+          end: new Date(data[0].timestamp).toLocaleString('fr-FR', { 
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+          })
+        }
+      };
+
+      // Enhanced summary grid with better layout
+      const summaryData = [
+        { 
+          icon: '■', 
+          label: 'Points de donnees', 
+          value: `${dataSummary.totalPoints} mesures`, 
+          color: primaryColor,
+          description: 'Total des enregistrements'
+        },
+        { 
+          icon: '°', 
+          label: 'Temperature', 
+          value: `${dataSummary.temperatureRange.avg}°C`, 
+          color: warningColor,
+          description: `${dataSummary.temperatureRange.min}°C - ${dataSummary.temperatureRange.max}°C`
+        },
+        { 
+          icon: '%', 
+          label: 'Humidite', 
+          value: `${dataSummary.humidityRange.avg}%`, 
+          color: successColor,
+          description: `${dataSummary.humidityRange.min}% - ${dataSummary.humidityRange.max}%`
+        },
+        { 
+          icon: '◐', 
+          label: 'Periode d\'analyse', 
+          value: `${dataSummary.timeRange.start}`, 
+          color: grayColor,
+          description: `jusqu'a ${dataSummary.timeRange.end}`
+        }
+      ];
+
+      summaryData.forEach((item, index) => {
+        const x = margin + (index % 2) * (pageWidth / 2);
+        const y = yPosition + Math.floor(index / 2) * 20;
+        
+        // Enhanced background box with border
+        doc.setFillColor(248, 250, 252);
+        doc.rect(x, y - 10, pageWidth / 2 - 10, 18, 'F');
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(0.3);
+        doc.rect(x, y - 10, pageWidth / 2 - 10, 18, 'S');
+        
+        // Icon
+        doc.setTextColor(...item.color);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text(item.icon, x + 3, y - 2);
+        
+        // Label
+        doc.setTextColor(...grayColor);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(item.label, x + 12, y - 2);
+        
+        // Main value
+        doc.setTextColor(...item.color);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(item.value, x + 12, y + 3);
+        
+        // Description
+        doc.setTextColor(...grayColor);
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.text(item.description, x + 12, y + 6);
+      });
+
+      yPosition += 35;
+
+      // Recent data table with improved structure
+      checkNewPage(35);
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      yPosition = addText('DETAIL DES MESURES', margin, yPosition + 8, { fontSize: 16 });
+
+      // Add separator line
+      doc.setDrawColor(...primaryColor);
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPosition + 2, pageWidth - margin, yPosition + 2);
+      yPosition += 8;
+
+      // Enhanced table headers
+      const tableHeaders = ['Heure', 'Temperature', 'Humidite', 'Batterie', 'Port'];
+      const colWidths = [25, 25, 20, 20, 15];
+      let xPos = margin;
+
+      // Header background with gradient effect
+      doc.setFillColor(...primaryColor);
+      doc.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
+      
+      tableHeaders.forEach((header, index) => {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(header, xPos + 2, yPosition + 6);
+        xPos += colWidths[index];
+      });
+
+      yPosition += 12;
+
+      // Table data (last 25 points) with better formatting
+      const recentData = data.slice(0, 25);
+      recentData.forEach((point, index) => {
+        checkNewPage(8);
+        
+        // Enhanced row styling
+        if (index % 2 === 0) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(margin, yPosition - 2, pageWidth - 2 * margin, 7, 'F');
+        } else {
+          doc.setFillColor(255, 255, 255);
+          doc.rect(margin, yPosition - 2, pageWidth - 2 * margin, 7, 'F');
+        }
+
+        // Add subtle border
+        doc.setDrawColor(240, 240, 240);
+        doc.setLineWidth(0.2);
+        doc.rect(margin, yPosition - 2, pageWidth - 2 * margin, 7, 'S');
+
+        xPos = margin;
+        const rowData = [
+          new Date(point.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          `${point.temperature.toFixed(1)}°C`,
+          `${point.humidity.toFixed(1)}%`,
+          `${point.battery.toFixed(2)}V`,
+          point.magnet === 1 ? 'Ouvert' : 'Ferme'
+        ];
+
+        rowData.forEach((cell, colIndex) => {
+          // Color coding for different data types
+          if (colIndex === 1) { // Temperature
+            const temp = parseFloat(point.temperature.toFixed(1));
+            if (temp < 0) doc.setTextColor(59, 130, 246); // Blue for cold
+            else if (temp > 4) doc.setTextColor(239, 68, 68); // Red for hot
+            else doc.setTextColor(34, 197, 94); // Green for optimal
+          } else if (colIndex === 2) { // Humidity
+            const hum = parseFloat(point.humidity.toFixed(1));
+            if (hum < 85) doc.setTextColor(245, 158, 11); // Orange for low
+            else if (hum > 95) doc.setTextColor(239, 68, 68); // Red for high
+            else doc.setTextColor(34, 197, 94); // Green for optimal
+          } else if (colIndex === 4) { // Door status
+            if (point.magnet === 1) {
+              doc.setTextColor(239, 68, 68); // Red for open
+            } else {
+              doc.setTextColor(34, 197, 94); // Green for closed
+            }
+          } else {
+            doc.setTextColor(0, 0, 0);
+          }
+          
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          doc.text(cell, xPos + 2, yPosition + 4);
+          xPos += colWidths[colIndex];
+        });
+
+        yPosition += 7;
+      });
+
+      // Enhanced footer with better structure
+      yPosition = pageHeight - 25;
+      
+      // Footer background
+      doc.setFillColor(248, 250, 252);
+      doc.rect(0, yPosition - 5, pageWidth, 25, 'F');
+      
+      // Footer border
+      doc.setDrawColor(...primaryColor);
+      doc.setLineWidth(0.5);
+      doc.line(0, yPosition - 5, pageWidth, yPosition - 5);
+      
+      // Footer content with YAZAMI branding
+      doc.setTextColor(...grayColor);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Rapport genere automatiquement par YAZAMI IoT', margin, yPosition);
+      
+      doc.setFontSize(8);
+      doc.text('Optimise pour le partage WhatsApp', margin, yPosition + 4);
+      doc.text('Donnees securisees et confidentielles', margin, yPosition + 8);
+      
+      // YAZAMI brand in footer - Centered and prominent
+      doc.setTextColor(...primaryColor);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      const footerBrandText = 'YAZAMI';
+      const footerBrandWidth = doc.getTextWidth(footerBrandText);
+      doc.text(footerBrandText, (pageWidth - footerBrandWidth) / 2, yPosition + 12);
+      
+      // QR Code placeholder (visual element)
+      doc.setFillColor(...primaryColor);
+      doc.rect(pageWidth - 25, yPosition - 2, 20, 20, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'bold');
+      doc.text('QR', pageWidth - 20, yPosition + 8);
+      doc.text('CODE', pageWidth - 20, yPosition + 12);
+
+      // Generate PDF blob for sharing
+      const pdfBlob = doc.output('blob');
+      const dateStr = new Date().toISOString().split('T')[0];
+      const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+      const fileName = `rapport-${sensorName.replace(/\s+/g, '-').toLowerCase()}-${dateStr}-${timeStr}.pdf`;
+      
+      // Create share options
+      const shareData = {
+        title: `Rapport Capteur - ${sensorName}`,
+        text: `Rapport d'analyse des capteurs généré par YAZAMI IoT\n\nCapteur: ${sensorName}\nDate: ${new Date().toLocaleString('fr-FR')}\nMode: ${isLiveMode ? 'Temps réel' : 'Historique'}`,
+        files: [new File([pdfBlob], fileName, { type: 'application/pdf' })]
+      };
+
+      // Check if Web Share API is supported
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        try {
+          await navigator.share(shareData);
+          console.log('📊 [SensorChart] PDF partagé via Web Share API');
+        } catch (error) {
+          if (error instanceof Error && error.name !== 'AbortError') {
+            console.error('❌ [SensorChart] Erreur lors du partage:', error);
+            // Fallback to download
+            doc.save(fileName);
+          }
+        }
+      } else {
+        // Fallback: Show share options dialog
+        showShareOptionsDialog(pdfBlob, fileName, shareData);
+      }
+    } catch (error) {
+      console.error('❌ [SensorChart] Error generating PDF:', error);
+    }
+  }, [data, sensorName, isLiveMode]);
+
+  // Share options dialog function
+  const showShareOptionsDialog = (pdfBlob: Blob, fileName: string, shareData: any) => {
+    // Create a modal dialog for share options
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    `;
+
+    dialog.innerHTML = `
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 600; color: #1f2937;">Partager le Rapport</h3>
+        <p style="margin: 0; color: #6b7280; font-size: 14px;">Choisissez comment partager votre rapport PDF</p>
+      </div>
+      
+      <div style="display: grid; gap: 12px;">
+        <button id="whatsapp-share" style="
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          border: none;
+          border-radius: 12px;
+          background: #25d366;
+          color: white;
+          font-size: 16px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+          </svg>
+          Partager sur WhatsApp
+        </button>
+        
+        <button id="email-share" style="
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          border: none;
+          border-radius: 12px;
+          background: #3b82f6;
+          color: white;
+          font-size: 16px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+          </svg>
+          Envoyer par Email
+        </button>
+        
+        <button id="download-share" style="
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          border: none;
+          border-radius: 12px;
+          background: #6b7280;
+          color: white;
+          font-size: 16px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          Télécharger le PDF
+        </button>
+        
+        <button id="copy-link" style="
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          border: none;
+          border-radius: 12px;
+          background: #10b981;
+          color: white;
+          font-size: 16px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+          </svg>
+          Copier le lien
+        </button>
+      </div>
+      
+      <div style="margin-top: 20px; text-align: center;">
+        <button id="close-share" style="
+          padding: 8px 16px;
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          background: white;
+          color: #6b7280;
+          font-size: 14px;
+          cursor: pointer;
+        ">Annuler</button>
+      </div>
+    `;
+
+    modal.appendChild(dialog);
+    document.body.appendChild(modal);
+
+    // Event listeners
+    const closeModal = () => {
+      document.body.removeChild(modal);
+    };
+
+    const downloadPDF = () => {
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      closeModal();
+    };
+
+    const shareWhatsApp = () => {
+      const text = encodeURIComponent(shareData.text);
+      const url = `https://wa.me/?text=${text}`;
+      window.open(url, '_blank');
+      closeModal();
+    };
+
+    const shareEmail = () => {
+      const subject = encodeURIComponent(shareData.title);
+      const body = encodeURIComponent(shareData.text);
+      const url = `mailto:?subject=${subject}&body=${body}`;
+      window.open(url);
+      closeModal();
+    };
+
+    const copyLink = () => {
+      navigator.clipboard.writeText(shareData.text).then(() => {
+        alert('Texte copié dans le presse-papiers !');
+        closeModal();
+      });
+    };
+
+    // Add event listeners
+    dialog.querySelector('#whatsapp-share')?.addEventListener('click', shareWhatsApp);
+    dialog.querySelector('#email-share')?.addEventListener('click', shareEmail);
+    dialog.querySelector('#download-share')?.addEventListener('click', downloadPDF);
+    dialog.querySelector('#copy-link')?.addEventListener('click', copyLink);
+    dialog.querySelector('#close-share')?.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+  };
 
   // MQTT Live data handling - REACTIVATED with correct configuration
   useEffect(() => {
@@ -1239,6 +1794,17 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, isOpen,
                 )}
               </button>
             )}
+
+            {/* Share Button - WhatsApp Style */}
+            <button
+              onClick={handleShareData}
+              className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 bg-green-500 text-white shadow-sm hover:bg-green-600"
+              title="Partager les données"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+              </svg>
+            </button>
             {/* Close Button - Apple Style */}
             <button
               onClick={onClose}
