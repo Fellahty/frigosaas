@@ -31,7 +31,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
   const [editingRoom, setEditingRoom] = useState<RoomDoc | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<RoomDoc | null>(null);
-  const [formData, setFormData] = useState<Room & { capacityCrates: number; capacityPallets: number }>({
+  const [formData, setFormData] = useState<Room & { capacityCrates: number; capacityPallets: number; athGroupNumber: number; boitieSensorId: string }>({
     room: '',
     capacity: 0,
     capacityCrates: 0,
@@ -39,6 +39,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     sensorId: '',
     active: true,
     capteurInstalled: false,
+    athGroupNumber: 1,
+    boitieSensorId: '',
   });
   const [sensorIdError, setSensorIdError] = useState<string>('');
   const [sortField, setSortField] = useState<keyof RoomDoc | null>(null);
@@ -95,6 +97,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
       sensorId: '',
       active: true,
       capteurInstalled: false,
+      athGroupNumber: 1,
+      boitieSensorId: '',
     });
     setSensorIdError('');
     setShowModal(true);
@@ -110,6 +114,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
       sensorId: room.sensorId,
       active: room.active,
       capteurInstalled: room.capteurInstalled || false,
+      athGroupNumber: room.athGroupNumber || 1,
+      boitieSensorId: room.boitieSensorId || '',
     });
     setSensorIdError('');
     setShowModal(true);
@@ -139,6 +145,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
         sensorId: formData.sensorId,
         active: formData.active,
         capteurInstalled: formData.capteurInstalled,
+        athGroupNumber: formData.athGroupNumber,
+        boitieSensorId: formData.boitieSensorId,
         tenantId,
         createdAt: serverTimestamp(),
       };
@@ -402,6 +410,24 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('athGroupNumber')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.athGroupNumber', 'Groupe ATH')}</span>
+                      {getSortIcon('athGroupNumber')}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('boitieSensorId')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{t('settings.rooms.boitieSensorId', 'Capteur Boitie')}</span>
+                      {getSortIcon('boitieSensorId')}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
                     onClick={() => handleSort('active')}
                   >
                     <div className="flex items-center space-x-1">
@@ -446,6 +472,20 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                       }`}>
                         {room.capteurInstalled ? t('common.yes', 'Oui') : t('common.no', 'Non')}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {room.athGroupNumber || 1}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {room.boitieSensorId ? (
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                          {room.boitieSensorId}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -561,6 +601,39 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                       {sensorIdError}
                     </p>
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('settings.rooms.athGroupNumber', 'Numéro de groupe ATH')}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.athGroupNumber}
+                    onChange={(e) => handleInputChange('athGroupNumber', parseInt(e.target.value) || 1)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="1"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t('settings.rooms.athGroupNumberHelp', 'Numéro du groupe ATH auquel appartient cette chambre')}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('settings.rooms.boitieSensorId', 'ID Capteur Boitie')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.boitieSensorId}
+                    onChange={(e) => handleInputChange('boitieSensorId', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="B-CH1"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t('settings.rooms.boitieSensorIdHelp', 'ID du capteur de la boitie (boîte) de cette chambre')}
+                  </p>
                 </div>
 
                 <div className="flex items-center">

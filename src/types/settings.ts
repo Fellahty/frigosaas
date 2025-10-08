@@ -25,6 +25,8 @@ export const roomSchema = z.object({
   sensorId: z.string().min(1, 'ID du capteur requis'),
   active: z.boolean().default(true),
   capteurInstalled: z.boolean().default(false), // Whether sensor is installed in the room
+  athGroupNumber: z.number().min(1, 'Le numéro de groupe ATH doit être positif').optional(), // ATH group number for the chamber
+  boitieSensorId: z.string().optional(), // ID sensor of boitie (box sensor)
 });
 
 // Pool Settings Schema
@@ -80,6 +82,8 @@ export interface RoomDoc {
   sensorId: string;
   active: boolean;
   capteurInstalled: boolean; // Whether sensor is installed in the room
+  athGroupNumber?: number; // ATH group number for the chamber
+  boitieSensorId?: string; // ID sensor of boitie (box sensor)
 }
 
 export interface PoolSettingsDoc {
