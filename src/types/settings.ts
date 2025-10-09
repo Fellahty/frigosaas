@@ -27,6 +27,10 @@ export const roomSchema = z.object({
   capteurInstalled: z.boolean().default(false), // Whether sensor is installed in the room
   athGroupNumber: z.number().min(1, 'Le numéro de groupe ATH doit être positif').optional(), // ATH group number for the chamber
   boitieSensorId: z.string().optional(), // ID sensor of boitie (box sensor)
+  polygon: z.array(z.object({
+    lat: z.number(),
+    lng: z.number()
+  })).optional(), // GeoJSON polygon coordinates for map display
 });
 
 // Pool Settings Schema
@@ -84,6 +88,7 @@ export interface RoomDoc {
   capteurInstalled: boolean; // Whether sensor is installed in the room
   athGroupNumber?: number; // ATH group number for the chamber
   boitieSensorId?: string; // ID sensor of boitie (box sensor)
+  polygon?: Array<{ lat: number; lng: number }>; // GeoJSON polygon coordinates for map display
 }
 
 export interface PoolSettingsDoc {

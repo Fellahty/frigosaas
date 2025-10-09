@@ -47,6 +47,7 @@ interface SensorData {
 interface SensorChartProps {
   sensorId: string;
   sensorName: string;
+  roomName?: string; // Add room name for API
   boitieDeviceId?: string;
   isOpen: boolean;
   onClose: () => void;
@@ -58,7 +59,7 @@ interface SensorChartProps {
   }>;
 }
 
-const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, boitieDeviceId, isOpen, onClose, availableChambers = [] }) => {
+const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomName, boitieDeviceId, isOpen, onClose, availableChambers = [] }) => {
   const [data, setData] = useState<SensorData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -398,19 +399,60 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, boitieD
     
     try {
       const deviceId = boitieDeviceId || '6925665';
+      const room = roomName || sensorName;
       
-      // Use /messages endpoint for historical data with reasonable limit
-      // This single request will have temperature, humidity, battery, magnet, beacons - everything!
-      const apiUrl = `https://flespi.io/gw/devices/${deviceId}/messages?limit=200`;
+      // Calculate time range based on selected dateRange type
+      const end = new Date();
+      let start = new Date();
       
-      console.log(`🌐 [SensorChart] 🚀 SINGLE API REQUEST for ALL data:`, apiUrl);
-      console.log(`📊 [SensorChart] This ONE request will contain temp, humidity, battery, magnet, beacons for ALL channels`);
+      // Calculate start time based on dateRange.type
+      switch (dateRange.type) {
+        case '30min':
+          start = new Date(end.getTime() - 30 * 60 * 1000);
+          break;
+        case '1h':
+          start = new Date(end.getTime() - 60 * 60 * 1000);
+          break;
+        case '6h':
+          start = new Date(end.getTime() - 6 * 60 * 60 * 1000);
+          break;
+        case '12h':
+          start = new Date(end.getTime() - 12 * 60 * 60 * 1000);
+          break;
+        case '24h':
+        case '1d':
+          start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case '7d':
+          start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          // Default to 30 minutes
+          start = new Date(end.getTime() - 30 * 60 * 1000);
+      }
       
-      const response = await fetch(apiUrl, {
-        headers: {
-          'Authorization': 'FlespiToken HLjLOPX7XObF3D6itPYgFmMP0Danfjg49eUofKdSwjyGY3hAKeBYkp7LC45Pznyj'
-        }
-      });
+      // Format dates for API (YYYY-MM-DD HH:MM)
+      const formatDate = (date: Date) => {
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      };
+      
+      const startStr = encodeURIComponent(formatDate(start));
+      const endStr = encodeURIComponent(formatDate(end));
+      const roomStr = encodeURIComponent(room);
+      
+      // Use new history API endpoint
+      const apiUrl = `https://api.frigosmart.com/rooms/history?device_id=${deviceId}&room=${roomStr}&start=${startStr}&end=${endStr}`;
+      
+      console.log(`🌐 [SensorChart] Fetching history from new API:`, apiUrl);
+      console.log(`📊 [SensorChart] Room: ${room}, Device: ${deviceId}`);
+      console.log(`📊 [SensorChart] Time Range Type: ${dateRange.type}`);
+      console.log(`📊 [SensorChart] Range: ${formatDate(start)} to ${formatDate(end)}`);
+      
+      const response = await fetch(apiUrl);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -420,60 +462,39 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, boitieD
 
       const rawData = await response.json();
       console.log(`📊 [SensorChart] API Response:`, rawData);
-      console.log(`📊 [SensorChart] Received ${rawData.result?.length || 0} messages`);
+      console.log(`📊 [SensorChart] Received ${rawData.count || 0} data points`);
       
-      // Print complete JSON data for debugging
-      console.log(`🔍 [SensorChart] COMPLETE JSON DATA:`, JSON.stringify(rawData, null, 2));
-      
-      // Print first few messages in detail
-      if (rawData.result && rawData.result.length > 0) {
-        console.log(`🔍 [SensorChart] FIRST 3 MESSAGES DETAIL:`, JSON.stringify(rawData.result.slice(0, 3), null, 2));
-        
-        // Check for beacon data in first few messages
-        const messagesWithBeacons = rawData.result.slice(0, 10).filter((msg: any) => msg['ble.beacons']);
-        if (messagesWithBeacons.length > 0) {
-          console.log(`🔍 [SensorChart] BEACON DATA FOUND:`, JSON.stringify(messagesWithBeacons[0]['ble.beacons'], null, 2));
-        }
-      }
-      
-      if (!rawData.result || rawData.result.length === 0) {
-        console.warn('⚠️ [SensorChart] No messages in API response!');
+      if (!rawData.data || rawData.data.length === 0) {
+        console.warn('⚠️ [SensorChart] No data in API response!');
         setData([]);
         setLoading(false);
         return;
       }
       
-      console.log(`📊 [SensorChart] First message sample:`, rawData.result[0]);
-      console.log(`📊 [SensorChart] Available keys in first message:`, Object.keys(rawData.result[0]));
-      console.log(`📊 [SensorChart] Channel number for processing:`, channelNumber);
+      console.log(`📊 [SensorChart] First data sample:`, rawData.data[0]);
       
-      // Show real data values being processed
-      if (rawData.result.length > 0) {
-        const firstMessage = rawData.result[0];
-        console.log(`🔍 [SensorChart] REAL DATA from API:`);
-        console.log(`   - Timestamp: ${new Date(firstMessage.timestamp * 1000).toLocaleString()}`);
-        console.log(`   - Temperature CH${channelNumber}: ${firstMessage[`ble.sensor.temperature.${channelNumber}`]}`);
-        console.log(`   - Humidity CH${channelNumber}: ${firstMessage[`ble.sensor.humidity.${channelNumber}`]}`);
-        console.log(`   - Battery CH${channelNumber}: ${firstMessage[`ble.sensor.battery.voltage.${channelNumber}`]}`);
-        console.log(`   - Magnet CH${channelNumber}: ${firstMessage[`ble.sensor.magnet.status.${channelNumber}`]}`);
-        console.log(`   - Has beacons: ${!!firstMessage['ble.beacons']}`);
-      }
+      // Convert API response to SensorData format
+      const processedData: SensorData[] = rawData.data.map((item: any) => ({
+        timestamp: item.epoch * 1000, // Convert to milliseconds
+        temperature: parseFloat(item.temperature) || 0,
+        humidity: parseFloat(item.humidity) || 0,
+        battery: 0, // Not provided by new API
+        magnet: item.magnet === true ? 1 : 0 // true = closed (1), false = open (0)
+      }));
       
-      // Process messages using the processChamberData function
-      const processedData = processChamberData(rawData.result, channelNumber || 1);
+      // Sort by timestamp
+      processedData.sort((a, b) => a.timestamp - b.timestamp);
       
       setData(processedData);
-      console.log(`✅ [SensorChart] Processed ${processedData.length} data points from ${rawData.result.length} messages`);
+      console.log(`✅ [SensorChart] Processed ${processedData.length} data points`);
       if (processedData.length > 0) {
-        console.log(`📊 [SensorChart] FINAL DATA for chart display:`, processedData[0]);
-        console.log(`🔍 [SensorChart] Chart will show REAL data:`);
-        console.log(`   - Time: ${new Date(processedData[0].timestamp).toLocaleString()}`);
+        console.log(`📊 [SensorChart] First data point:`, processedData[0]);
+        console.log(`📊 [SensorChart] Last data point:`, processedData[processedData.length - 1]);
+        console.log(`🔍 [SensorChart] Chart data:`);
+        console.log(`   - Time range: ${new Date(processedData[0].timestamp).toLocaleString()} to ${new Date(processedData[processedData.length - 1].timestamp).toLocaleString()}`);
         console.log(`   - Temperature: ${processedData[0].temperature}°C`);
         console.log(`   - Humidity: ${processedData[0].humidity}%`);
-        console.log(`   - Battery: ${processedData[0].battery}V`);
         console.log(`   - Door: ${processedData[0].magnet === 1 ? 'CLOSED' : 'OPEN'}`);
-      } else {
-        console.warn('⚠️ [SensorChart] No data points were processed! Check channel number and data format');
       }
 
       // Cache the result

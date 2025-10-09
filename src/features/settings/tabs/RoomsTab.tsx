@@ -7,6 +7,7 @@ import { useTenantId } from '../../../lib/hooks/useTenantId';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { toast } from 'react-hot-toast';
+import PolygonEditorModal from '../../../components/PolygonEditorModal';
 
 interface RoomDoc extends Room {
   id: string;
@@ -31,6 +32,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
   const [editingRoom, setEditingRoom] = useState<RoomDoc | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<RoomDoc | null>(null);
+  const [showPolygonEditor, setShowPolygonEditor] = useState(false);
+  const [editingPolygonRoom, setEditingPolygonRoom] = useState<RoomDoc | null>(null);
   const [formData, setFormData] = useState<Room & { capacityCrates: number; capacityPallets: number; athGroupNumber: number; boitieSensorId: string }>({
     room: '',
     capacity: 0,
@@ -224,6 +227,34 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
   const handleCloseModal = () => {
     setShowModal(false);
     setSensorIdError('');
+  };
+
+  const handleEditPolygon = (room: RoomDoc) => {
+    setEditingPolygonRoom(room);
+    setShowPolygonEditor(true);
+  };
+
+  const handleSavePolygon = async (polygon: Array<{ lat: number; lng: number }>) => {
+    if (!editingPolygonRoom || !tenantId) return;
+
+    try {
+      const roomRef = doc(db, 'rooms', editingPolygonRoom.id);
+      await updateDoc(roomRef, {
+        polygon: polygon
+      });
+
+      // Update local state
+      setRooms(prev => prev.map(r => 
+        r.id === editingPolygonRoom.id ? { ...r, polygon } : r
+      ));
+
+      toast.success('Polygone enregistré avec succès');
+      setShowPolygonEditor(false);
+      setEditingPolygonRoom(null);
+    } catch (error) {
+      console.error('Error saving polygon:', error);
+      toast.error('Erreur lors de l\'enregistrement du polygone');
+    }
   };
 
   const handleSort = (field: keyof RoomDoc) => {
@@ -506,18 +537,29 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                       }) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleEditRoom(room)}
-                        className="text-blue-600 hover:text-blue-900 mr-3"
-                      >
-                        {t('common.edit')}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteRoom(room)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        {t('common.delete')}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleEditRoom(room)}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="Modifier"
+                        >
+                          {t('common.edit')}
+                        </button>
+                        <button
+                          onClick={() => handleEditPolygon(room)}
+                          className="text-purple-600 hover:text-purple-900"
+                          title="Dessiner polygone"
+                        >
+                          🗺️
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRoom(room)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Supprimer"
+                        >
+                          {t('common.delete')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -720,6 +762,20 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
             </div>
           </div>
         </div>
+      )}
+
+      {/* Polygon Editor Modal */}
+      {showPolygonEditor && editingPolygonRoom && (
+        <PolygonEditorModal
+          isOpen={showPolygonEditor}
+          onClose={() => {
+            setShowPolygonEditor(false);
+            setEditingPolygonRoom(null);
+          }}
+          roomName={editingPolygonRoom.room}
+          initialPolygon={editingPolygonRoom.polygon}
+          onSave={handleSavePolygon}
+        />
       )}
     </div>
   );
