@@ -337,13 +337,35 @@ const SensorsPage: React.FC = () => {
 
   // Get rooms to display based on active tab
   const displayRooms = useMemo(() => {
+    let roomsToDisplay: Room[] = [];
+    
     if (!activeTab) {
       return [];
     }
     if (activeTab === 'all') {
-      return rooms || [];
+      roomsToDisplay = rooms || [];
+    } else {
+      roomsToDisplay = groupedRooms[activeTab] || [];
     }
-    return groupedRooms[activeTab] || [];
+    
+    // Sort rooms numerically by name (Chambre 1, Chambre 2, CH1, CH2, etc.) for correct 3D positioning
+    return roomsToDisplay.sort((a, b) => {
+      // Extract numbers from room names (handles "Chambre 1", "CH1", "Couloir 1", etc.)
+      const extractNumber = (name: string): number => {
+        const match = name.match(/(\d+)/);
+        return match ? parseInt(match[0]) : 0;
+      };
+      
+      const aNum = extractNumber(a.name);
+      const bNum = extractNumber(b.name);
+      
+      // If numbers are the same, fall back to alphabetical sorting
+      if (aNum === bNum) {
+        return a.name.localeCompare(b.name, 'fr', { numeric: true });
+      }
+      
+      return aNum - bNum;
+    });
   }, [activeTab, rooms, groupedRooms]);
 
   const handleSensorClick = (sensor: Sensor) => {
@@ -430,7 +452,7 @@ const SensorsPage: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">{t('sensors.title')}</h1>
-                <p className="text-gray-600 text-base sm:text-lg">Surveillance IoT en temps réel</p>
+                <p className="text-gray-600 text-base sm:text-lg">{t('sensors.realTimeMonitoring')}</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -438,10 +460,10 @@ const SensorsPage: React.FC = () => {
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="text-sm font-medium text-gray-700">
                   {!activeTab 
-                    ? 'Chargement...'
+                    ? t('common.loading')
                     : activeTab === 'all' 
-                      ? `${rooms.length} chambres actives`
-                      : `${displayRooms.length} chambres - ${tabs.find(t => t.id === activeTab)?.label || 'Groupe'}`
+                      ? `${rooms.length} ${t('sensors.activeRooms')}`
+                      : `${displayRooms.length} ${t('sensors.rooms')} - ${tabs.find(t => t.id === activeTab)?.label || t('sensors.group')}`
                   }
                 </span>
               </div>
@@ -486,7 +508,7 @@ const SensorsPage: React.FC = () => {
                 }}
                 disabled={roomsLoading}
                 className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 hover:border-blue-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
-                title="Actualiser les données"
+                title={t('common.refresh') as string}
               >
                 {roomsLoading ? (
                   <svg className="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -497,7 +519,7 @@ const SensorsPage: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 )}
-                Actualiser
+                {t('common.refresh')}
               </button>
             </div>
           </div>
@@ -601,18 +623,18 @@ const SensorsPage: React.FC = () => {
                         <div className="grid grid-cols-3 gap-2">
                           {/* Door Status */}
                           <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-2.5 border border-gray-200/50">
-                            <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase">Porte</div>
+                            <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase">{t('sensors.door')}</div>
                             <div className="flex items-center justify-center gap-1">
                               <div className={`w-2 h-2 rounded-full ${sensor.additionalData.magnet === 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
                               <span className="text-base font-bold text-gray-800">
-                                {sensor.additionalData.magnet === 0 ? 'O' : 'F'}
+                                {sensor.additionalData.magnet === 0 ? t('sensors.doorOpened') : t('sensors.doorClosed')}
                               </span>
                             </div>
                           </div>
                           
                           {/* Temperature */}
                           <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-lg p-2.5 border border-red-200/50">
-                            <div className="text-[10px] text-red-600 font-semibold mb-1 uppercase">Temp</div>
+                            <div className="text-[10px] text-red-600 font-semibold mb-1 uppercase">{t('sensors.temp')}</div>
                             <div className="text-base font-bold text-red-700 text-center">
                               {sensor.additionalData.temperature !== null && !isNaN(sensor.additionalData.temperature) 
                                 ? sensor.additionalData.temperature.toFixed(1) + '°'
@@ -622,7 +644,7 @@ const SensorsPage: React.FC = () => {
                           
                           {/* Humidity */}
                           <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-2.5 border border-blue-200/50">
-                            <div className="text-[10px] text-blue-600 font-semibold mb-1 uppercase">Hum</div>
+                            <div className="text-[10px] text-blue-600 font-semibold mb-1 uppercase">{t('sensors.hum')}</div>
                             <div className="text-base font-bold text-blue-700 text-center">
                               {sensor.additionalData.humidity.toFixed(0)}%
                             </div>

@@ -51,30 +51,20 @@ interface Reception {
   createdAt: any;
 }
 
-// Helper function to get battery config based on occupancy
+// Helper function to get color based on occupancy
 const getBatteryConfig = (percentage: number) => {
   if (percentage === 0) {
-    return {
-      color: "bg-gray-500",
-      status: "Empty",
-      statusColor: "text-gray-600",
-    };
+    return { color: "bg-gray-400" };
   } else if (percentage < 60) {
-    return {
-      color: "bg-green-500",
-      status: "Normal",
-      statusColor: "text-green-600",
-    };
+    return { color: "bg-green-500" };
+  } else if (percentage < 80) {
+    return { color: "bg-yellow-500" };
   } else {
-    return {
-      color: "bg-red-500",
-      status: "Critical",
-      statusColor: "text-red-600",
-    };
+    return { color: "bg-red-500" };
   }
 };
 
-// Modern Room Card Component
+// Simplified Room Card Component
 const RoomCard: React.FC<{
   room: RoomSummary;
   clients: any[];
@@ -141,205 +131,87 @@ const RoomCard: React.FC<{
   );
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100/50 shadow-sm hover:shadow-lg transition-all duration-300 group relative overflow-hidden backdrop-blur-sm">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
       {/* Room Header */}
       <div
-        className={`h-12 ${batteryConfig.color} flex items-center justify-center relative`}
+        className={`h-10 ${batteryConfig.color} flex items-center justify-center`}
       >
-        <div className="text-center text-white px-3">
-          <div className="font-bold text-sm tracking-tight">{room.name}</div>
-          <div className="text-xs opacity-90 font-medium">
-            {room.currentOccupancy}/{room.capacity}
-          </div>
-        </div>
-
-        {/* Status Badge */}
-        <div className="absolute top-1.5 right-2">
-          <div
-            className={`px-2 py-0.5 rounded-full text-xs font-medium bg-white/95 ${batteryConfig.statusColor} shadow-sm`}
-          >
-            {batteryConfig.status === "Empty"
-              ? t("dashboard.status.empty")
-              : batteryConfig.status === "Normal"
-              ? t("dashboard.status.normal")
-              : batteryConfig.status === "Critical"
-              ? t("dashboard.status.critical")
-              : batteryConfig.status}
-          </div>
-        </div>
-      </div>
-
-      {/* Cumulative Entries Display */}
-      <div className="bg-gradient-to-r from-blue-50/80 to-green-50/80 px-2 py-1.5 border-b border-gray-100/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-            <span className="text-xs font-medium text-gray-700">
-              {t("dashboard.facilityMap.cumulative", "Cumul")}
-            </span>
-          </div>
-          <div className="text-right">
-            <div className="text-xs font-bold text-blue-600">
-              {cumulativeEntries}
-            </div>
-            <div className="text-xs text-gray-500">{cumulativeCrates}</div>
-          </div>
+        <div className="text-center text-white">
+          <div className="font-semibold text-sm">{room.name}</div>
         </div>
       </div>
 
       {/* Room Content */}
-      <div className="p-3">
-        {/* Cumulative Summary */}
-        {cumulativeEntries > 0 && (
-          <div className="bg-blue-50 rounded-lg p-2 mb-2 border border-blue-100">
-            <div className="text-center">
-              <div className="text-sm font-bold text-blue-700 mb-0.5">
-                {cumulativeEntries}{" "}
-                {cumulativeEntries > 1
-                  ? t("dashboard.facilityMap.entries", "Entrées")
-                  : t("dashboard.facilityMap.entry", "Entrée")}
-              </div>
-              <div className="text-xs text-blue-600 font-medium">
-                {cumulativeCrates}{" "}
-                {t("dashboard.facilityMap.crates", "caisses")}
-              </div>
+      <div className="p-4">
+        {/* Occupancy Info */}
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-2xl font-bold text-gray-900">
+              {room.currentOccupancy}<span className="text-gray-400 text-lg">/{room.capacity}</span>
+            </div>
+            <div className="text-xs text-gray-500">
+              {t("dashboard.facilityMap.crates", "caisses")}
             </div>
           </div>
-        )}
-
-        {/* Main Metrics Row */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          {/* Occupancy Percentage */}
-          <div className="text-center">
-            <div className="text-lg font-bold text-gray-800 mb-0.5">
+          <div className="text-right">
+            <div className="text-lg font-semibold text-gray-700">
               {occupancyPercentage}%
             </div>
-            <div className="text-xs text-gray-600 font-medium">
-              {t("dashboard.chamber")}
-            </div>
+            <div className="text-xs text-gray-500">{t("dashboard.available", "disponible")}</div>
           </div>
+        </div>
 
-          {/* Progress Bar - Centered */}
-          <div className="col-span-1 flex flex-col justify-center">
-            <div className="text-xs text-gray-600 mb-1 font-medium text-center">
-              {t("dashboard.coldStorage")}
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-              <div
-                className={`h-2 ${batteryConfig.color} rounded-full transition-all duration-1000 ease-out`}
-                style={{ width: `${occupancyPercentage}%` }}
-              ></div>
-            </div>
-          </div>
-
-          {/* Available Capacity */}
-          <div className="text-center">
-            <div className="text-lg font-bold text-gray-800 mb-0.5">
-              {room.capacity - room.currentOccupancy}
-            </div>
-            <div className="text-xs text-gray-600 font-medium">
-              {t("dashboard.available")}
-            </div>
+        {/* Progress Bar */}
+        <div className="mb-4">
+          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+            <div
+              className={`h-2 ${batteryConfig.color} rounded-full transition-all duration-500`}
+              style={{ width: `${occupancyPercentage}%` }}
+            ></div>
           </div>
         </div>
 
         {/* Dynamic Content Section based on View Mode */}
-        <div className="mt-2 pt-2 border-t border-gray-100/50">
+        <div className="border-t border-gray-100 pt-3">
           {viewMode === "reservations" ? (
             // Reservations View
             <div>
-              <div className="text-xs text-gray-500 mb-2 flex items-center gap-1.5 font-medium">
-                <svg
-                  className="w-3 h-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-                {t("dashboard.facilityMap.reservations", "Réservations")}
-                <span className="ml-auto text-blue-600 font-semibold text-xs sm:text-sm flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                  {reservationPercentage}%
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-gray-600">
+                  {t("dashboard.facilityMap.reservations", "Réservations")}
+                </span>
+                <span className="text-xs font-semibold text-blue-600">
+                  {Math.round(totalReservedCrates)} {t("dashboard.facilityMap.crates", "caisses")}
                 </span>
               </div>
 
-              {/* Reservation Progress Bar */}
-              <div className="mb-3">
-                <div className="flex justify-between text-xs text-gray-600 mb-1">
-                  <span>{t("dashboard.facilityMap.reserved", "Réservé")}</span>
-                  <span>
-                    {Math.round(totalReservedCrates)}/{room.capacity}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="h-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-1000 ease-out"
-                    style={{
-                      width: `${Math.min(reservationPercentage, 100)}%`,
-                    }}
-                  ></div>
-                </div>
-              </div>
-
               {roomReservations.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="text-xs text-gray-500 font-medium mb-2">
-                    {t(
-                      "dashboard.facilityMap.clientsReserved",
-                      "Clients réservés"
-                    )}{" "}
-                    ({roomReservations.length})
-                  </div>
-                  <div className="flex flex-wrap gap-1 sm:gap-2">
-                    {roomReservations
-                      .slice(0, 3)
-                      .map((reservation: Reservation, index: number) => (
-                        <div
-                          key={reservation.id}
-                          className="bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold border border-blue-200 shadow-sm"
-                          title={`${reservation.clientName} - ${Math.round(
-                            reservation.reservedCrates /
-                              reservation.selectedRooms.length
-                          )} ${t("dashboard.facilityMap.crates")} (${
+                <div className="flex flex-wrap gap-2">
+                  {roomReservations
+                    .slice(0, 3)
+                    .map((reservation: Reservation) => (
+                      <div
+                        key={reservation.id}
+                        className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-xs font-medium"
+                        title={`${reservation.clientName} - ${Math.round(
+                          reservation.reservedCrates /
                             reservation.selectedRooms.length
-                          } ${t("dashboard.facilityMap.roomsMain")})`}
-                        >
-                          {reservation.clientName
-                            ? reservation.clientName.substring(0, 8)
-                            : `C${index + 1}`}
-                        </div>
-                      ))}
-                    {roomReservations.length > 3 && (
-                      <div className="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold border border-gray-200 shadow-sm">
-                        +{roomReservations.length - 3}
+                        )} ${t("dashboard.facilityMap.crates")}`}
+                      >
+                        {reservation.clientName
+                          ? reservation.clientName.substring(0, 12)
+                          : "Client"}
                       </div>
-                    )}
-                  </div>
+                    ))}
+                  {roomReservations.length > 3 && (
+                    <div className="bg-gray-100 text-gray-600 px-3 py-1 rounded-lg text-xs font-medium">
+                      +{roomReservations.length - 3}
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="text-center py-3">
-                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <svg
-                      className="w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="text-xs text-gray-400 italic">
+                <div className="text-center py-2">
+                  <div className="text-xs text-gray-400">
                     {t("dashboard.facilityMap.noReservations", {
                       default: "Aucune réservation",
                     })}
@@ -350,108 +222,52 @@ const RoomCard: React.FC<{
           ) : (
             // Real Entries/Exits View - Only entrée de caisse and client data
             <div>
-              <div className="text-xs sm:text-sm text-gray-500 mb-3 flex items-center gap-2 font-medium">
-                <svg
-                  className="w-3 h-3 sm:w-4 sm:h-4 text-green-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
-                {t("dashboard.facilityMap.appleEntries", "Entrées Pommiers")}
-                <span className="ml-auto text-green-600 font-semibold text-xs flex items-center gap-1">
-                  <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
-                  {roomReceptions.length}
-                  {cumulativeCrates > 0 && (
-                    <span className="ml-1 text-blue-600 text-xs">
-                      ({cumulativeCrates})
-                    </span>
-                  )}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-gray-600">
+                  {t("dashboard.facilityMap.appleEntries", "Entrées Pommiers")}
+                </span>
+                <span className="text-xs font-semibold text-green-600">
+                  {roomReceptions.length} {t("dashboard.facilityMap.entries", "entrées")} ({cumulativeCrates})
                 </span>
               </div>
 
               {roomReceptions.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {roomReceptions.slice(0, 3).map((reception: Reception) => {
-                    // Convert Firestore Timestamp to Date safely
-                    const entryDate =
-                      safeToDate(reception.createdAt) || new Date();
-
-                    // Display client name and product info
-                    const displayName =
-                      reception.clientName || "Client inconnu";
-                    const productInfo = reception.productVariety
-                      ? `${reception.productName} (${reception.productVariety})`
-                      : reception.productName;
+                    const entryDate = safeToDate(reception.createdAt) || new Date();
+                    const displayName = reception.clientName || "Client inconnu";
 
                     return (
                       <div
                         key={reception.id}
-                        className="flex items-center justify-between p-1.5 bg-green-50 rounded-lg border border-green-100"
+                        className="flex items-center justify-between p-2 bg-green-50 rounded-lg"
                       >
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-gray-700 font-medium text-xs truncate">
-                              {displayName}
-                            </div>
-                            <div className="text-gray-500 text-xs truncate">
-                              {reception.totalCrates}{" "}
-                              {t("dashboard.facilityMap.crates")}
-                            </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-gray-700 font-medium text-xs truncate">
+                            {displayName}
+                          </div>
+                          <div className="text-gray-500 text-xs">
+                            {reception.totalCrates} {t("dashboard.facilityMap.crates")}
                           </div>
                         </div>
-                        <div className="text-right flex-shrink-0 ml-2">
-                          <div className="text-gray-500 text-xs font-medium">
-                            {entryDate.toLocaleDateString("fr-FR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                            })}
-                          </div>
-                          <div className="text-gray-400 text-xs">
-                            {entryDate.toLocaleTimeString("fr-FR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </div>
+                        <div className="text-xs text-gray-500">
+                          {entryDate.toLocaleDateString("fr-FR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                          })}
                         </div>
                       </div>
                     );
                   })}
                   {roomReceptions.length > 3 && (
-                    <div className="flex items-center justify-center p-1.5 bg-gray-50 rounded-lg border border-gray-100">
-                      <span className="text-gray-500 text-xs font-medium">
-                        +{roomReceptions.length - 3} autres
-                      </span>
+                    <div className="text-center py-1 text-xs text-gray-500">
+                      +{roomReceptions.length - 3} autres
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="text-center py-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-1">
-                    <svg
-                      className="w-4 h-4 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
-                  </div>
-                  <span className="text-xs text-gray-400">
-                    Aucune réception
-                  </span>
+                <div className="text-center py-2">
+                  <div className="text-xs text-gray-400">Aucune réception</div>
                 </div>
               )}
             </div>
@@ -577,8 +393,8 @@ const FacilityMap: React.FC<FacilityMapProps> = ({
     }
   
     const getCHNumber = (name: string) => {
-      const m = name.trim().match(/^CH\s*(\d+)/i);
-      return m ? parseInt(m[1], 10) : null;
+      const m = name.trim().match(/^(CH|chambre)\s*(\d+)/i);
+      return m ? parseInt(m[2], 10) : null;
     };
   
     const getCouloirNumber = (name: string) => {

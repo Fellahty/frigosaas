@@ -18,7 +18,8 @@
     "refresh": "تحديث",
     "domain": "المنطقة",
     "companyName": "ليزامي",
-    "saving": "جاري الحفظ..."
+    "saving": "جاري الحفظ...",
+    "notAvailable": "غير متوفر"
   },
   "roles": {
     "admin": "مدير",
@@ -55,22 +56,31 @@
     "description": "ستكون هذه الميزة متاحة في التحديث القادم.",
     "kpis": {
       "pending": "الطلبات المعلقة",
+      "pendingRequests": "الطلبات المعلقة",
+      "approved": "موافق عليها",
       "active": "النشطة",
       "totalReserved": "الصناديق المحجوزة",
       "remainingToLoan": "المتبقي للإعارة",
-      "inStock": "في المخزن"
+      "inStock": "في المخزن",
+      "totalRoomCapacity": "السعة الإجمالية للغرف",
+      "rooms": "غرف",
+      "totalEmptyCrates": "إجمالي الصناديق الفارغة",
+      "availableOnSite": "متاحة في الموقع"
     },
     "tabs": {
       "requests": "الطلبات",
+      "approved": "موافق عليها",
       "active": "النشطة",
       "closed": "المغلقة",
-      "refused": "المرفوضة/المنتهية"
+      "refused": "المرفوضة"
     },
     "table": {
       "reference": "المرجع",
       "client": "العميل",
       "season": "الموسم",
       "reserved": "محجوز",
+      "rooms": "الغرف",
+      "capacity": "السعة",
       "loanedEmpty": "معار فارغ",
       "receivedFull": "مستلم ممتلئ",
       "inStock": "في المخزن",
@@ -78,7 +88,6 @@
       "remaining": "متبقي",
       "status": "الحالة",
       "deposit": "الضمان",
-      "capacity": "السعة",
       "actions": "الإجراءات"
     },
     "status": {
@@ -98,9 +107,19 @@
       "close": "إغلاق",
       "duplicate": "نسخ"
     },
+    "assignedRooms": "الغرف المخصصة",
+    "viewDetails": "عرض التفاصيل",
+    "roomsToUse": "الغرف المراد استخدامها",
+    "exceeded": "تجاوز",
+    "selected": "محددة",
+    "maxEmptyCrates": "الحد الأقصى",
+    "cannotExceedReserved": "لا يمكن تجاوز الصناديق المحجوزة",
+    "clientWillUse": "سيستخدم العميل {{empty}} صناديق فارغة لتخزين {{reserved}} صناديق",
+    "crates": "صناديق",
     "createReservation": "إنشاء حجز",
     "createReservationShort": "إنشاء",
     "search": "بحث",
+    "activeSearch": "بحث نشط",
     "searchPlaceholder": "البحث بالعميل، المرجع...",
     "reservedCrates": "الصناديق المحجوزة",
     "actions": "الإجراءات",
@@ -124,6 +143,7 @@
     "save": "حفظ",
     "saving": "جاري الحفظ...",
     "deleteReservation": "حذف الحجز",
+    "deleteConfirmMessage": "هل أنت متأكد من حذف الحجز {{reference}} للعميل {{clientName}}؟ هذا الإجراء لا يمكن التراجع عنه.",
     "confirmDelete": "حذف",
     "cancelDelete": "إلغاء",
     "myReservations": "حجوزاتي",
@@ -152,6 +172,7 @@
     "detail": {
       "title": "تفاصيل الحجز",
       "information": "المعلومات",
+      "crates": "صندوق",
       "counters": "العدادات",
       "reference": "المرجع",
       "client": "العميل",
@@ -562,6 +583,21 @@
   "sensors": {
     "title": "المستشعرات",
     "subtitle": "مراقبة الغرف وأجهزة الاستشعار الذكية",
+    "realTimeMonitoring": "مراقبة إنترنت الأشياء في الوقت الفعلي",
+    "activeRooms": "غرف نشطة",
+    "rooms": "غرف",
+    "group": "مجموعة",
+    "liveMonitoring": "مراقبة مباشرة",
+    "total": "الإجمالي",
+    "ok": "جيد",
+    "alerts": "التنبيهات",
+    "legend": "وسيلة الإيضاح",
+    "doorOpen": "الباب مفتوح",
+    "door": "الباب",
+    "doorClosed": "م",
+    "doorOpened": "م",
+    "temp": "حرارة",
+    "hum": "رطوبة",
     "room": "الغرفة",
     "capacity": "السعة",
     "sensor": "المستشعر",
@@ -592,6 +628,24 @@
     "view3D": "عرض ثلاثي الأبعاد",
     "viewGrid": "عرض شبكي",
     "warehouse3D": "مستودع ثلاثي الأبعاد",
+    "warehouseTitle": "مستودع التبريد",
+    "thermalView": "رؤية حرارية",
+    "normalView": "رؤية عادية",
+    "thermal": {
+      "title": "حراري",
+      "scale": "المقياس",
+      "minTemp": "0°",
+      "maxTemp": "15°",
+      "ranges": {
+        "freezing": "<0°",
+        "veryCold": "0-3°",
+        "cold": "3-6°",
+        "cool": "6-9°",
+        "normal": "9-12°",
+        "warm": "12-15°",
+        "hot": ">15°"
+      }
+    },
     "tabs": {
       "all": "الكل"
     }

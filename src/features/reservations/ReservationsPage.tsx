@@ -50,13 +50,6 @@ const STATUS_COLORS = {
   REFUSED: 'bg-red-100 text-red-800',
 };
 
-const STATUS_LABELS = {
-  REQUESTED: 'En attente',
-  APPROVED: 'Approuvée',
-  CLOSED: 'Clôturée',
-  REFUSED: 'Refusée',
-};
-
 export const ReservationsPage: React.FC = () => {
   const { t } = useTranslation();
   const tenantId = useTenantId();
@@ -460,11 +453,20 @@ export const ReservationsPage: React.FC = () => {
     console.error('Settings error:', settingsError);
   }
 
-  const getStatusBadge = (status: string) => (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status as keyof typeof STATUS_COLORS]}`}>
-      {STATUS_LABELS[status as keyof typeof STATUS_LABELS]}
-    </span>
-  );
+  const getStatusBadge = (status: string) => {
+    const statusLabels: Record<string, string> = {
+      REQUESTED: t('reservations.status.requested', 'En attente'),
+      APPROVED: t('reservations.status.approved', 'Approuvée'),
+      CLOSED: t('reservations.status.closed', 'Clôturée'),
+      REFUSED: t('reservations.status.refused', 'Refusée'),
+    };
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status as keyof typeof STATUS_COLORS]}`}>
+        {statusLabels[status] || status}
+      </span>
+    );
+  };
 
   const getCapacityIcon = (ok: boolean) => (
     <span className="text-lg">
@@ -543,7 +545,7 @@ export const ReservationsPage: React.FC = () => {
               <span className="text-sm font-medium">{t('reservations.search', 'Rechercher')}</span>
             )}
             {searchTerm && (
-              <span className="text-sm font-medium">Recherche active</span>
+              <span className="text-sm font-medium">{t('reservations.activeSearch', 'Recherche active')}</span>
             )}
           </button>
 
@@ -586,13 +588,13 @@ export const ReservationsPage: React.FC = () => {
         <Card className="p-3 sm:p-4">
           <div className="text-center">
             <div className="text-xl sm:text-2xl font-bold text-blue-600">{kpis.pending}</div>
-            <div className="text-xs sm:text-sm text-gray-600">Demandes en attente</div>
+            <div className="text-xs sm:text-sm text-gray-600">{t('reservations.kpis.pendingRequests', 'Demandes en attente')}</div>
           </div>
         </Card>
         <Card className="p-3 sm:p-4">
           <div className="text-center">
             <div className="text-xl sm:text-2xl font-bold text-green-600">{kpis.approved}</div>
-            <div className="text-xs sm:text-sm text-gray-600">Approuvées</div>
+            <div className="text-xs sm:text-sm text-gray-600">{t('reservations.kpis.approved', 'Approuvées')}</div>
           </div>
         </Card>
         <Card className="p-3 sm:p-4">
@@ -604,15 +606,15 @@ export const ReservationsPage: React.FC = () => {
         <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200 p-3 sm:p-4">
           <div className="text-center">
             <div className="text-lg sm:text-2xl font-bold text-teal-600">{kpis.totalRoomsCrates.toLocaleString()}</div>
-            <div className="text-xs sm:text-sm text-teal-700 font-medium">Capacité totale salles</div>
-            <div className="text-xs text-teal-600 mt-1">{kpis.numberOfRooms} salle{kpis.numberOfRooms > 1 ? 's' : ''}</div>
+            <div className="text-xs sm:text-sm text-teal-700 font-medium">{t('reservations.kpis.totalRoomCapacity', 'Capacité totale salles')}</div>
+            <div className="text-xs text-teal-600 mt-1">{kpis.numberOfRooms} {t('reservations.kpis.rooms', kpis.numberOfRooms > 1 ? 'salles' : 'salle')}</div>
           </div>
         </Card>
         <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200 p-3 sm:p-4 col-span-2 sm:col-span-1">
           <div className="text-center">
             <div className="text-lg sm:text-2xl font-bold text-indigo-600">{kpis.totalEmptyCrates.toLocaleString()}</div>
-            <div className="text-xs sm:text-sm text-indigo-700 font-medium">Total caisses vides</div>
-            <div className="text-xs text-indigo-600 mt-1">Disponibles sur le site</div>
+            <div className="text-xs sm:text-sm text-indigo-700 font-medium">{t('reservations.kpis.totalEmptyCrates', 'Total caisses vides')}</div>
+            <div className="text-xs text-indigo-600 mt-1">{t('reservations.kpis.availableOnSite', 'Disponibles sur le site')}</div>
           </div>
         </Card>
       </div>
@@ -621,10 +623,10 @@ export const ReservationsPage: React.FC = () => {
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-2 sm:space-x-8 overflow-x-auto scrollbar-hide">
           {[
-            { key: 'approved', label: 'Approuvées', count: reservations.filter(r => r.status === 'APPROVED').length },
-            { key: 'requests', label: 'Demandes', count: reservations.filter(r => r.status === 'REQUESTED').length },
-            { key: 'closed', label: 'Clôturées', count: reservations.filter(r => r.status === 'CLOSED').length },
-            { key: 'refused', label: 'Refusées', count: reservations.filter(r => r.status === 'REFUSED').length },
+            { key: 'approved', label: t('reservations.tabs.approved', 'Approuvées'), count: reservations.filter(r => r.status === 'APPROVED').length },
+            { key: 'requests', label: t('reservations.tabs.requests', 'Demandes'), count: reservations.filter(r => r.status === 'REQUESTED').length },
+            { key: 'closed', label: t('reservations.tabs.closed', 'Clôturées'), count: reservations.filter(r => r.status === 'CLOSED').length },
+            { key: 'refused', label: t('reservations.tabs.refused', 'Refusées'), count: reservations.filter(r => r.status === 'REFUSED').length },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -650,11 +652,11 @@ export const ReservationsPage: React.FC = () => {
             <TableRow>
               <TableHeader>{t('reservations.actions', 'Actions')}</TableHeader>
               <TableHeader>{t('reservations.client', 'Client')}</TableHeader>
-              <TableHeader>Réservé</TableHeader>
+              <TableHeader>{t('reservations.table.reserved', 'Réservé')}</TableHeader>
               <TableHeader>{t('reservations.emptyCrates', 'Caisses vides')}</TableHeader>
-              <TableHeader>Salles</TableHeader>
+              <TableHeader>{t('reservations.table.rooms', 'Salles')}</TableHeader>
               <TableHeader>{t('reservations.status', 'Statut')}</TableHeader>
-              <TableHeader>Capacité</TableHeader>
+              <TableHeader>{t('reservations.table.capacity', 'Capacité')}</TableHeader>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -686,7 +688,7 @@ export const ReservationsPage: React.FC = () => {
                         }}
                         className="text-blue-600 hover:text-blue-800 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
                       >
-                        👁️ Voir
+                        👁️ {t('reservations.actions.view', 'Voir')}
                       </button>
                       {reservation.status === 'REQUESTED' && (
                         <div className="flex flex-col space-y-1">
@@ -708,7 +710,7 @@ export const ReservationsPage: React.FC = () => {
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
-                                <span>Approuver</span>
+                                <span>{t('reservations.actions.approve', 'Approuver')}</span>
                               </>
                             )}
                           </button>
@@ -730,7 +732,7 @@ export const ReservationsPage: React.FC = () => {
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
-                                <span>Refuser</span>
+                                <span>{t('reservations.actions.refuse', 'Refuser')}</span>
                               </>
                             )}
                           </button>
@@ -754,7 +756,7 @@ export const ReservationsPage: React.FC = () => {
                             </span>
                           ))
                         ) : (
-                          <span className="text-gray-400 text-sm">Aucune salle</span>
+                          <span className="text-gray-400 text-sm">{t('reservations.noRooms', 'Aucune salle')}</span>
                         )}
                       </div>
                       {reservation.totalRoomCapacity && reservation.totalRoomCapacity > 0 && (
@@ -762,7 +764,7 @@ export const ReservationsPage: React.FC = () => {
                           {reservation.totalRoomCapacity.toLocaleString()}
                           {isOverCapacity && (
                             <span className="ml-2 text-xs text-red-500">
-                              ⚠️ Dépassement
+                              ⚠️ {t('reservations.exceeded', 'Dépassement')}
                             </span>
                           )}
                         </div>
@@ -789,7 +791,7 @@ export const ReservationsPage: React.FC = () => {
           </Card>
         ) : filteredReservations.length === 0 ? (
           <Card className="p-8 text-center text-gray-500">
-            Aucune réservation trouvée
+            {t('reservations.noReservationsFound', 'Aucune réservation trouvée')}
           </Card>
         ) : (
           filteredReservations.map((reservation) => {
@@ -812,17 +814,17 @@ export const ReservationsPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-blue-50 p-3 rounded-lg">
                       <div className="text-2xl font-bold text-blue-600">{reservation.reservedCrates}</div>
-                      <div className="text-sm text-blue-700">Caisses réservées</div>
+                      <div className="text-sm text-blue-700">{t('reservations.reservedCrates', 'Caisses réservées')}</div>
                     </div>
                     <div className="bg-orange-50 p-3 rounded-lg">
                       <div className="text-2xl font-bold text-orange-600">{reservation.emptyCratesNeeded || 0}</div>
-                      <div className="text-sm text-orange-700">Caisses vides</div>
+                      <div className="text-sm text-orange-700">{t('reservations.emptyCrates', 'Caisses vides')}</div>
                     </div>
                   </div>
 
                   {/* Rooms */}
                   <div>
-                    <div className="text-sm font-medium text-gray-700 mb-2">Salles assignées</div>
+                    <div className="text-sm font-medium text-gray-700 mb-2">{t('reservations.assignedRooms', 'Salles assignées')}</div>
                     <div className="flex flex-wrap gap-1">
                       {reservation.roomNames && reservation.roomNames.length > 0 ? (
                         reservation.roomNames.map((roomName, index) => (
@@ -839,10 +841,10 @@ export const ReservationsPage: React.FC = () => {
                     </div>
                     {reservation.totalRoomCapacity && reservation.totalRoomCapacity > 0 && (
                       <div className={`text-sm font-semibold mt-2 ${isOverCapacity ? 'text-red-600' : 'text-gray-900'}`}>
-                        Capacité: {reservation.totalRoomCapacity.toLocaleString()}
+                        {t('reservations.table.capacity', 'Capacité')}: {reservation.totalRoomCapacity.toLocaleString()}
                         {isOverCapacity && (
                           <span className="ml-2 text-xs text-red-500">
-                            ⚠️ Dépassement
+                            ⚠️ {t('reservations.exceeded', 'Dépassement')}
                           </span>
                         )}
                       </div>
@@ -862,7 +864,7 @@ export const ReservationsPage: React.FC = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
-                      <span>Voir les détails</span>
+                      <span>{t('reservations.viewDetails', 'Voir les détails')}</span>
                     </button>
                     
                     {reservation.status === 'REQUESTED' && (
@@ -965,7 +967,7 @@ export const ReservationsPage: React.FC = () => {
                   onChange={(e) => setForm(f => ({ ...f, clientId: e.target.value }))}
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-gray-50 focus:bg-white"
                 >
-                  <option value="">Sélectionner un client</option>
+                  <option value="">{t('reservations.form.selectClient', 'Sélectionner un client')}</option>
                   {clients?.map(client => (
                     <option key={client.id} value={client.id}>{client.name}</option>
                   ))}
@@ -1028,7 +1030,7 @@ export const ReservationsPage: React.FC = () => {
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
                       <span className="text-gray-600">
-                        Maximum: {form.reservedCrates} (ne peut pas dépasser les caisses à rentrer)
+                        {t('reservations.maxEmptyCrates', 'Maximum')}: {form.reservedCrates} ({t('reservations.cannotExceedReserved', 'ne peut pas dépasser les caisses à rentrer')})
                       </span>
                     </div>
                   </div>
@@ -1042,7 +1044,7 @@ export const ReservationsPage: React.FC = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <span>
-                        Le client va utiliser {form.emptyCratesNeeded} caisses vides pour stocker ses {form.reservedCrates} caisses à rentrer
+                        {t('reservations.clientWillUse', 'Le client va utiliser {{empty}} caisses vides pour stocker ses {{reserved}} caisses à rentrer', { empty: form.emptyCratesNeeded, reserved: form.reservedCrates })}
                       </span>
                     </div>
                   </div>
@@ -1055,8 +1057,8 @@ export const ReservationsPage: React.FC = () => {
                   <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
-                  <span>Salles à utiliser</span>
-                  <span className="text-xs text-gray-500">({form.selectedRooms.length} sélectionnée{form.selectedRooms.length > 1 ? 's' : ''})</span>
+                  <span>{t('reservations.roomsToUse', 'Salles à utiliser')}</span>
+                  <span className="text-xs text-gray-500">({form.selectedRooms.length} {t('reservations.selected', form.selectedRooms.length > 1 ? 'sélectionnées' : 'sélectionnée')})</span>
                 </label>
                 
                 {/* Selected Rooms Summary */}
@@ -1117,7 +1119,7 @@ export const ReservationsPage: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-gray-900 truncate">{room.room || room.name || `Room ${room.id}`}</div>
                         <div className="text-xs text-gray-500">
-                          {room.capacityCrates || room.capacity || 0} caisses
+                          {room.capacityCrates || room.capacity || 0} {t('reservations.crates', 'caisses')}
                         </div>
                       </div>
                     </label>
@@ -1172,7 +1174,7 @@ export const ReservationsPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Détail de la réservation</h3>
+              <h3 className="text-lg font-semibold">{t('reservations.detail.title', 'Détail de la réservation')}</h3>
               <button
                 onClick={() => setIsDetailOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -1184,23 +1186,23 @@ export const ReservationsPage: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
-                <h4 className="font-medium mb-2">Informations</h4>
+                <h4 className="font-medium mb-2">{t('reservations.detail.information', 'Informations')}</h4>
                 <div className="space-y-2 text-sm">
-                  <div><strong>Référence:</strong> {selectedReservation.reference || 'N/A'}</div>
-                  <div><strong>Client:</strong> {selectedReservation.clientName}</div>
-                  <div><strong>Statut:</strong> {getStatusBadge(selectedReservation.status)}</div>
+                  <div><strong>{t('reservations.reference', 'Référence')}:</strong> {selectedReservation.reference || t('common.notAvailable', 'N/A')}</div>
+                  <div><strong>{t('reservations.client', 'Client')}:</strong> {selectedReservation.clientName}</div>
+                  <div><strong>{t('reservations.status', 'Statut')}:</strong> {getStatusBadge(selectedReservation.status)}</div>
                 </div>
               </div>
               <div>
-                <h4 className="font-medium mb-2">Caisse</h4>
+                <h4 className="font-medium mb-2">{t('reservations.detail.crates', 'Caisse')}</h4>
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div className="bg-red-50 p-3 rounded">
                     <div className="text-xl sm:text-2xl font-bold text-red-600">{selectedReservation.reservedCrates}</div>
-                    <div className="text-xs text-gray-600">Nombre de caisses à rentrer</div>
+                    <div className="text-xs text-gray-600">{t('reservations.numberOfCratesToStore', 'Nombre de caisses à rentrer')}</div>
                   </div>
                   <div className="bg-green-50 p-3 rounded">
                     <div className="text-xl sm:text-2xl font-bold text-green-600">{selectedReservation.reservedCrates}</div>
-                    <div className="text-xs text-gray-600">Caisses vides nécessaires</div>
+                    <div className="text-xs text-gray-600">{t('reservations.emptyCratesNeeded', 'Caisses vides nécessaires')}</div>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-center">
@@ -1234,7 +1236,7 @@ export const ReservationsPage: React.FC = () => {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                    <span>Supprimer</span>
+                    <span>{t('common.delete', 'Supprimer')}</span>
                   </>
                 )}
               </button>
@@ -1243,13 +1245,13 @@ export const ReservationsPage: React.FC = () => {
                   onClick={handleEditReservation}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                 >
-                  Modifier
+                  {t('common.edit', 'Modifier')}
                 </button>
                 <button
                   onClick={() => setIsDetailOpen(false)}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800"
                 >
-                  Fermer
+                  {t('reservations.detail.close', 'Fermer')}
                 </button>
               </div>
             </div>
@@ -1262,7 +1264,7 @@ export const ReservationsPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Modifier la réservation</h3>
+              <h3 className="text-lg font-semibold">{t('reservations.editReservation', 'Modifier la réservation')}</h3>
               <button
                 onClick={handleCancelEdit}
                 className="text-gray-400 hover:text-gray-600"
@@ -1290,7 +1292,7 @@ export const ReservationsPage: React.FC = () => {
                   })) || []}
                   value={editForm.clientId}
                   onChange={(value) => setEditForm(f => ({ ...f, clientId: value }))}
-                  placeholder="Sélectionner un client"
+                  placeholder={t('reservations.form.selectClient', 'Sélectionner un client')}
                   className="w-full"
                 />
               </div>
@@ -1301,7 +1303,7 @@ export const ReservationsPage: React.FC = () => {
                   <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
-                  <span>Nombre de caisses à rentrer</span>
+                  <span>{t('reservations.numberOfCratesToStore', 'Nombre de caisses à rentrer')}</span>
                 </label>
                 <input
                   type="number"
@@ -1319,7 +1321,7 @@ export const ReservationsPage: React.FC = () => {
                   <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
-                  <span>Caisses vides nécessaires</span>
+                  <span>{t('reservations.emptyCratesNeeded', 'Caisses vides nécessaires')}</span>
                 </label>
                 <input
                   type="number"
@@ -1337,8 +1339,8 @@ export const ReservationsPage: React.FC = () => {
                   <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
-                  <span>Salles à utiliser</span>
-                  <span className="text-xs text-gray-500">({editForm.selectedRooms.length} sélectionnée{editForm.selectedRooms.length > 1 ? 's' : ''})</span>
+                  <span>{t('reservations.roomsToUse', 'Salles à utiliser')}</span>
+                  <span className="text-xs text-gray-500">({editForm.selectedRooms.length} {t('reservations.selected', editForm.selectedRooms.length > 1 ? 'sélectionnées' : 'sélectionnée')})</span>
                 </label>
                 
                 {/* Selected Rooms Summary */}
@@ -1399,7 +1401,7 @@ export const ReservationsPage: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-gray-900 truncate">{room.room || room.name || `Room ${room.id}`}</div>
                         <div className="text-xs text-gray-500">
-                          {room.capacityCrates || room.capacity || 0} caisses
+                          {room.capacityCrates || room.capacity || 0} {t('reservations.crates', 'caisses')}
                         </div>
                       </div>
                     </label>
@@ -1420,7 +1422,7 @@ export const ReservationsPage: React.FC = () => {
                 disabled={updateReservation.isPending}
                 className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
               >
-                {updateReservation.isPending ? 'Enregistrement...' : 'Enregistrer'}
+                {updateReservation.isPending ? t('reservations.saving', 'Enregistrement...') : t('reservations.save', 'Enregistrer')}
               </button>
               <button
                 onClick={handleCancelEdit}
@@ -1438,10 +1440,10 @@ export const ReservationsPage: React.FC = () => {
         isOpen={isDeleteModalOpen}
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
-        title="Supprimer la réservation"
-        message={`Êtes-vous sûr de vouloir supprimer la réservation ${reservationToDelete?.reference || ''} pour le client ${reservationToDelete?.clientName || ''} ? Cette action est irréversible.`}
-        confirmText="Supprimer"
-        cancelText="Annuler"
+        title={t('reservations.deleteReservation', 'Supprimer la réservation')}
+        message={t('reservations.deleteConfirmMessage', 'Êtes-vous sûr de vouloir supprimer la réservation {{reference}} pour le client {{clientName}} ? Cette action est irréversible.', { reference: reservationToDelete?.reference || '', clientName: reservationToDelete?.clientName || '' })}
+        confirmText={t('reservations.confirmDelete', 'Supprimer')}
+        cancelText={t('common.cancel', 'Annuler')}
         type="danger"
         isLoading={deleteReservation.isPending}
       />

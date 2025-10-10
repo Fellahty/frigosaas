@@ -2,6 +2,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';
 import * as THREE from 'three';
+import { useTranslation } from 'react-i18next';
 
 interface Sensor {
   id: string;
@@ -478,6 +479,7 @@ const ScanningRadar: React.FC = () => {
 
 // Main warehouse scene
 const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, onRoomClick }) => {
+  const { t } = useTranslation();
   const [internalSelectedRoom, setInternalSelectedRoom] = useState<Room | null>(selectedRoom || null);
   const [showThermalView, setShowThermalView] = useState(false);
 
@@ -492,13 +494,17 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
     const aisleWidth = 6; // Wider central corridor
     const roomSpacing = roomDepth + 1.5; // More space between rooms
     
+    // Split rooms: first half on left (1-6), second half on right (7+)
+    const halfCount = Math.ceil(rooms.length / 2);
+    
     rooms.forEach((room, index) => {
-      // Alternate: left side, right side
-      const isLeftSide = index % 2 === 0;
+      // First half of rooms go to left side (1-6), second half to right side (7+)
+      const isLeftSide = index < halfCount;
       
-      // Position along the corridor (more compact)
-      const roomIndexOnSide = Math.floor(index / 2);
-      const z = (roomIndexOnSide * roomSpacing) - ((Math.ceil(rooms.length / 2)) * roomSpacing / 2);
+      // Position along the corridor (starting from door at front)
+      const roomIndexOnSide = isLeftSide ? index : (index - halfCount);
+      // Start from front (negative z) and go back: Chambre 1 at front
+      const z = (roomIndexOnSide * roomSpacing) - (halfCount * roomSpacing / 2) + (roomSpacing / 2);
       
       // Position across the corridor
       const x = isLeftSide 
@@ -838,7 +844,7 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
             textShadow: '0 0 10px #7dd3fc, 1px 1px 3px rgba(0,0,0,0.3)',
             letterSpacing: '3px'
           }}>
-            ENTREPÔT FRIGORIFIQUE
+            {t('sensors.warehouseTitle')}
           </div>
         </Html>
 
@@ -863,7 +869,7 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
       <div className="absolute bottom-3 left-3 md:bottom-6 md:left-6 bg-white/95 backdrop-blur-md rounded-xl p-3 md:p-4 shadow-2xl border border-cyan-200 max-w-[180px] md:max-w-xs">
         <div className="text-xs md:text-sm font-bold text-cyan-600 mb-2 md:mb-3 flex items-center gap-1 md:gap-2">
           <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
-          <span className="hidden md:inline">Légende</span>
+          <span className="hidden md:inline">{t('sensors.legend')}</span>
           <span className="md:hidden">Temp</span>
         </div>
         <div className="space-y-1 md:space-y-1.5">
@@ -885,7 +891,7 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
           </div>
           <div className="flex items-center gap-1.5 md:gap-2">
             <div className="w-4 h-4 md:w-5 md:h-5 rounded-sm shadow-lg flex-shrink-0" style={{ backgroundColor: '#fda4af', boxShadow: '0 0 15px #fda4af' }}></div>
-            <span className="text-[10px] md:text-xs font-bold text-rose-700">🚨 Porte ouverte</span>
+            <span className="text-[10px] md:text-xs font-bold text-rose-700">🚨 {t('sensors.doorOpen')}</span>
           </div>
         </div>
       </div>
@@ -894,13 +900,13 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
       <div className="absolute top-3 left-3 md:top-6 md:left-6 bg-white/95 backdrop-blur-md rounded-xl p-3 md:p-4 shadow-2xl border border-cyan-200">
         <div className="text-xs md:text-sm font-bold text-cyan-600 mb-1.5 md:mb-2 flex items-center gap-1">
           <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
-          Monitoring Live
+          {t('sensors.liveMonitoring')}
         </div>
         
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-lg p-2 border border-cyan-200">
-            <div className="text-[10px] text-slate-600">Total</div>
+            <div className="text-[10px] text-slate-600">{t('sensors.total')}</div>
             <div className="text-lg font-bold text-cyan-600">{rooms.length}</div>
           </div>
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-2 border border-blue-200">
@@ -910,13 +916,13 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
             </div>
           </div>
           <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-2 border border-emerald-200">
-            <div className="text-[10px] text-slate-600">OK</div>
+            <div className="text-[10px] text-slate-600">{t('sensors.ok')}</div>
             <div className="text-lg font-bold text-emerald-600">
               {rooms.filter((r) => r.sensors?.[0]?.additionalData?.magnet !== 0 && (r.sensors?.[0]?.additionalData?.temperature || 0) < 10).length}
             </div>
           </div>
           <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-lg p-2 border border-rose-200">
-            <div className="text-[10px] text-slate-600">Alertes</div>
+            <div className="text-[10px] text-slate-600">{t('sensors.alerts')}</div>
             <div className="text-lg font-bold text-rose-600">
               {rooms.filter((r) => r.sensors?.[0]?.additionalData?.magnet === 0).length}
             </div>
@@ -932,56 +938,55 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
               : 'bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-700 hover:from-cyan-200 hover:to-blue-200'
           }`}
         >
-          {showThermalView ? '🌡️ Vision Thermique ON' : '🔍 Vision Normale'}
+          {showThermalView ? `🌡️ ${t('sensors.thermalView')} ON` : `🔍 ${t('sensors.normalView')}`}
         </button>
       </div>
 
       {/* Thermal View Indicator & Scale */}
       {showThermalView && (
-        <div className="absolute top-3 right-3 md:top-6 md:right-6 bg-gradient-to-br from-gray-900/98 to-black/98 backdrop-blur-md rounded-xl p-4 shadow-2xl border-2 border-orange-400">
-          <div className="text-sm font-bold text-white flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
-            MODE THERMIQUE
+        <div className="absolute top-3 right-3 md:top-6 md:right-6 bg-gradient-to-br from-gray-900/98 to-black/98 backdrop-blur-md rounded-xl p-3 shadow-2xl border-2 border-orange-500">
+          <div className="text-xs font-bold flex items-center gap-1.5 mb-2" style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></div>
+            {t('sensors.thermal.title')}
           </div>
           
           {/* Thermal gradient scale */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-3 rounded" style={{ background: 'linear-gradient(to right, #8b5cf6, #3b82f6, #06b6d4, #10b981, #eab308, #f97316, #ef4444)' }}></div>
-              <span className="text-xs text-white">Échelle</span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-full h-2.5 rounded-sm shadow-lg" style={{ background: 'linear-gradient(to right, #a78bfa, #60a5fa, #22d3ee, #34d399, #fbbf24, #fb923c, #f87171)' }}></div>
             </div>
-            <div className="flex justify-between text-[10px] text-gray-300">
-              <span>❄️ 0°C</span>
-              <span>🔥 15°C</span>
+            <div className="flex justify-between text-[9px] font-semibold mb-1.5" style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+              <span>❄️ {t('sensors.thermal.minTemp')}</span>
+              <span>🔥 {t('sensors.thermal.maxTemp')}</span>
             </div>
-            <div className="space-y-1 text-[10px] mt-2">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#8b5cf6' }}></div>
-                <span className="text-violet-300">Glacial &lt; 0°</span>
+            <div className="space-y-0.5 text-[10px] font-medium">
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-2.5 rounded-sm shadow-md border border-violet-400/30" style={{ backgroundColor: '#a78bfa' }}></div>
+                <span style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{t('sensors.thermal.ranges.freezing')}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#3b82f6' }}></div>
-                <span className="text-blue-300">Très froid 0-3°</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-2.5 rounded-sm shadow-md border border-blue-400/30" style={{ backgroundColor: '#60a5fa' }}></div>
+                <span style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{t('sensors.thermal.ranges.veryCold')}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#06b6d4' }}></div>
-                <span className="text-cyan-300">Froid 3-6°</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-2.5 rounded-sm shadow-md border border-cyan-400/30" style={{ backgroundColor: '#22d3ee' }}></div>
+                <span style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{t('sensors.thermal.ranges.cold')}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#10b981' }}></div>
-                <span className="text-emerald-300">Frais 6-9°</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-2.5 rounded-sm shadow-md border border-emerald-400/30" style={{ backgroundColor: '#34d399' }}></div>
+                <span style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{t('sensors.thermal.ranges.cool')}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#eab308' }}></div>
-                <span className="text-yellow-300">Normal 9-12°</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-2.5 rounded-sm shadow-md border border-yellow-400/30" style={{ backgroundColor: '#fbbf24' }}></div>
+                <span style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{t('sensors.thermal.ranges.normal')}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#f97316' }}></div>
-                <span className="text-orange-300">Chaud 12-15°</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-2.5 rounded-sm shadow-md border border-orange-400/30" style={{ backgroundColor: '#fb923c' }}></div>
+                <span style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{t('sensors.thermal.ranges.warm')}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#ef4444' }}></div>
-                <span className="text-red-300">Très chaud &gt; 15°</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-2.5 rounded-sm shadow-md border border-red-400/30" style={{ backgroundColor: '#f87171' }}></div>
+                <span style={{ color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{t('sensors.thermal.ranges.hot')}</span>
               </div>
             </div>
           </div>
