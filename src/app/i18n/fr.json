@@ -586,7 +586,13 @@
     "recentReadings": "Lectures récentes",
     "time": "Heure",
     "value": "Valeur",
-    "statusOk": "OK"
+    "statusOk": "OK",
+    "view3D": "Vue 3D",
+    "viewGrid": "Vue Grille",
+    "warehouse3D": "Entrepôt 3D",
+    "tabs": {
+      "all": "Toutes"
+    }
   },
   "usersRoles": {
     "title": "Utilisateurs & Rôles",

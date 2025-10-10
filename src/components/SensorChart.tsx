@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { mqttLiveService, SensorData as MQTTSensorData } from '../lib/mqtt-live';
 import jsPDF from 'jspdf';
+import * as SunCalc from 'suncalc';
 
 // Utility function to calculate time ago
 const getTimeAgo = (timestamp: Date): string => {
@@ -842,6 +843,116 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
     return markLines;
   };
 
+  // Helper function to create day/night visualization using SunCalc
+  const createDayNightMarkAreas = (chartData: SensorData[]) => {
+    if (!chartData || chartData.length === 0) return [];
+    
+    const markAreas: any[] = [];
+    const startTime = chartData[0].timestamp;
+    const endTime = chartData[chartData.length - 1].timestamp;
+    
+    // Only show day/night for ranges > 6h
+    const timeRange = endTime - startTime;
+    const hours = timeRange / (1000 * 60 * 60);
+    if (hours < 6) return [];
+    
+    // Midelt, Morocco coordinates
+    const MIDELT_LAT = 32.6852;
+    const MIDELT_LNG = -4.7371;
+    
+    // Start from the beginning of the first day
+    let currentTime = new Date(startTime);
+    currentTime.setHours(0, 0, 0, 0);
+    
+    while (currentTime.getTime() < endTime) {
+      const times = SunCalc.getTimes(currentTime, MIDELT_LAT, MIDELT_LNG);
+      const sunset = times.sunset;
+      
+      // Calculate next day's sunrise
+      const nextDay = new Date(currentTime);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextTimes = SunCalc.getTimes(nextDay, MIDELT_LAT, MIDELT_LNG);
+      const nextSunrise = nextTimes.sunrise;
+      
+      // Add night period (sunset to next sunrise)
+      if (sunset.getTime() >= startTime && sunset.getTime() <= endTime) {
+        markAreas.push({
+          xAxis: sunset.getTime(),
+          xAxisEnd: Math.min(nextSunrise.getTime(), endTime)
+        });
+      }
+      
+      currentTime = nextDay;
+    }
+    
+    console.log(`🌞🌙 [SensorChart] Created ${markAreas.length} day/night periods for Midelt, Morocco`);
+    
+    return markAreas;
+  };
+
+  // Helper function to create day/night transition markLines (sunrise/sunset) using SunCalc
+  const createDayNightMarkLines = (chartData: SensorData[]) => {
+    if (!chartData || chartData.length === 0) return [];
+    
+    const startTime = chartData[0].timestamp;
+    const endTime = chartData[chartData.length - 1].timestamp;
+    
+    // Only show for ranges > 6h
+    const timeRange = endTime - startTime;
+    const hours = timeRange / (1000 * 60 * 60);
+    if (hours < 6) return [];
+    
+    // Midelt, Morocco coordinates
+    const MIDELT_LAT = 32.6852;
+    const MIDELT_LNG = -4.7371;
+    
+    const markLines: any[] = [];
+    let currentTime = new Date(startTime);
+    currentTime.setHours(0, 0, 0, 0);
+    
+    while (currentTime.getTime() < endTime) {
+      const times = SunCalc.getTimes(currentTime, MIDELT_LAT, MIDELT_LNG);
+      const sunrise = times.sunrise;
+      const sunset = times.sunset;
+      
+      // Add sunrise line
+      if (sunrise.getTime() >= startTime && sunrise.getTime() <= endTime) {
+        markLines.push({
+          xAxis: sunrise.getTime(),
+          lineStyle: {
+            color: 'rgba(251, 191, 36, 0.25)', // Amber for sunrise
+            width: 1,
+            type: 'dotted'
+          },
+          label: {
+            show: false
+          }
+        });
+      }
+      
+      // Add sunset line
+      if (sunset.getTime() >= startTime && sunset.getTime() <= endTime) {
+        markLines.push({
+          xAxis: sunset.getTime(),
+          lineStyle: {
+            color: 'rgba(99, 102, 241, 0.25)', // Indigo for sunset
+            width: 1,
+            type: 'dotted'
+          },
+          label: {
+            show: false
+          }
+        });
+      }
+      
+      currentTime.setDate(currentTime.getDate() + 1);
+    }
+    
+    console.log(`🌅🌆 [SensorChart] Added ${markLines.length} sunrise/sunset transitions for Midelt`);
+    
+    return markLines;
+  };
+
   // Create comparison chart option
   const createComparisonChartOption = (dataKey: 'temperature' | 'humidity') => {
     const series: any[] = [];
@@ -1418,6 +1529,32 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       }
     ],
     series: [
+      // Day/Night background layer (first layer, behind everything)
+      {
+        name: 'Nuit',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: [], // Empty data, just for markArea
+        markArea: {
+          silent: true,
+          itemStyle: {
+            color: 'rgba(30, 41, 59, 0.04)', // Very subtle dark blue for night
+            borderWidth: 0
+          },
+          label: {
+            show: false
+          },
+          data: createDayNightMarkAreas(processedData).map(area => [
+            { 
+              xAxis: area.xAxis,
+              name: 'Nuit'
+            },
+            { xAxis: area.xAxisEnd }
+          ])
+        },
+        z: -1 // Behind everything
+      },
       {
         name: 'Température',
         type: 'line',
@@ -1460,8 +1597,12 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         markLine: {
           silent: true,
           symbol: 'none',
-          data: createDoorMarkLines(processedData)
-        }
+          data: [
+            ...createDoorMarkLines(processedData),
+            ...createDayNightMarkLines(processedData)
+          ]
+        },
+        z: 2
       },
       {
         name: 'État Porte',
@@ -1783,6 +1924,32 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       }
     ],
     series: [
+      // Day/Night background layer (first layer, behind everything)
+      {
+        name: 'Nuit',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: [], // Empty data, just for markArea
+        markArea: {
+          silent: true,
+          itemStyle: {
+            color: 'rgba(30, 41, 59, 0.04)', // Very subtle dark blue for night
+            borderWidth: 0
+          },
+          label: {
+            show: false
+          },
+          data: createDayNightMarkAreas(processedData).map(area => [
+            { 
+              xAxis: area.xAxis,
+              name: 'Nuit'
+            },
+            { xAxis: area.xAxisEnd }
+          ])
+        },
+        z: -1 // Behind everything
+      },
       {
         name: 'Humidité',
         type: 'line',
@@ -1825,8 +1992,12 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         markLine: {
           silent: true,
           symbol: 'none',
-          data: createDoorMarkLines(processedData)
-        }
+          data: [
+            ...createDoorMarkLines(processedData),
+            ...createDayNightMarkLines(processedData)
+          ]
+        },
+        z: 2
       },
       {
         name: 'État Porte',
@@ -2230,6 +2401,31 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                               </div>
                                   </div>
                                 )}
+
+          {/* Day/Night Legend - Compact */}
+          {processedData.length > 0 && createDayNightMarkAreas(processedData).length > 0 && (() => {
+            // Calculate sample sunrise/sunset times for legend
+            const MIDELT_LAT = 32.6852;
+            const MIDELT_LNG = -4.7371;
+            const sampleDate = new Date(processedData[0].timestamp);
+            const times = SunCalc.getTimes(sampleDate, MIDELT_LAT, MIDELT_LNG);
+            const sunriseHour = times.sunrise.getHours();
+            const sunriseMin = times.sunrise.getMinutes();
+            const sunsetHour = times.sunset.getHours();
+            const sunsetMin = times.sunset.getMinutes();
+            const sunriseStr = `${sunriseHour}h${sunriseMin.toString().padStart(2, '0')}`;
+            const sunsetStr = `${sunsetHour}h${sunsetMin.toString().padStart(2, '0')}`;
+            
+            return (
+              <div className="mb-2 flex items-center justify-center gap-2 px-2 py-1 bg-gradient-to-r from-amber-50/80 via-white/60 to-indigo-50/80 backdrop-blur-sm rounded-lg border border-gray-200/30 shadow-sm">
+                <span className="text-[9px] sm:text-[10px] text-amber-600 font-semibold">☀️{sunriseStr}-{sunsetStr}</span>
+                <span className="text-gray-300">•</span>
+                <span className="text-[9px] sm:text-[10px] text-indigo-600 font-semibold">🌙Nuit</span>
+                <span className="text-gray-300 hidden sm:inline">•</span>
+                <span className="text-[8px] text-gray-400 font-medium hidden sm:inline">Midelt</span>
+              </div>
+            );
+          })()}
 
           {/* Charts */}
           <div className={`grid grid-cols-1 lg:grid-cols-2 gap-${responsiveConfig.padding.gap}`}>

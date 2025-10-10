@@ -7,7 +7,7 @@ import { Spinner } from '../../components/Spinner';
 import { useTranslation } from 'react-i18next';
 import { SensorHistoryModal } from './SensorHistoryModal';
 import SensorChart from '../../components/SensorChart';
-import SensorsMapView from '../../components/SensorsMapView';
+import Warehouse3DView from '../../components/Warehouse3DView';
 import { RoomDoc } from '../../types/settings';
 
 // Utility function to calculate time ago
@@ -87,7 +87,6 @@ const SensorsPage: React.FC = () => {
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
-  const [selectedRoomForMap, setSelectedRoomForMap] = useState<Room | null>(null);
   
   // Function to extract channel number from sensor ID (e.g., "S-CH1" -> 1, "S-CH2" -> 2)
   const extractChannelNumber = (sensorId: string): number | null => {
@@ -449,33 +448,29 @@ const SensorsPage: React.FC = () => {
               {/* View Mode Toggle */}
               <div className="flex items-center bg-gray-100 rounded-lg p-1">
                 <button
-                  onClick={() => {
-                    setViewMode('grid');
-                    setSelectedRoomForMap(null);
-                  }}
+                  onClick={() => setViewMode('grid')}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                     viewMode === 'grid'
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
+                  title={t('sensors.viewGrid', 'Vue Grille') as string}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                   </svg>
                 </button>
                 <button
-                  onClick={() => {
-                    setViewMode('map');
-                    setSelectedRoomForMap(null);
-                  }}
+                  onClick={() => setViewMode('map')}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                     viewMode === 'map'
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
+                  title={t('sensors.view3D', 'Vue 3D') as string}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
                 </button>
               </div>
@@ -549,10 +544,10 @@ const SensorsPage: React.FC = () => {
             </div>
           </div>
         ) : viewMode === 'map' ? (
-          /* Google Maps View */
-          <SensorsMapView 
+          /* 3D Warehouse View */
+          <Warehouse3DView 
             rooms={displayRooms}
-            selectedRoom={selectedRoomForMap}
+            selectedRoom={null}
             onRoomClick={(room) => {
               const sensor = room.sensors[0];
               if (sensor) {
@@ -645,24 +640,7 @@ const SensorsPage: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        </div>
-                        
-                        {/* View on Map Button - Only show if polygon exists */}
-                        {room.polygon && room.polygon.length > 0 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedRoomForMap(room);
-                              setViewMode('map');
-                            }}
-                            className="w-full px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 border border-purple-200"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                            Voir sur carte
-                          </button>
-                        )}
+                      </div>
                       </div>
                       )}
                     </div>

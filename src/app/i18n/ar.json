@@ -588,7 +588,13 @@
     "recentReadings": "القراءات الأخيرة",
     "time": "الوقت",
     "value": "القيمة",
-    "statusOk": "جيد"
+    "statusOk": "جيد",
+    "view3D": "عرض ثلاثي الأبعاد",
+    "viewGrid": "عرض شبكي",
+    "warehouse3D": "مستودع ثلاثي الأبعاد",
+    "tabs": {
+      "all": "الكل"
+    }
   },
   "usersRoles": {
     "title": "المستخدمون والأدوار",
