@@ -49,9 +49,10 @@ interface RoomBoxProps {
   position: [number, number, number];
   isSelected: boolean;
   onClick: () => void;
+  thermalMode?: boolean;
 }
 
-const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick }) => {
+const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, thermalMode = false }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -64,6 +65,18 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick }
     }
   });
 
+  // Get thermal camera colors (pure temperature gradient)
+  const getThermalColor = (temp: number) => {
+    // Thermal imaging gradient: violet → blue → cyan → green → yellow → orange → red
+    if (temp < 0) return '#8b5cf6'; // Violet - Freezing
+    if (temp < 3) return '#3b82f6'; // Blue - Very cold
+    if (temp < 6) return '#06b6d4'; // Cyan - Cold
+    if (temp < 9) return '#10b981'; // Green - Cool
+    if (temp < 12) return '#eab308'; // Yellow - Normal
+    if (temp < 15) return '#f97316'; // Orange - Warm
+    return '#ef4444'; // Red - Hot
+  };
+
   // Get modern light color based on temperature and door status
   const getColor = () => {
     const sensor = room.sensors?.[0];
@@ -72,6 +85,12 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick }
     const isDoorOpen = sensor.additionalData.magnet === 0;
     const temp = sensor.additionalData.temperature;
 
+    // Thermal mode: pure temperature gradient
+    if (thermalMode) {
+      return getThermalColor(temp);
+    }
+
+    // Normal mode: light modern colors
     if (isDoorOpen) return '#fda4af'; // Light rose - Door open (alert)
     if (temp < 5) return '#7dd3fc'; // Light sky blue - Very cold
     if (temp < 10) return '#5eead4'; // Light teal - Normal cold
@@ -85,11 +104,11 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick }
   const humidity = sensor?.additionalData?.humidity;
   const isDoorOpen = sensor?.additionalData?.magnet === 0;
 
-  // Compact chamber dimensions - Optimized for viewing
-  const baseScale = 1.3 + (room.capacity / 10000) * 0.4;
-  const width = 2.8 * baseScale; // Compact width
-  const height = 3.5; // Standard ceiling height (fixed)
-  const depth = 3.5 * baseScale; // Compact depth
+  // Larger chamber dimensions - Better presence
+  const baseScale = 1.6 + (room.capacity / 10000) * 0.5;
+  const width = 3.5 * baseScale; // Wider
+  const height = 4; // Taller ceiling
+  const depth = 4.5 * baseScale; // Deeper
 
   return (
     <group position={position}>
@@ -99,7 +118,7 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick }
         <meshStandardMaterial color="#f1f5f9" metalness={0.3} roughness={0.7} />
       </mesh>
 
-      {/* Main room interior - Light modern with colored glow */}
+      {/* Main room interior - Changes based on view mode */}
       <mesh
         ref={meshRef}
         onClick={onClick}
@@ -109,73 +128,77 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick }
       >
         <boxGeometry args={[width, height, depth]} />
         <meshStandardMaterial
-          color="#ffffff"
+          color={thermalMode ? color : "#ffffff"}
           emissive={color}
-          emissiveIntensity={isSelected ? 0.9 : hovered ? 0.7 : isDoorOpen ? 0.8 : 0.5}
-          metalness={0.3}
-          roughness={0.4}
-          opacity={0.6}
+          emissiveIntensity={thermalMode ? 1.2 : (isSelected ? 0.9 : hovered ? 0.7 : isDoorOpen ? 0.8 : 0.5)}
+          metalness={thermalMode ? 0.1 : 0.3}
+          roughness={thermalMode ? 0.8 : 0.4}
+          opacity={thermalMode ? 0.95 : 0.6}
           transparent
           side={THREE.DoubleSide}
         />
       </mesh>
 
-      {/* Room walls - Clean white modern */}
-      {/* Back wall */}
-      <mesh position={[0, 0, -depth / 2]} castShadow receiveShadow>
-        <boxGeometry args={[width, height, 0.15]} />
-        <meshStandardMaterial
-          color="#ffffff"
-          metalness={0.2}
-          roughness={0.7}
-          opacity={0.9}
-          transparent
-          emissive={color}
-          emissiveIntensity={0.15}
-        />
-      </mesh>
+      {/* Room walls - Hidden in thermal mode */}
+      {!thermalMode && (
+        <>
+          {/* Back wall */}
+          <mesh position={[0, 0, -depth / 2]} castShadow receiveShadow>
+            <boxGeometry args={[width, height, 0.15]} />
+            <meshStandardMaterial
+              color="#ffffff"
+              metalness={0.2}
+              roughness={0.7}
+              opacity={0.9}
+              transparent
+              emissive={color}
+              emissiveIntensity={0.15}
+            />
+          </mesh>
 
-      {/* Left wall */}
-      <mesh position={[-width / 2, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.15, height, depth]} />
-        <meshStandardMaterial
-          color="#ffffff"
-          metalness={0.2}
-          roughness={0.7}
-          opacity={0.9}
-          transparent
-          emissive={color}
-          emissiveIntensity={0.15}
-        />
-      </mesh>
+          {/* Left wall */}
+          <mesh position={[-width / 2, 0, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.15, height, depth]} />
+            <meshStandardMaterial
+              color="#ffffff"
+              metalness={0.2}
+              roughness={0.7}
+              opacity={0.9}
+              transparent
+              emissive={color}
+              emissiveIntensity={0.15}
+            />
+          </mesh>
 
-      {/* Right wall */}
-      <mesh position={[width / 2, 0, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.15, height, depth]} />
-        <meshStandardMaterial
-          color="#ffffff"
-          metalness={0.2}
-          roughness={0.7}
-          opacity={0.9}
-          transparent
-          emissive={color}
-          emissiveIntensity={0.15}
-        />
-      </mesh>
+          {/* Right wall */}
+          <mesh position={[width / 2, 0, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.15, height, depth]} />
+            <meshStandardMaterial
+              color="#ffffff"
+              metalness={0.2}
+              roughness={0.7}
+              opacity={0.9}
+              transparent
+              emissive={color}
+              emissiveIntensity={0.15}
+            />
+          </mesh>
 
-      {/* Ceiling/roof of room - Light modern panels */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height / 2, 0]} receiveShadow>
-        <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial
-          color="#f8fafc"
-          metalness={0.4}
-          roughness={0.5}
-          opacity={0.6}
-          transparent
-          emissive={color}
-          emissiveIntensity={0.2}
-        />
-      </mesh>
+          {/* Ceiling/roof of room - Light modern panels */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height / 2, 0]} receiveShadow>
+            <planeGeometry args={[width, depth]} />
+            <meshStandardMaterial
+              color="#f8fafc"
+              metalness={0.4}
+              roughness={0.5}
+              opacity={0.6}
+              transparent
+              emissive={color}
+              emissiveIntensity={0.2}
+            />
+          </mesh>
+        </>
+      )}
 
       {/* Selection outline with glow */}
       {isSelected && (
@@ -185,114 +208,239 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick }
         </mesh>
       )}
 
-      {/* Door facing corridor - on the side facing the aisle */}
+      {/* Modern Smart Door System */}
       {isDoorOpen ? (
         <>
-          {/* Open door swung outward */}
+          {/* Open door - Modern glass with warning color */}
           <mesh position={[position[0] > 0 ? -width / 2 - 0.1 : width / 2 + 0.1, 0, depth / 3]} rotation={[0, position[0] > 0 ? -Math.PI / 3 : Math.PI / 3, 0]} castShadow>
             <boxGeometry args={[0.12, height * 0.85, depth * 0.7]} />
             <meshStandardMaterial 
-              color="#dc2626" 
-              emissive="#dc2626" 
-              emissiveIntensity={0.7} 
-              metalness={0.5} 
-              roughness={0.5}
+              color="#fecdd3" 
+              emissive="#fda4af" 
+              emissiveIntensity={0.8} 
+              metalness={0.6} 
+              roughness={0.3}
+              opacity={0.8}
+              transparent
             />
           </mesh>
-          {/* Alarm light above door */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.15 : width / 2 + 0.15, height / 2 - 0.2, 0]}>
-            <sphereGeometry args={[0.15, 16, 16]} />
+          {/* Warning LED strip on door edge */}
+          <mesh position={[position[0] > 0 ? -width / 2 - 0.15 : width / 2 + 0.15, 0, depth / 3]}>
+            <boxGeometry args={[0.03, height * 0.85, 0.05]} />
             <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={2} />
+          </mesh>
+          {/* Alarm light - Pulsing */}
+          <mesh position={[position[0] > 0 ? -width / 2 - 0.2 : width / 2 + 0.2, height / 2 - 0.3, 0]}>
+            <sphereGeometry args={[0.12, 16, 16]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={2.5} />
           </mesh>
         </>
       ) : (
         <>
-          {/* Closed door facing corridor - metal insulated */}
+          {/* Closed door - Modern white/glass with metal frame */}
           <mesh position={[position[0] > 0 ? -width / 2 - 0.05 : width / 2 + 0.05, 0, 0]} castShadow receiveShadow>
             <boxGeometry args={[0.12, height * 0.85, depth * 0.7]} />
             <meshStandardMaterial 
-              color="#475569" 
+              color="#f8fafc" 
               metalness={0.7} 
+              roughness={0.2}
+              emissive="#bae6fd"
+              emissiveIntensity={0.2}
+            />
+          </mesh>
+          {/* Door frame - Metallic accent */}
+          <mesh position={[position[0] > 0 ? -width / 2 - 0.06 : width / 2 + 0.06, 0, 0]}>
+            <boxGeometry args={[0.04, height * 0.9, depth * 0.75]} />
+            <meshStandardMaterial color="#cbd5e1" metalness={0.85} roughness={0.15} />
+          </mesh>
+          {/* Modern handle - Chrome finish */}
+          <mesh position={[position[0] > 0 ? -width / 2 - 0.13 : width / 2 + 0.13, 0.3, depth / 4]} castShadow>
+            <cylinderGeometry args={[0.04, 0.04, 0.35, 16]} />
+            <meshStandardMaterial 
+              color="#e0e7ff" 
+              metalness={0.95} 
+              roughness={0.05}
+              emissive="#a5f3fc"
+              emissiveIntensity={0.3}
+            />
+          </mesh>
+          {/* Status LED panel - Green secure */}
+          <mesh position={[position[0] > 0 ? -width / 2 - 0.13 : width / 2 + 0.13, 0.8, 0]}>
+            <boxGeometry args={[0.02, 0.15, 0.15]} />
+            <meshStandardMaterial 
+              color="#6ee7b7" 
+              emissive="#10b981" 
+              emissiveIntensity={1.2}
+              metalness={0.5}
               roughness={0.3}
             />
           </mesh>
-          {/* Door handle */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.1 : width / 2 + 0.1, 0.3, depth / 4]} castShadow>
-            <cylinderGeometry args={[0.05, 0.05, 0.3, 12]} />
-            <meshStandardMaterial color="#94a3b8" metalness={0.95} roughness={0.05} />
-          </mesh>
-          {/* Door lock indicator - green when closed */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.12 : width / 2 + 0.12, 0.8, 0]}>
-            <sphereGeometry args={[0.08, 16, 16]} />
-            <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={0.8} />
+          {/* Digital lock indicator */}
+          <mesh position={[position[0] > 0 ? -width / 2 - 0.13 : width / 2 + 0.13, 0.5, 0]}>
+            <boxGeometry args={[0.02, 0.08, 0.08]} />
+            <meshStandardMaterial 
+              color="#7dd3fc" 
+              emissive="#06b6d4" 
+              emissiveIntensity={0.9}
+            />
           </mesh>
         </>
       )}
 
-      {/* Compact modern text display */}
+      {/* Futuristic Holographic Display */}
       <Html position={[0, height / 2 + 0.5, 0]} center>
         <div className="flex flex-col items-center gap-0.5 pointer-events-none">
-          {/* Room number */}
-          <div className="text-lg font-bold text-slate-700" style={{ 
-            textShadow: '0 0 8px rgba(255,255,255,0.8), 1px 1px 2px rgba(0,0,0,0.3)'
-          }}>
-            {room.name.replace(/[^0-9]/g, '') || room.name}
-          </div>
-          
-          {/* Temperature */}
-          {temp !== undefined && !isNaN(temp) && (
-            <div className="text-base font-bold" style={{
-              color: temp < 5 ? '#0891b2' : temp < 10 ? '#14b8a6' : temp < 15 ? '#ca8a04' : '#ea580c',
-              textShadow: `0 0 6px rgba(255,255,255,0.9), 1px 1px 2px rgba(0,0,0,0.2)`
-            }}>
-              {temp.toFixed(1)}°
+          {/* Holographic frame */}
+          <div className="relative bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm border border-cyan-400/30 rounded-lg px-3 py-2">
+            {/* Scanning line animation */}
+            <div className="absolute inset-0 overflow-hidden rounded-lg">
+              <div className="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse"></div>
             </div>
-          )}
+            
+            {/* Room number */}
+            <div className="text-lg font-bold text-slate-700 mb-0.5" style={{ 
+              textShadow: '0 0 8px rgba(255,255,255,0.8)'
+            }}>
+              #{room.name.replace(/[^0-9]/g, '') || room.name}
+            </div>
+            
+            {/* Temperature with trend */}
+            {temp !== undefined && !isNaN(temp) && (
+              <div className="flex items-center gap-1">
+                <div className="text-base font-bold" style={{
+                  color: temp < 5 ? '#0891b2' : temp < 10 ? '#14b8a6' : temp < 15 ? '#ca8a04' : '#ea580c',
+                  textShadow: `0 0 6px rgba(255,255,255,0.9)`
+                }}>
+                  {temp.toFixed(1)}°C
+                </div>
+                {/* Temperature status icon */}
+                <span className="text-xs">
+                  {temp < 5 ? '❄️' : temp < 10 ? '✅' : temp < 15 ? '⚠️' : '🔥'}
+                </span>
+              </div>
+            )}
 
-          {/* Status indicator */}
-          {isDoorOpen && (
-            <div className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" style={{
-              boxShadow: '0 0 8px #f43f5e'
-            }}></div>
-          )}
+            {/* Humidity bar */}
+            {humidity !== undefined && !isNaN(humidity) && (
+              <div className="flex items-center gap-1 mt-1">
+                <div className="w-12 h-1 bg-slate-200 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full"
+                    style={{ width: `${Math.min(humidity, 100)}%` }}
+                  ></div>
+                </div>
+                <span className="text-[10px] text-slate-600">{humidity.toFixed(0)}%</span>
+              </div>
+            )}
+
+            {/* Status badge */}
+            {isDoorOpen && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping" style={{
+                boxShadow: '0 0 10px #f43f5e'
+              }}></div>
+            )}
+          </div>
         </div>
       </Html>
 
-      {/* Info tooltip on hover - No translation here as this is inside the 3D canvas */}
+      {/* Cold air particles effect for very cold rooms */}
+      {temp !== undefined && temp < 3 && (
+        <mesh position={[0, height / 4, 0]}>
+          <sphereGeometry args={[0.05, 8, 8]} />
+          <meshStandardMaterial 
+            color="#7dd3fc" 
+            emissive="#7dd3fc" 
+            emissiveIntensity={1.5}
+            transparent
+            opacity={0.6}
+          />
+        </mesh>
+      )}
+
+      {/* Heat warning indicator for warm rooms */}
+      {temp !== undefined && temp > 12 && (
+        <mesh position={[0, height / 2 + 1.2, 0]}>
+          <sphereGeometry args={[0.1, 16, 16]} />
+          <meshStandardMaterial 
+            color="#fbbf24" 
+            emissive="#fbbf24" 
+            emissiveIntensity={2}
+          />
+        </mesh>
+      )}
+
+      {/* Advanced Info Panel on Hover - Futuristic */}
       {hovered && sensor?.additionalData && (
-        <Html position={[0, height / 2 + 0.6, 0]} center>
-          <div className="bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-xl border border-gray-200 min-w-[180px]">
-            <div className="font-bold text-gray-900 mb-2 text-sm">{room.name}</div>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Température:</span>
-                <span className="font-semibold text-red-700">
-                  {temp !== undefined ? temp.toFixed(1) : '--'}°C
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Humidité:</span>
-                <span className="font-semibold text-blue-700">
-                  {humidity !== undefined ? humidity.toFixed(0) : '--'}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Porte:</span>
-                <span className={`font-semibold ${isDoorOpen ? 'text-red-600' : 'text-green-600'}`}>
-                  {isDoorOpen ? 'Ouverte' : 'Fermée'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Capacité:</span>
-                <span className="font-semibold text-gray-900">{room.capacity}L</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Groupe:</span>
-                <span className="font-semibold text-blue-600">F{room.athGroupNumber || 1}</span>
+        <Html position={[0, height / 2 + 1.5, 0]} center>
+          <div className="bg-white/98 backdrop-blur-md rounded-xl p-3 shadow-2xl border-2 border-cyan-300 min-w-[220px]">
+            {/* Header with scanning effect */}
+            <div className="relative mb-2 pb-2 border-b border-cyan-200">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-100 to-transparent opacity-50 animate-pulse"></div>
+              <div className="font-bold text-cyan-700 text-sm flex items-center gap-2 relative">
+                <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
+                {room.name}
               </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-gray-200 text-[10px] text-gray-500 text-center">
-              Cliquez pour voir les détails
+            
+            {/* Data Grid */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {/* Temperature Card */}
+              <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-lg p-2 border border-cyan-200">
+                <div className="text-[9px] text-slate-600 mb-0.5">Température</div>
+                <div className="text-lg font-bold text-cyan-700">
+                  {temp !== undefined ? temp.toFixed(1) : '--'}°C
+                </div>
+                {/* Mini temperature gauge */}
+                <div className="w-full h-1 bg-slate-200 rounded-full mt-1 overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full ${
+                      temp !== undefined && temp < 5 ? 'bg-cyan-500' : 
+                      temp !== undefined && temp < 10 ? 'bg-teal-500' : 
+                      temp !== undefined && temp < 15 ? 'bg-yellow-500' : 'bg-orange-500'
+                    }`}
+                    style={{ width: `${temp !== undefined ? Math.min((temp / 20) * 100, 100) : 0}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Humidity Card */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-2 border border-blue-200">
+                <div className="text-[9px] text-slate-600 mb-0.5">Humidité</div>
+                <div className="text-lg font-bold text-blue-700">
+                  {humidity !== undefined ? humidity.toFixed(0) : '--'}%
+                </div>
+                {/* Humidity gauge */}
+                <div className="w-full h-1 bg-slate-200 rounded-full mt-1 overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full"
+                    style={{ width: `${humidity !== undefined ? Math.min(humidity, 100) : 0}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Status and Capacity */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`rounded-lg p-2 text-center border ${
+                isDoorOpen 
+                  ? 'bg-rose-50 border-rose-300' 
+                  : 'bg-emerald-50 border-emerald-300'
+              }`}>
+                <div className="text-[9px] text-slate-600">Porte</div>
+                <div className={`text-xs font-bold ${isDoorOpen ? 'text-rose-700' : 'text-emerald-700'}`}>
+                  {isDoorOpen ? '🚨 Ouverte' : '🔒 Fermée'}
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-lg p-2 text-center border border-violet-200">
+                <div className="text-[9px] text-slate-600">Groupe</div>
+                <div className="text-xs font-bold text-violet-700">FRIGO {room.athGroupNumber || 1}</div>
+              </div>
+            </div>
+
+            {/* Action hint */}
+            <div className="mt-2 pt-2 border-t border-cyan-200 flex items-center justify-center gap-1">
+              <div className="w-1 h-1 bg-cyan-500 rounded-full"></div>
+              <span className="text-[10px] text-slate-500">Cliquez pour graphiques détaillés</span>
             </div>
           </div>
         </Html>
@@ -301,20 +449,48 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick }
   );
 };
 
+// Scanning radar effect component
+const ScanningRadar: React.FC = () => {
+  const radarRef = useRef<THREE.Mesh>(null);
+  
+  useFrame((state) => {
+    if (radarRef.current) {
+      // Rotate and pulse
+      radarRef.current.rotation.y = state.clock.elapsedTime * 0.5;
+      radarRef.current.position.y = 0.1 + Math.sin(state.clock.elapsedTime) * 0.05;
+    }
+  });
+
+  return (
+    <mesh ref={radarRef} position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0, 30, 64, 1, 0, Math.PI / 3]} />
+      <meshStandardMaterial 
+        color="#06b6d4" 
+        emissive="#06b6d4" 
+        emissiveIntensity={1.5}
+        transparent
+        opacity={0.3}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+};
+
 // Main warehouse scene
 const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, onRoomClick }) => {
   const [internalSelectedRoom, setInternalSelectedRoom] = useState<Room | null>(selectedRoom || null);
+  const [showThermalView, setShowThermalView] = useState(false);
 
-  // Calculate positions - Compact warehouse layout
+  // Calculate positions - Spacious warehouse layout
   const roomPositions = useMemo(() => {
     const positions: Map<string, [number, number, number]> = new Map();
     
-    // Compact warehouse layout
-    const avgScale = 1.3 + (6000 / 10000) * 0.4;
-    const roomWidth = 2.8 * avgScale;
-    const roomDepth = 3.5 * avgScale;
-    const aisleWidth = 5; // Central corridor width
-    const roomSpacing = roomDepth + 0.2; // Minimal gap between rooms
+    // Spacious warehouse layout with better spacing
+    const avgScale = 1.6 + (6000 / 10000) * 0.5;
+    const roomWidth = 3.5 * avgScale;
+    const roomDepth = 4.5 * avgScale;
+    const aisleWidth = 6; // Wider central corridor
+    const roomSpacing = roomDepth + 1.5; // More space between rooms
     
     rooms.forEach((room, index) => {
       // Alternate: left side, right side
@@ -329,7 +505,7 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         ? -(aisleWidth / 2 + roomWidth / 2)  // Left side
         : (aisleWidth / 2 + roomWidth / 2);   // Right side
       
-      const y = 3.5 / 2; // Half height (center of room)
+      const y = 4 / 2; // Half height (center of room - updated for new height)
       
       positions.set(room.id, [x, y, z]);
     });
@@ -352,7 +528,7 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
     <div className="bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-50 rounded-2xl border border-slate-300 shadow-2xl overflow-hidden relative" style={{ height: 'calc(100vh - 280px)', minHeight: '500px' }}>
       <Canvas
         shadows
-        camera={{ position: [0, 14, 35], fov: 65 }}
+        camera={{ position: [0, 18, 50], fov: 65 }}
         gl={{ antialias: true }}
       >
         {/* Modern light environment */}
@@ -381,9 +557,55 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         {/* Grid helper - Light modern grid */}
         <gridHelper args={[100, 50, '#cbd5e1', '#e2e8f0']} position={[0, 0.01, 0]} />
 
-        {/* Central corridor - Light polished aisle */}
+        {/* Scanning Radar Effect */}
+        <ScanningRadar />
+
+        {/* IoT Network Connections - Data flow visualization */}
+        {rooms.slice(0, -1).map((room, index) => {
+          const pos1 = roomPositions.get(room.id) || [0, 0, 0];
+          const nextRoom = rooms[index + 1];
+          const pos2 = roomPositions.get(nextRoom?.id || '') || [0, 0, 0];
+          
+          if (!nextRoom) return null;
+          
+          const distance = Math.sqrt(
+            Math.pow(pos2[0] - pos1[0], 2) + 
+            Math.pow(pos2[1] - pos1[1], 2) + 
+            Math.pow(pos2[2] - pos1[2], 2)
+          );
+          
+          const midX = (pos1[0] + pos2[0]) / 2;
+          const midY = (pos1[1] + pos2[1]) / 2 + 2.5;
+          const midZ = (pos1[2] + pos2[2]) / 2;
+          
+          // Calculate rotation to point from pos1 to pos2
+          const dx = pos2[0] - pos1[0];
+          const dy = pos2[1] - pos1[1];
+          const dz = pos2[2] - pos1[2];
+          const rotationY = Math.atan2(dx, dz);
+          const rotationZ = Math.atan2(Math.sqrt(dx * dx + dz * dz), dy) - Math.PI / 2;
+          
+          return (
+            <mesh 
+              key={`connection-${index}`} 
+              position={[midX, midY, midZ]}
+              rotation={[0, rotationY, rotationZ]}
+            >
+              <cylinderGeometry args={[0.015, 0.015, distance, 8]} />
+              <meshStandardMaterial 
+                color="#7dd3fc" 
+                emissive="#06b6d4" 
+                emissiveIntensity={0.9}
+                transparent
+                opacity={0.5}
+              />
+            </mesh>
+          );
+        })}
+
+        {/* Central corridor - Wide polished aisle */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
-          <planeGeometry args={[5, 60]} />
+          <planeGeometry args={[6, 80]} />
           <meshStandardMaterial 
             color="#f1f5f9" 
             metalness={0.5} 
@@ -394,25 +616,25 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </mesh>
 
         {/* Aisle edge lines - Modern cyan markings */}
-        <mesh position={[-2.5, 0.03, 0]}>
-          <boxGeometry args={[0.15, 0.02, 60]} />
+        <mesh position={[-3, 0.03, 0]}>
+          <boxGeometry args={[0.15, 0.02, 80]} />
           <meshStandardMaterial color="#06b6d4" emissive="#06b6d4" emissiveIntensity={0.7} />
         </mesh>
-        <mesh position={[2.5, 0.03, 0]}>
-          <boxGeometry args={[0.15, 0.02, 60]} />
+        <mesh position={[3, 0.03, 0]}>
+          <boxGeometry args={[0.15, 0.02, 80]} />
           <meshStandardMaterial color="#06b6d4" emissive="#06b6d4" emissiveIntensity={0.7} />
         </mesh>
 
         {/* Center line - Teal guide */}
         <mesh position={[0, 0.04, 0]}>
-          <boxGeometry args={[0.1, 0.01, 60]} />
+          <boxGeometry args={[0.1, 0.01, 80]} />
           <meshStandardMaterial color="#14b8a6" emissive="#14b8a6" emissiveIntensity={0.6} />
         </mesh>
 
         {/* WAREHOUSE BUILDING STRUCTURE - Modern Light Glass */}
         {/* Left External Wall */}
-        <mesh position={[-13, 3.5, 0]} receiveShadow castShadow>
-          <boxGeometry args={[0.25, 7, 60]} />
+        <mesh position={[-17, 4, 0]} receiveShadow castShadow>
+          <boxGeometry args={[0.25, 8, 80]} />
           <meshStandardMaterial 
             color="#e0f2fe" 
             metalness={0.4} 
@@ -425,8 +647,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </mesh>
 
         {/* Right External Wall */}
-        <mesh position={[13, 3.5, 0]} receiveShadow castShadow>
-          <boxGeometry args={[0.25, 7, 60]} />
+        <mesh position={[17, 4, 0]} receiveShadow castShadow>
+          <boxGeometry args={[0.25, 8, 80]} />
           <meshStandardMaterial 
             color="#e0f2fe" 
             metalness={0.4} 
@@ -439,8 +661,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </mesh>
 
         {/* Back Wall */}
-        <mesh position={[0, 3.5, -30]} receiveShadow castShadow>
-          <boxGeometry args={[26, 7, 0.25]} />
+        <mesh position={[0, 4, -40]} receiveShadow castShadow>
+          <boxGeometry args={[34, 8, 0.25]} />
           <meshStandardMaterial 
             color="#e0f2fe" 
             metalness={0.4} 
@@ -453,8 +675,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </mesh>
 
         {/* Front Wall (with large opening) */}
-        <mesh position={[-10, 3.5, 30]} receiveShadow castShadow>
-          <boxGeometry args={[6, 7, 0.25]} />
+        <mesh position={[-13, 4, 40]} receiveShadow castShadow>
+          <boxGeometry args={[8, 8, 0.25]} />
           <meshStandardMaterial 
             color="#e0f2fe" 
             metalness={0.4} 
@@ -465,8 +687,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
             emissiveIntensity={0.15}
           />
         </mesh>
-        <mesh position={[10, 3.5, 30]} receiveShadow castShadow>
-          <boxGeometry args={[6, 7, 0.25]} />
+        <mesh position={[13, 4, 40]} receiveShadow castShadow>
+          <boxGeometry args={[8, 8, 0.25]} />
           <meshStandardMaterial 
             color="#e0f2fe" 
             metalness={0.4} 
@@ -479,8 +701,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </mesh>
 
         {/* Roof Structure - V Inversé - Modern Glass Left Side */}
-        <mesh rotation={[0, 0, Math.PI / 5.5]} position={[-6.5, 9, 0]} receiveShadow castShadow>
-          <boxGeometry args={[17, 0.2, 60.4]} />
+        <mesh rotation={[0, 0, Math.PI / 5.5]} position={[-8.5, 10, 0]} receiveShadow castShadow>
+          <boxGeometry args={[22, 0.2, 80.4]} />
           <meshStandardMaterial 
             color="#f0f9ff" 
             metalness={0.6} 
@@ -493,8 +715,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </mesh>
 
         {/* Roof Structure - V Inversé - Right Side */}
-        <mesh rotation={[0, 0, -Math.PI / 5.5]} position={[6.5, 9, 0]} receiveShadow castShadow>
-          <boxGeometry args={[17, 0.2, 60.4]} />
+        <mesh rotation={[0, 0, -Math.PI / 5.5]} position={[8.5, 10, 0]} receiveShadow castShadow>
+          <boxGeometry args={[22, 0.2, 80.4]} />
           <meshStandardMaterial 
             color="#f0f9ff" 
             metalness={0.6} 
@@ -507,8 +729,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </mesh>
 
         {/* Ridge beam at top - Modern metallic */}
-        <mesh position={[0, 12, 0]} castShadow>
-          <boxGeometry args={[0.3, 0.3, 60.4]} />
+        <mesh position={[0, 14, 0]} castShadow>
+          <boxGeometry args={[0.3, 0.3, 80.4]} />
           <meshStandardMaterial 
             color="#bae6fd" 
             metalness={0.9} 
@@ -519,11 +741,11 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </mesh>
 
         {/* Roof Support Beams - Modern Light Metal */}
-        {[-25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25].map((z) => (
+        {[-35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35].map((z) => (
           <group key={`beam-group-${z}`}>
             {/* Left roof beam */}
-            <mesh position={[-6.5, 9, z]} rotation={[0, 0, Math.PI / 5.5]} castShadow>
-              <boxGeometry args={[17, 0.12, 0.2]} />
+            <mesh position={[-8.5, 10, z]} rotation={[0, 0, Math.PI / 5.5]} castShadow>
+              <boxGeometry args={[22, 0.12, 0.2]} />
               <meshStandardMaterial 
                 color="#bae6fd" 
                 metalness={0.85} 
@@ -533,8 +755,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
               />
             </mesh>
             {/* Right roof beam */}
-            <mesh position={[6.5, 9, z]} rotation={[0, 0, -Math.PI / 5.5]} castShadow>
-              <boxGeometry args={[17, 0.12, 0.2]} />
+            <mesh position={[8.5, 10, z]} rotation={[0, 0, -Math.PI / 5.5]} castShadow>
+              <boxGeometry args={[22, 0.12, 0.2]} />
               <meshStandardMaterial 
                 color="#bae6fd" 
                 metalness={0.85} 
@@ -548,25 +770,31 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
 
         {/* Support Columns - Modern Light Metal */}
         {[
-          [-12.5, -28],
-          [12.5, -28],
-          [-12.5, -20],
-          [12.5, -20],
-          [-12.5, -12],
-          [12.5, -12],
-          [-12.5, -4],
-          [12.5, -4],
-          [-12.5, 4],
-          [12.5, 4],
-          [-12.5, 12],
-          [12.5, 12],
-          [-12.5, 20],
-          [12.5, 20],
-          [-12.5, 28],
-          [12.5, 28],
+          [-16.5, -38],
+          [16.5, -38],
+          [-16.5, -30],
+          [16.5, -30],
+          [-16.5, -22],
+          [16.5, -22],
+          [-16.5, -14],
+          [16.5, -14],
+          [-16.5, -6],
+          [16.5, -6],
+          [-16.5, 2],
+          [16.5, 2],
+          [-16.5, 10],
+          [16.5, 10],
+          [-16.5, 18],
+          [16.5, 18],
+          [-16.5, 26],
+          [16.5, 26],
+          [-16.5, 34],
+          [16.5, 34],
+          [-16.5, 38],
+          [16.5, 38],
         ].map(([x, z], i) => (
-          <mesh key={`column-${i}`} position={[x, 3.5, z]} castShadow>
-            <cylinderGeometry args={[0.25, 0.25, 7, 12]} />
+          <mesh key={`column-${i}`} position={[x, 4, z]} castShadow>
+            <cylinderGeometry args={[0.3, 0.3, 8, 12]} />
             <meshStandardMaterial 
               color="#cbd5e1" 
               metalness={0.8} 
@@ -578,8 +806,8 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         ))}
 
         {/* Warehouse Sign - Modern light panel */}
-        <mesh position={[0, 6, 30.1]} receiveShadow>
-          <boxGeometry args={[16, 2.5, 0.15]} />
+        <mesh position={[0, 7, 40.1]} receiveShadow>
+          <boxGeometry args={[20, 3, 0.15]} />
           <meshStandardMaterial 
             color="#bae6fd" 
             metalness={0.6} 
@@ -599,29 +827,30 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
               position={position}
               isSelected={internalSelectedRoom?.id === room.id}
               onClick={() => handleRoomClick(room)}
+              thermalMode={showThermalView}
             />
           );
         })}
 
         {/* Warehouse title - Modern */}
-        <Html position={[0, 10, -28]} center>
-          <div className="text-2xl font-bold text-cyan-600 pointer-events-none" style={{
+        <Html position={[0, 12, -38]} center>
+          <div className="text-3xl font-bold text-cyan-600 pointer-events-none" style={{
             textShadow: '0 0 10px #7dd3fc, 1px 1px 3px rgba(0,0,0,0.3)',
-            letterSpacing: '2px'
+            letterSpacing: '3px'
           }}>
             ENTREPÔT FRIGORIFIQUE
           </div>
         </Html>
 
-        {/* Camera controls - Optimized for compact warehouse */}
+        {/* Camera controls - Optimized for spacious warehouse */}
         <OrbitControls
           enablePan
           enableZoom
           enableRotate
-          minDistance={12}
-          maxDistance={70}
+          minDistance={20}
+          maxDistance={90}
           maxPolarAngle={Math.PI / 2.2}
-          target={[0, 3, 0]}
+          target={[0, 4, 0]}
           enableDamping
           dampingFactor={0.05}
         />
@@ -661,35 +890,103 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </div>
       </div>
 
-      {/* Stats overlay - Modern Light */}
+      {/* Advanced Control Panel */}
       <div className="absolute top-3 left-3 md:top-6 md:left-6 bg-white/95 backdrop-blur-md rounded-xl p-3 md:p-4 shadow-2xl border border-cyan-200">
         <div className="text-xs md:text-sm font-bold text-cyan-600 mb-1.5 md:mb-2 flex items-center gap-1">
           <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
-          Stats Live
+          Monitoring Live
         </div>
-        <div className="space-y-0.5 md:space-y-1 text-[10px] md:text-xs">
-          <div className="flex items-center gap-1.5">
-            <span>🏢</span>
-            <span className="font-bold text-cyan-600">{rooms.length}</span>
-            <span className="text-slate-600 hidden md:inline">chambres</span>
+        
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-lg p-2 border border-cyan-200">
+            <div className="text-[10px] text-slate-600">Total</div>
+            <div className="text-lg font-bold text-cyan-600">{rooms.length}</div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span>❄️</span>
-            <span className="font-bold text-blue-600">
-              {(
-                rooms.reduce((sum, r) => sum + (r.sensors?.[0]?.additionalData?.temperature || 0), 0) / rooms.length
-              ).toFixed(1)}°C
-            </span>
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-2 border border-blue-200">
+            <div className="text-[10px] text-slate-600">Moy. T°</div>
+            <div className="text-lg font-bold text-blue-600">
+              {(rooms.reduce((sum, r) => sum + (r.sensors?.[0]?.additionalData?.temperature || 0), 0) / rooms.length).toFixed(1)}°
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span>🚨</span>
-            <span className="font-bold text-rose-600">
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-2 border border-emerald-200">
+            <div className="text-[10px] text-slate-600">OK</div>
+            <div className="text-lg font-bold text-emerald-600">
+              {rooms.filter((r) => r.sensors?.[0]?.additionalData?.magnet !== 0 && (r.sensors?.[0]?.additionalData?.temperature || 0) < 10).length}
+            </div>
+          </div>
+          <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-lg p-2 border border-rose-200">
+            <div className="text-[10px] text-slate-600">Alertes</div>
+            <div className="text-lg font-bold text-rose-600">
               {rooms.filter((r) => r.sensors?.[0]?.additionalData?.magnet === 0).length}
-            </span>
-            <span className="text-slate-600 hidden md:inline">ouvertes</span>
+            </div>
           </div>
         </div>
+
+        {/* Thermal View Toggle */}
+        <button
+          onClick={() => setShowThermalView(!showThermalView)}
+          className={`w-full py-1.5 px-3 rounded-lg text-xs font-medium transition-all ${
+            showThermalView 
+              ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg' 
+              : 'bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-700 hover:from-cyan-200 hover:to-blue-200'
+          }`}
+        >
+          {showThermalView ? '🌡️ Vision Thermique ON' : '🔍 Vision Normale'}
+        </button>
       </div>
+
+      {/* Thermal View Indicator & Scale */}
+      {showThermalView && (
+        <div className="absolute top-3 right-3 md:top-6 md:right-6 bg-gradient-to-br from-gray-900/98 to-black/98 backdrop-blur-md rounded-xl p-4 shadow-2xl border-2 border-orange-400">
+          <div className="text-sm font-bold text-white flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
+            MODE THERMIQUE
+          </div>
+          
+          {/* Thermal gradient scale */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-3 rounded" style={{ background: 'linear-gradient(to right, #8b5cf6, #3b82f6, #06b6d4, #10b981, #eab308, #f97316, #ef4444)' }}></div>
+              <span className="text-xs text-white">Échelle</span>
+            </div>
+            <div className="flex justify-between text-[10px] text-gray-300">
+              <span>❄️ 0°C</span>
+              <span>🔥 15°C</span>
+            </div>
+            <div className="space-y-1 text-[10px] mt-2">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#8b5cf6' }}></div>
+                <span className="text-violet-300">Glacial &lt; 0°</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#3b82f6' }}></div>
+                <span className="text-blue-300">Très froid 0-3°</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#06b6d4' }}></div>
+                <span className="text-cyan-300">Froid 3-6°</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#10b981' }}></div>
+                <span className="text-emerald-300">Frais 6-9°</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#eab308' }}></div>
+                <span className="text-yellow-300">Normal 9-12°</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#f97316' }}></div>
+                <span className="text-orange-300">Chaud 12-15°</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#ef4444' }}></div>
+                <span className="text-red-300">Très chaud &gt; 15°</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
