@@ -125,6 +125,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [kpiCalculating, setKpiCalculating] = useState(false);
   const [cachedKPIs, setCachedKPIs] = useState<any>(null);
+  const [chartKey, setChartKey] = useState(0); // For forcing chart re-render on resize
 
   // Cache duration constant
   const CACHE_DURATION = 30000; // 30 seconds cache
@@ -532,8 +533,314 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
 
   const isRangeSelected = (type: string) => dateRange.type === type;
 
+  // Calculate KPIs from data
+  const calculateKPIs = useCallback(() => {
+    // Use validData for KPI calculations (filters out 0 values)
+    const validDataForKPI = data.filter(d => d.temperature !== 0 && d.humidity !== 0);
+    
+    if (validDataForKPI.length === 0) return null;
+
+    const temps = validDataForKPI.map(d => d.temperature);
+    const humidities = validDataForKPI.map(d => d.humidity);
+
+    // Average Temperature
+    const avgTemp = temps.reduce((sum, t) => sum + t, 0) / temps.length;
+
+    // Temperature Stability (Standard Deviation)
+    const tempVariance = temps.reduce((sum, t) => sum + Math.pow(t - avgTemp, 2), 0) / temps.length;
+    const tempStability = Math.sqrt(tempVariance);
+
+    // Average Humidity
+    const avgHumidity = humidities.reduce((sum, h) => sum + h, 0) / humidities.length;
+
+    // Humidity Stability (Standard Deviation)
+    const humVariance = humidities.reduce((sum, h) => sum + Math.pow(h - avgHumidity, 2), 0) / humidities.length;
+    const humStability = Math.sqrt(humVariance);
+
+    // Temperature in safe range (0-4°C)
+    const tempInRange = temps.filter(t => t >= 0 && t <= 4).length;
+    const tempRangePercent = (tempInRange / temps.length) * 100;
+
+    // Humidity in optimal range (90-95%)
+    const humInRange = humidities.filter(h => h >= 90 && h <= 95).length;
+    const humRangePercent = (humInRange / humidities.length) * 100;
+
+    // Min/Max values
+    const minTemp = Math.min(...temps);
+    const maxTemp = Math.max(...temps);
+    const minHum = Math.min(...humidities);
+    const maxHum = Math.max(...humidities);
+
+    return {
+      avgTemp,
+      tempStability,
+      avgHumidity,
+      humStability,
+      tempRangePercent,
+      humRangePercent,
+      minTemp,
+      maxTemp,
+      minHum,
+      maxHum,
+      dataPoints: validDataForKPI.length
+    };
+  }, [data]);
+
+  const kpis = calculateKPIs();
+
+  // Calculate responsive chart dimensions and font sizes
+  const getResponsiveConfig = () => {
+    if (typeof window !== 'undefined') {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      
+      // Mobile Portrait (< 640px)
+      if (vw < 640) {
+        return {
+          height: '300px', // Fixed height for consistency
+          fontSize: { base: 10, label: 8, title: 10, legend: 9 },
+          symbolSize: 2,
+          padding: { chart: '2', gap: '2' },
+          grid: {
+            left: '12%',
+            right: '18%',
+            bottom: '18%',
+            top: '18%'
+          },
+          toolbox: { right: 5, top: 5, itemSize: 12 }
+        };
+      }
+      // Tablet (640px - 1024px)
+      if (vw < 1024) {
+        return {
+          height: Math.min(vh * 0.40, 360) + 'px',
+          fontSize: { base: 11, label: 10, title: 12, legend: 11 },
+          symbolSize: 3,
+          padding: { chart: '3', gap: '3' },
+          grid: {
+            left: '10%',
+            right: '16%',
+            bottom: '20%',
+            top: '16%'
+          },
+          toolbox: { right: 10, top: 10, itemSize: 14 }
+        };
+      }
+      // Desktop (1024px - 1280px)
+      if (vw < 1280) {
+        return {
+          height: Math.min(vh * 0.45, 400) + 'px',
+          fontSize: { base: 12, label: 11, title: 13, legend: 12 },
+          symbolSize: 4,
+          padding: { chart: '4', gap: '4' },
+          grid: {
+            left: '8%',
+            right: '15%',
+            bottom: '22%',
+            top: '15%'
+          },
+          toolbox: { right: 15, top: 15, itemSize: 15 }
+        };
+      }
+      // Large desktop (> 1280px)
+      return {
+        height: Math.min(vh * 0.50, 450) + 'px',
+        fontSize: { base: 13, label: 12, title: 14, legend: 13 },
+        symbolSize: 5,
+        padding: { chart: '5', gap: '5' },
+        grid: {
+          left: '8%',
+          right: '15%',
+          bottom: '22%',
+          top: '15%'
+        },
+        toolbox: { right: 20, top: 15, itemSize: 16 }
+      };
+    }
+    return {
+      height: '360px',
+      fontSize: { base: 12, label: 11, title: 13, legend: 12 },
+      symbolSize: 4,
+      padding: { chart: '4', gap: '4' },
+      grid: {
+        left: '8%',
+        right: '15%',
+        bottom: '22%',
+        top: '15%'
+      },
+      toolbox: { right: 15, top: 15, itemSize: 15 }
+    };
+  };
+  
+  const responsiveConfig = getResponsiveConfig();
+
   // Chart colors for comparison
   const chamberColors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+
+  // Helper function to filter invalid sensor data
+  const filterValidData = useCallback((chartData: SensorData[]) => {
+    if (!chartData || chartData.length === 0) return chartData;
+    
+    const filtered = chartData.filter(point => {
+      // Remove points where temperature or humidity is 0 (sensor error)
+      const isValid = point.temperature !== 0 && point.humidity !== 0;
+      return isValid;
+    });
+    
+    const removed = chartData.length - filtered.length;
+    if (removed > 0) {
+      console.log(`🧹 [SensorChart] Filtered out ${removed} invalid data points (temp=0 or humidity=0)`);
+    }
+    
+    return filtered;
+  }, []);
+
+  // Helper function to aggregate/downsample data for better visualization
+  const aggregateData = useCallback((chartData: SensorData[], intervalMinutes: number) => {
+    if (!chartData || chartData.length === 0) return chartData;
+    
+    // If data is already small, no need to aggregate
+    if (chartData.length <= 100) return chartData;
+    
+    const intervalMs = intervalMinutes * 60 * 1000;
+    const aggregated: SensorData[] = [];
+    const groups: { [key: number]: SensorData[] } = {};
+    
+    // Group data by time intervals
+    chartData.forEach(point => {
+      const bucketTime = Math.floor(point.timestamp / intervalMs) * intervalMs;
+      if (!groups[bucketTime]) {
+        groups[bucketTime] = [];
+      }
+      groups[bucketTime].push(point);
+    });
+    
+    // Calculate averages for each bucket
+    Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(bucketTime => {
+      const bucket = groups[Number(bucketTime)];
+      
+      // Filter valid values only for averaging
+      const validTemps = bucket.filter(p => p.temperature !== 0).map(p => p.temperature);
+      const validHums = bucket.filter(p => p.humidity !== 0).map(p => p.humidity);
+      
+      // Skip bucket if no valid data
+      if (validTemps.length === 0 || validHums.length === 0) return;
+      
+      const avgTemp = validTemps.reduce((sum, t) => sum + t, 0) / validTemps.length;
+      const avgHum = validHums.reduce((sum, h) => sum + h, 0) / validHums.length;
+      const avgBattery = bucket.reduce((sum, p) => sum + p.battery, 0) / bucket.length;
+      
+      // For magnet, use the most common value in the bucket (mode)
+      const magnetCounts = bucket.reduce((acc, p) => {
+        acc[p.magnet] = (acc[p.magnet] || 0) + 1;
+        return acc;
+      }, {} as Record<number, number>);
+      const magnetMode = Object.entries(magnetCounts).sort((a, b) => b[1] - a[1])[0][0];
+      
+      aggregated.push({
+        timestamp: Number(bucketTime),
+        temperature: Number(avgTemp.toFixed(2)),
+        humidity: Number(avgHum.toFixed(1)),
+        battery: Number(avgBattery.toFixed(2)),
+        magnet: Number(magnetMode)
+      });
+    });
+    
+    console.log(`📊 [SensorChart] Aggregated ${chartData.length} points to ${aggregated.length} points (${intervalMinutes}min intervals)`);
+    return aggregated;
+  }, []);
+
+  // Determine aggregation interval based on date range
+  const getAggregationInterval = (rangeType: string) => {
+    switch (rangeType) {
+      case '30min':
+      case '1h':
+        return 0; // No aggregation
+      case '6h':
+        return 5; // 5 min intervals
+      case '12h':
+        return 10; // 10 min intervals
+      case '24h':
+      case '1d':
+        return 10; // 10 min intervals
+      case '7d':
+        return 60; // 1 hour intervals
+      case '30d':
+        return 240; // 4 hour intervals
+      default:
+        return 0;
+    }
+  };
+
+  // Filter invalid data first, then apply aggregation
+  const validData = filterValidData(data);
+  const aggregationInterval = getAggregationInterval(dateRange.type);
+  const processedData = aggregationInterval > 0 ? aggregateData(validData, aggregationInterval) : validData;
+
+  // Helper function to create door state markAreas
+  const createDoorMarkAreas = (chartData: SensorData[]) => {
+    if (!chartData || chartData.length === 0) return [];
+    
+    const markAreas: any[] = [];
+    let openStart: number | null = null;
+    
+    for (let i = 0; i < chartData.length; i++) {
+      const current = chartData[i];
+      const isOpen = current.magnet === 0; // 0 = open
+      
+      if (isOpen && openStart === null) {
+        // Start of open period
+        openStart = current.timestamp;
+      } else if (!isOpen && openStart !== null) {
+        // End of open period
+        markAreas.push({
+          xAxis: openStart,
+          xAxisEnd: current.timestamp
+        });
+        openStart = null;
+      }
+    }
+    
+    // Handle case where door is still open at the end
+    if (openStart !== null && chartData.length > 0) {
+      markAreas.push({
+        xAxis: openStart,
+        xAxisEnd: chartData[chartData.length - 1].timestamp
+      });
+    }
+    
+    return markAreas;
+  };
+
+  // Helper function to create door state change markLines
+  const createDoorMarkLines = (chartData: SensorData[]) => {
+    if (!chartData || chartData.length <= 1) return [];
+    
+    const markLines: any[] = [];
+    
+    for (let i = 1; i < chartData.length; i++) {
+      const prev = chartData[i - 1];
+      const current = chartData[i];
+      
+      // Detect state change
+      if (prev.magnet !== current.magnet) {
+        const isOpening = current.magnet === 0;
+        markLines.push({
+          xAxis: current.timestamp,
+          lineStyle: {
+            color: isOpening ? 'rgba(239, 68, 68, 0.4)' : 'rgba(34, 197, 94, 0.4)',
+            width: 1,
+            type: 'dashed'
+          },
+          label: {
+            show: false
+          }
+        });
+      }
+    }
+    
+    return markLines;
+  };
 
   // Create comparison chart option
   const createComparisonChartOption = (dataKey: 'temperature' | 'humidity') => {
@@ -549,19 +856,40 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
     })));
     
     // Add main sensor data
-    if (data.length > 0) {
+    if (processedData.length > 0) {
+      const doorMarkAreas = createDoorMarkAreas(processedData);
+      
       series.push({
         name: sensorName,
         type: 'line',
-        data: data.map(d => [d.timestamp, d[dataKey], d.magnet]),
+        data: processedData.map(d => [d.timestamp, d[dataKey], d.magnet]),
         smooth: true,
         lineStyle: { width: 3, color: chamberColors[0] },
         itemStyle: { color: chamberColors[0] },
         symbol: 'circle',
-        symbolSize: 4,
+        symbolSize: responsiveConfig.symbolSize,
+        markArea: {
+          silent: true,
+          itemStyle: {
+            color: 'rgba(239, 68, 68, 0.08)', // Red for door open
+            borderWidth: 0
+          },
+          label: {
+            show: false
+          },
+          data: doorMarkAreas.map(area => [
+            { xAxis: area.xAxis },
+            { xAxis: area.xAxisEnd }
+          ])
+        },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          data: createDoorMarkLines(processedData)
+        }
       });
       legendData.push(sensorName);
-      console.log(`✅ [SensorChart] Added main sensor: ${sensorName}`);
+      console.log(`✅ [SensorChart] Added main sensor: ${sensorName} with ${doorMarkAreas.length} door open periods`);
     }
     
     // Add comparison chamber data
@@ -579,7 +907,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
           lineStyle: { width: 2, color: chamberColors[colorIndex], type: 'dashed' },
           itemStyle: { color: chamberColors[colorIndex] },
           symbol: 'circle',
-          symbolSize: 3,
+          symbolSize: responsiveConfig.symbolSize - 1,
         });
         legendData.push(chamberName);
         console.log(`✅ [SensorChart] Added comparison chamber: ${chamberName} (${chamberData.length} points)`);
@@ -588,42 +916,32 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
     
     console.log(`📊 [SensorChart] Total series: ${series.length}, Legend: ${legendData.join(', ')}`);
     
-    // Add door status bar for main sensor
-    const doorStatusSeries = data.length > 0 ? {
-      name: 'État Porte',
-      type: 'bar',
-      xAxisIndex: 1,
-      yAxisIndex: 1,
-      data: data.map(d => [d.timestamp, d.magnet]),
-      itemStyle: {
-        color: function(params: any) {
-          return params.data[1] === 1 ? '#10B981' : '#EF4444';
-        }
-      },
-      barWidth: '100%',
-      barGap: '-100%'
-    } : null;
-    
-    if (doorStatusSeries) {
-      series.push(doorStatusSeries);
-    }
+ 
+  
     
     return {
     backgroundColor: 'transparent',
+    animation: true,
+    animationDuration: 800,
+    animationEasing: 'cubicOut',
     toolbox: {
+      right: responsiveConfig.toolbox.right,
+      top: responsiveConfig.toolbox.top,
+      itemSize: responsiveConfig.toolbox.itemSize,
       feature: {
         dataZoom: {
           yAxisIndex: 'none',
           title: {
-            zoom: 'Zoom temporel',
-            back: 'Restaurer zoom'
+            zoom: 'Zoom',
+            back: 'Retour'
           }
         },
         restore: {
-          title: 'Restaurer'
+          title: 'Reset'
         },
         saveAsImage: {
-          title: 'Sauvegarder'
+          title: 'Save',
+          pixelRatio: 2
         }
       }
     },
@@ -631,78 +949,164 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       {
         type: 'inside',
         start: 0,
-        end: 100
+        end: 100,
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: false
       },
       {
+        type: 'slider',
         start: 0,
         end: 100,
-        handleIcon: 'M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
-        handleSize: '80%',
+        height: responsiveConfig.toolbox.itemSize + 8,
+        bottom: 10,
+        show: true,
+        showDetail: false,
+        showDataShadow: false,
+        realtime: true,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(241, 245, 249, 0.8)',
+        fillerColor: 'rgba(59, 130, 246, 0.2)',
+        dataBackground: {
+          lineStyle: { 
+            opacity: 0,
+            width: 0 
+          },
+          areaStyle: { 
+            opacity: 0,
+            color: 'transparent'
+          }
+        },
+        selectedDataBackground: {
+          lineStyle: { 
+            opacity: 0,
+            width: 0
+          },
+          areaStyle: { 
+            opacity: 0,
+            color: 'transparent'
+          }
+        },
+        handleIcon: 'path://M512,512m-448,0a448,448,0,1,0,896,0a448,448,0,1,0,-896,0Z',
+        handleSize: '120%',
         handleStyle: {
-          color: '#fff',
-          shadowBlur: 3,
-          shadowColor: 'rgba(0, 0, 0, 0.6)',
-          shadowOffsetX: 2,
+          color: '#3B82F6',
+          borderColor: '#fff',
+          borderWidth: 2,
+          shadowBlur: 4,
+          shadowColor: 'rgba(59, 130, 246, 0.4)',
+          shadowOffsetX: 0,
           shadowOffsetY: 2
+        },
+        moveHandleSize: 0,
+        moveHandleStyle: {
+          opacity: 0
+        },
+        textStyle: {
+          color: 'transparent',
+          fontSize: 0
+        },
+        labelFormatter: '',
+        brushSelect: false,
+        borderRadius: 10,
+        emphasis: {
+          handleStyle: {
+            shadowBlur: 6,
+            shadowColor: 'rgba(59, 130, 246, 0.5)'
+          }
         }
       }
     ],
     tooltip: {
       trigger: 'axis',
-        axisPointer: { type: 'cross' },
+      axisPointer: { 
+        type: 'cross',
+        label: {
+          backgroundColor: '#6B7280'
+        }
+      },
+      position: function (point: any, _params: any, _dom: any, _rect: any, size: any) {
+        // Smart positioning for mobile and desktop
+        const isMobile = window.innerWidth < 640;
+        const x = point[0] - size.contentSize[0] / 2;
+        const y = isMobile ? '5%' : '10%';
+        return [x, y];
+      },
+      backgroundColor: 'rgba(255, 255, 255, 0.96)',
+      borderColor: '#E5E7EB',
+      borderWidth: 1,
+      padding: [10, 14],
+      textStyle: {
+        color: '#1F2937',
+        fontSize: responsiveConfig.fontSize.base
+      },
+      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border-radius: 8px; backdrop-filter: blur(8px);',
       formatter: function(params: any) {
         if (!params || params.length === 0) return '';
         
-          let tooltipHtml = '<div style="padding: 8px;">';
-          tooltipHtml += `<div style="font-weight: bold; margin-bottom: 6px;">${dataKey === 'temperature' ? 'Température' : 'Humidité'}</div>`;
+        let tooltipHtml = '<div>';
+        
+        // Time at the top
+        const date = new Date(params[0].data[0]);
+        const time = date.toLocaleString('fr-FR', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          day: '2-digit',
+          month: 'short'
+        });
+        tooltipHtml += `<div style="font-weight: 600; margin-bottom: 8px; color: #111827; border-bottom: 1px solid #E5E7EB; padding-bottom: 6px;">${time}</div>`;
+        
+        params.forEach((param: any) => {
+          // Skip door status series in tooltip
+          if (param.seriesName === 'État Porte') return;
           
-          params.forEach((param: any) => {
-            // Skip door status series in tooltip
-            if (param.seriesName === 'État Porte') return;
-            
-            const value = param.data[1].toFixed(dataKey === 'temperature' ? 1 : 0);
-            const unit = dataKey === 'temperature' ? '°C' : '%';
-            
-            tooltipHtml += `
-              <div style="margin-bottom: 4px;">
-                <span style="display: inline-block; width: 10px; height: 10px; background-color: ${param.color}; border-radius: 50%; margin-right: 6px;"></span>
-                <strong>${param.seriesName}:</strong> ${value}${unit}
-          </div>
-        `;
-          });
+          const value = param.data[1].toFixed(dataKey === 'temperature' ? 1 : 0);
+          const unit = dataKey === 'temperature' ? '°C' : '%';
           
-          // Add door status at the end
-          if (params[0] && params[0].data[2] !== undefined) {
-            const doorStatus = params[0].data[2] === 1 ? '🔒 Fermée' : '🔓 Ouverte';
-            tooltipHtml += `<div style="font-size: 12px; color: #6B7280; margin-top: 4px;">Porte: ${doorStatus}</div>`;
-          }
-          
-          const date = new Date(params[0].data[0]);
-          const time = date.toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-          tooltipHtml += `<div style="font-size: 12px; color: #6B7280;">${time}</div>`;
-          
-          tooltipHtml += '</div>';
-          return tooltipHtml;
+          tooltipHtml += `
+            <div style="margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; min-width: 180px;">
+              <div style="display: flex; align-items: center;">
+                <span style="display: inline-block; width: 8px; height: 8px; background-color: ${param.color}; border-radius: 50%; margin-right: 8px;"></span>
+                <span style="color: #6B7280; font-size: 12px;">${param.seriesName}</span>
+              </div>
+              <strong style="margin-left: 12px; color: #111827;">${value}${unit}</strong>
+            </div>
+          `;
+        });
+        
+        // Add door status
+        if (params[0] && params[0].data[2] !== undefined) {
+          const doorStatus = params[0].data[2] === 1 ? '🔒 Fermée' : '  Ouverte';
+          const doorColor = params[0].data[2] === 1 ? '#10B981' : '#EF4444';
+          tooltipHtml += `
+            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #E5E7EB;">
+              <span style="color: ${doorColor}; font-size: 12px; font-weight: 500;">${doorStatus}</span>
+            </div>
+          `;
+        }
+        
+        tooltipHtml += '</div>';
+        return tooltipHtml;
       }
     },
       legend: {
         data: legendData,
         top: 10,
-        textStyle: { fontSize: 12 }
+        textStyle: { fontSize: responsiveConfig.fontSize.legend }
       },
     grid: [
       {
-        left: '5%',
-        right: '5%',
-        bottom: '30%',
+        left: responsiveConfig.grid.left,
+        right: responsiveConfig.grid.right,
+        bottom: responsiveConfig.grid.bottom,
         top: '20%',
         containLabel: true
       },
       {
-        left: '5%',
-        right: '5%',
+        left: responsiveConfig.grid.left,
+        right: responsiveConfig.grid.right,
         bottom: '5%',
-        top: '85%',
+        top: '88%',
         containLabel: true
       }
     ],
@@ -713,7 +1117,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         axisLine: { lineStyle: { color: '#E5E7EB' } },
         axisLabel: {
           color: '#6B7280',
-          fontSize: 10,
+          fontSize: responsiveConfig.fontSize.label,
           rotate: 45,
           interval: 'auto',
           formatter: function(value: number) {
@@ -734,28 +1138,34 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         type: 'value',
         gridIndex: 0,
         name: dataKey === 'temperature' ? 'Température (°C)' : 'Humidité (%)',
-        nameTextStyle: { color: dataKey === 'temperature' ? '#EF4444' : '#3B82F6' },
+        nameTextStyle: { 
+          color: dataKey === 'temperature' ? '#EF4444' : '#3B82F6',
+          fontSize: responsiveConfig.fontSize.title
+        },
         axisLine: { lineStyle: { color: dataKey === 'temperature' ? '#EF4444' : '#3B82F6' } },
         axisLabel: {
           color: dataKey === 'temperature' ? '#EF4444' : '#3B82F6',
+          fontSize: responsiveConfig.fontSize.label,
           formatter: dataKey === 'temperature' ? '{value}°C' : '{value}%'
         },
         splitLine: { lineStyle: { color: dataKey === 'temperature' ? '#FEE2E2' : '#DBEAFE' } }
       },
       {
         type: 'value',
-        gridIndex: 1,
-        name: 'Porte',
-        nameTextStyle: { color: '#6B7280', fontSize: 10 },
+        gridIndex: 1, 
+        nameTextStyle: { 
+          color: '#6B7280', 
+          fontSize: responsiveConfig.fontSize.label 
+        },
         min: 0,
         max: 1,
         interval: 1,
         axisLine: { lineStyle: { color: '#E5E7EB' } },
         axisLabel: {
           color: '#6B7280',
-          fontSize: 9,
+          fontSize: responsiveConfig.fontSize.label,
           formatter: function(value: number) {
-            return value === 1 ? '🔒' : '🔓';
+            return value === 1 ? '🔒' : ' ';
           }
         },
         splitLine: { show: false }
@@ -766,9 +1176,9 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
   };
 
   // Temperature chart configuration
-  console.log(`📊 [SensorChart] Creating temperature chart with ${data.length} data points`);
-  if (data.length > 0) {
-    console.log(`🚪 [SensorChart] Door status data for chart:`, data.slice(0, 5).map(d => ({
+  console.log(`📊 [SensorChart] Creating temperature chart with ${processedData.length} data points (original: ${data.length})`);
+  if (processedData.length > 0) {
+    console.log(`🚪 [SensorChart] Door status data for chart:`, processedData.slice(0, 5).map(d => ({
       time: new Date(d.timestamp).toLocaleTimeString(),
       magnet: d.magnet
     })));
@@ -776,20 +1186,26 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
   
   const temperatureChartOption = comparisonMode ? createComparisonChartOption('temperature') : {
     backgroundColor: 'transparent',
+    animation: true,
+    animationDuration: 800,
     toolbox: {
+      right: responsiveConfig.toolbox.right,
+      top: responsiveConfig.toolbox.top,
+      itemSize: responsiveConfig.toolbox.itemSize,
       feature: {
         dataZoom: {
           yAxisIndex: 'none',
           title: {
-            zoom: 'Zoom temporel',
-            back: 'Restaurer zoom'
+            zoom: 'Zoom',
+            back: 'Retour'
           }
         },
         restore: {
-          title: 'Restaurer'
+          title: 'Reset'
         },
         saveAsImage: {
-          title: 'Sauvegarder'
+          title: 'Save',
+          pixelRatio: 2
         }
       }
     },
@@ -797,38 +1213,141 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       {
         type: 'inside',
         start: 0,
-        end: 100
+        end: 100,
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: false
       },
       {
+        type: 'slider',
         start: 0,
         end: 100,
-        handleIcon: 'M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
-        handleSize: '80%',
+        height: responsiveConfig.toolbox.itemSize + 8,
+        bottom: 10,
+        show: true,
+        showDetail: false,
+        showDataShadow: false,
+        realtime: true,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(254, 226, 226, 0.6)',
+        fillerColor: 'rgba(239, 68, 68, 0.25)',
+        dataBackground: {
+          lineStyle: { 
+            opacity: 0,
+            width: 0 
+          },
+          areaStyle: { 
+            opacity: 0,
+            color: 'transparent'
+          }
+        },
+        selectedDataBackground: {
+          lineStyle: { 
+            opacity: 0,
+            width: 0
+          },
+          areaStyle: { 
+            opacity: 0,
+            color: 'transparent'
+          }
+        },
+        handleIcon: 'path://M512,512m-448,0a448,448,0,1,0,896,0a448,448,0,1,0,-896,0Z',
+        handleSize: '120%',
         handleStyle: {
-          color: '#fff',
-          shadowBlur: 3,
-          shadowColor: 'rgba(0, 0, 0, 0.6)',
-          shadowOffsetX: 2,
+          color: '#EF4444',
+          borderColor: '#fff',
+          borderWidth: 2,
+          shadowBlur: 4,
+          shadowColor: 'rgba(239, 68, 68, 0.4)',
+          shadowOffsetX: 0,
           shadowOffsetY: 2
+        },
+        moveHandleSize: 0,
+        moveHandleStyle: {
+          opacity: 0
+        },
+        textStyle: {
+          color: 'transparent',
+          fontSize: 0
+        },
+        labelFormatter: '',
+        brushSelect: false,
+        borderRadius: 10,
+        emphasis: {
+          handleStyle: {
+            shadowBlur: 6,
+            shadowColor: 'rgba(239, 68, 68, 0.5)'
+          }
         }
       }
     ],
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross' },
+      axisPointer: { 
+        type: 'cross',
+        label: {
+          backgroundColor: '#6B7280'
+        }
+      },
+      position: function (point: any, _params: any, _dom: any, _rect: any, size: any) {
+        // Position tooltip at top for better visibility
+        return [point[0] - size.contentSize[0] / 2, '10%'];
+      },
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#E5E7EB',
+      borderWidth: 1,
+      padding: [12, 16],
+      textStyle: {
+        color: '#1F2937',
+        fontSize: 13
+      },
+      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border-radius: 8px;',
       formatter: function(params: any) {
         if (!params || params.length === 0) return '';
         const point = params[0];
         const date = new Date(point.data[0]);
-        const time = date.toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const time = date.toLocaleString('fr-FR', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          day: '2-digit',
+          month: 'short'
+        });
         const value = point.data[1].toFixed(1);
-        const doorStatus = point.data[2] === 1 ? '🔒 Fermée' : '🔓 Ouverte';
-        return `<div style="padding: 8px;"><strong>Température: ${value}°C</strong><br/>${time}<br/>Porte: ${doorStatus}</div>`;
+        const doorStatus = point.data[2] === 1 ? '🔒 Fermée' : '  Ouverte';
+        const doorColor = point.data[2] === 1 ? '#10B981' : '#EF4444';
+        
+        return `
+          <div>
+            <div style="font-weight: 600; margin-bottom: 8px; color: #111827; border-bottom: 1px solid #E5E7EB; padding-bottom: 6px;">${time}</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; min-width: 180px; margin-bottom: 6px;">
+              <div style="display: flex; align-items: center;">
+                <span style="display: inline-block; width: 8px; height: 8px; background-color: #EF4444; border-radius: 50%; margin-right: 8px;"></span>
+                <span style="color: #6B7280; font-size: 12px;">Température</span>
+              </div>
+              <strong style="margin-left: 12px; color: #111827;">${value}°C</strong>
+            </div>
+            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #E5E7EB;">
+              <span style="color: ${doorColor}; font-size: 12px; font-weight: 500;">${doorStatus}</span>
+            </div>
+          </div>
+        `;
       }
     },
     grid: [
-      { left: '5%', right: '5%', bottom: '30%', top: '12%', containLabel: true },
-      { left: '5%', right: '5%', bottom: '5%', top: '85%', containLabel: true }
+      { 
+        left: responsiveConfig.grid.left, 
+        right: responsiveConfig.grid.right, 
+        bottom: responsiveConfig.grid.bottom, 
+        top: responsiveConfig.grid.top, 
+        containLabel: true 
+      },
+      { 
+        left: responsiveConfig.grid.left, 
+        right: responsiveConfig.grid.right, 
+        bottom: '5%', 
+        top: '88%', 
+        containLabel: true 
+      }
     ],
     xAxis: [
       {
@@ -837,7 +1356,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         axisLine: { lineStyle: { color: '#E5E7EB' } },
         axisLabel: {
           color: '#6B7280',
-          fontSize: 10,
+          fontSize: responsiveConfig.fontSize.label,
           rotate: 45,
           interval: 'auto',
           formatter: function(value: number) {
@@ -858,25 +1377,41 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         type: 'value',
         gridIndex: 0,
         name: 'Température (°C)',
-        nameTextStyle: { color: '#EF4444' },
+        nameTextStyle: { 
+          color: '#EF4444',
+          fontSize: responsiveConfig.fontSize.title
+        },
         axisLine: { lineStyle: { color: '#EF4444' } },
-        axisLabel: { color: '#EF4444', formatter: '{value}°C' },
+        axisLabel: { 
+          color: '#EF4444', 
+          fontSize: responsiveConfig.fontSize.label,
+          formatter: '{value}°C' 
+        },
         splitLine: { lineStyle: { color: '#FEE2E2' } }
       },
       {
         type: 'value',
-        gridIndex: 1,
+        gridIndex: 1,  
+        interval: 1, 
+      },
+      {
+        type: 'value',
+        gridIndex: 0,
         name: 'Porte',
-        nameTextStyle: { color: '#6B7280', fontSize: 10 },
+        nameTextStyle: { 
+          color: '#8B5CF6',
+          fontSize: responsiveConfig.fontSize.label
+        },
+        position: 'right',
         min: 0,
         max: 1,
-        interval: 1,
-        axisLine: { lineStyle: { color: '#E5E7EB' } },
+        interval: 0.5,
+        axisLine: { lineStyle: { color: '#8B5CF6' } },
         axisLabel: {
-          color: '#6B7280',
-          fontSize: 9,
+          color: '#8B5CF6',
+          fontSize: responsiveConfig.fontSize.label,
           formatter: function(value: number) {
-            return value === 1 ? '🔒' : '🔓';
+            return value === 1 ? 'Fermé' : value === 0 ? 'Ouvert' : '';
           }
         },
         splitLine: { show: false }
@@ -888,7 +1423,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         type: 'line',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: data.map(d => [d.timestamp, d.temperature, d.magnet]),
+        data: processedData.map(d => [d.timestamp, d.temperature, d.magnet]),
         smooth: true,
         lineStyle: { width: 3, color: '#EF4444' },
         itemStyle: { color: '#EF4444' },
@@ -903,48 +1438,130 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
           }
         },
         symbol: 'circle',
-        symbolSize: 4,
+        symbolSize: responsiveConfig.symbolSize,
+        markArea: {
+          silent: true,
+          itemStyle: {
+            color: 'rgba(220, 38, 38, 0.12)', // Stronger red for door open
+            borderWidth: 1,
+            borderColor: 'rgba(220, 38, 38, 0.2)'
+          },
+          label: {
+            show: false
+          },
+          data: createDoorMarkAreas(processedData).map(area => [
+            { 
+              xAxis: area.xAxis,
+              name: 'Porte Ouverte'
+            },
+            { xAxis: area.xAxisEnd }
+          ])
+        },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          data: createDoorMarkLines(processedData)
+        }
+      },
+      {
+        name: 'État Porte',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 2,
+        data: processedData.map(d => [d.timestamp, d.magnet]),
+        step: 'end',
+        lineStyle: { 
+          width: 2, 
+          color: '#8B5CF6',
+          type: 'solid'
+        },
+        itemStyle: { color: '#8B5CF6' },
+        symbol: 'none',
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(231, 246, 92, 0.2)' },
+              { offset: 1, color: 'rgba(138, 92, 246, 0)' }
+            ]
+          }
+        }
       },
       {
         name: 'État Porte',
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: data.map(d => {
+        data: processedData.map(d => {
           const doorData = [d.timestamp, d.magnet];
           return doorData;
         }),
         itemStyle: {
           color: function(params: any) {
-            return params.data[1] === 1 ? '#10B981' : '#EF4444';
-          }
+            // 1 = Closed (Green), 0 = Open (Red)
+            return params.data[1] === 1 
+              ? {
+                  type: 'linear',
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: '#10B981' },  // Green-500
+                    { offset: 1, color: '#059669' }   // Green-600
+                  ]
+                }
+              : {
+                  type: 'linear',
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: '#EF4444' },  // Red-500
+                    { offset: 1, color: '#DC2626' }   // Red-600
+                  ]
+                };
+          },
+          borderRadius: [2, 2, 0, 0],
+          shadowColor: 'rgba(0, 0, 0, 0.1)',
+          shadowBlur: 2,
+          shadowOffsetY: 1
         },
         barWidth: '100%',
-        barGap: '-100%'
+        barGap: '-100%',
+        emphasis: {
+          itemStyle: {
+            shadowColor: 'rgba(0, 0, 0, 0.3)',
+            shadowBlur: 5,
+            shadowOffsetY: 2
+          }
+        }
       }
     ]
   };
   
   console.log(`🚪 [SensorChart] Temperature chart series count: ${temperatureChartOption.series.length}`);
-  console.log(`🚪 [SensorChart] Door status series data points: ${data.length}`);
+  console.log(`🚪 [SensorChart] Door status series data points: ${processedData.length}`);
 
   // Humidity chart configuration
   const humidityChartOption = comparisonMode ? createComparisonChartOption('humidity') : {
     backgroundColor: 'transparent',
+    animation: true,
+    animationDuration: 800,
     toolbox: {
+      right: responsiveConfig.toolbox.right,
+      top: responsiveConfig.toolbox.top,
+      itemSize: responsiveConfig.toolbox.itemSize,
       feature: {
         dataZoom: {
           yAxisIndex: 'none',
           title: {
-            zoom: 'Zoom temporel',
-            back: 'Restaurer zoom'
+            zoom: 'Zoom',
+            back: 'Retour'
           }
         },
         restore: {
-          title: 'Restaurer'
+          title: 'Reset'
         },
         saveAsImage: {
-          title: 'Sauvegarder'
+          title: 'Save',
+          pixelRatio: 2
         }
       }
     },
@@ -952,38 +1569,141 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       {
         type: 'inside',
         start: 0,
-        end: 100
+        end: 100,
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: false
       },
       {
+        type: 'slider',
         start: 0,
         end: 100,
-        handleIcon: 'M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
-        handleSize: '80%',
+        height: responsiveConfig.toolbox.itemSize + 8,
+        bottom: 10,
+        show: true,
+        showDetail: false,
+        showDataShadow: false,
+        realtime: true,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(219, 234, 254, 0.6)',
+        fillerColor: 'rgba(59, 130, 246, 0.25)',
+        dataBackground: {
+          lineStyle: { 
+            opacity: 0,
+            width: 0 
+          },
+          areaStyle: { 
+            opacity: 0,
+            color: 'transparent'
+          }
+        },
+        selectedDataBackground: {
+          lineStyle: { 
+            opacity: 0,
+            width: 0
+          },
+          areaStyle: { 
+            opacity: 0,
+            color: 'transparent'
+          }
+        },
+        handleIcon: 'path://M512,512m-448,0a448,448,0,1,0,896,0a448,448,0,1,0,-896,0Z',
+        handleSize: '120%',
         handleStyle: {
-          color: '#fff',
-          shadowBlur: 3,
-          shadowColor: 'rgba(0, 0, 0, 0.6)',
-          shadowOffsetX: 2,
+          color: '#3B82F6',
+          borderColor: '#fff',
+          borderWidth: 2,
+          shadowBlur: 4,
+          shadowColor: 'rgba(59, 130, 246, 0.4)',
+          shadowOffsetX: 0,
           shadowOffsetY: 2
+        },
+        moveHandleSize: 0,
+        moveHandleStyle: {
+          opacity: 0
+        },
+        textStyle: {
+          color: 'transparent',
+          fontSize: 0
+        },
+        labelFormatter: '',
+        brushSelect: false,
+        borderRadius: 10,
+        emphasis: {
+          handleStyle: {
+            shadowBlur: 6,
+            shadowColor: 'rgba(59, 130, 246, 0.5)'
+          }
         }
       }
     ],
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross' },
+      axisPointer: { 
+        type: 'cross',
+        label: {
+          backgroundColor: '#6B7280'
+        }
+      },
+      position: function (point: any, _params: any, _dom: any, _rect: any, size: any) {
+        // Position tooltip at top for better visibility
+        return [point[0] - size.contentSize[0] / 2, '10%'];
+      },
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#E5E7EB',
+      borderWidth: 1,
+      padding: [12, 16],
+      textStyle: {
+        color: '#1F2937',
+        fontSize: 13
+      },
+      extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border-radius: 8px;',
       formatter: function(params: any) {
         if (!params || params.length === 0) return '';
         const point = params[0];
         const date = new Date(point.data[0]);
-        const time = date.toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const time = date.toLocaleString('fr-FR', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          day: '2-digit',
+          month: 'short'
+        });
         const value = point.data[1].toFixed(0);
-        const doorStatus = point.data[2] === 1 ? '🔒 Fermée' : '🔓 Ouverte';
-        return `<div style="padding: 8px;"><strong>Humidité: ${value}%</strong><br/>${time}<br/>Porte: ${doorStatus}</div>`;
+        const doorStatus = point.data[2] === 1 ? '🔒 Fermée' : '  Ouverte';
+        const doorColor = point.data[2] === 1 ? '#10B981' : '#EF4444';
+        
+        return `
+          <div>
+            <div style="font-weight: 600; margin-bottom: 8px; color: #111827; border-bottom: 1px solid #E5E7EB; padding-bottom: 6px;">${time}</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; min-width: 180px; margin-bottom: 6px;">
+              <div style="display: flex; align-items: center;">
+                <span style="display: inline-block; width: 8px; height: 8px; background-color: #3B82F6; border-radius: 50%; margin-right: 8px;"></span>
+                <span style="color: #6B7280; font-size: 12px;">Humidité</span>
+              </div>
+              <strong style="margin-left: 12px; color: #111827;">${value}%</strong>
+            </div>
+            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #E5E7EB;">
+              <span style="color: ${doorColor}; font-size: 12px; font-weight: 500;">${doorStatus}</span>
+            </div>
+          </div>
+        `;
       }
     },
     grid: [
-      { left: '5%', right: '5%', bottom: '30%', top: '12%', containLabel: true },
-      { left: '5%', right: '5%', bottom: '5%', top: '85%', containLabel: true }
+      { 
+        left: responsiveConfig.grid.left, 
+        right: responsiveConfig.grid.right, 
+        bottom: responsiveConfig.grid.bottom, 
+        top: responsiveConfig.grid.top, 
+        containLabel: true 
+      },
+      { 
+        left: responsiveConfig.grid.left, 
+        right: responsiveConfig.grid.right, 
+        bottom: '5%', 
+        top: '88%', 
+        containLabel: true 
+      }
     ],
     xAxis: [
       {
@@ -992,7 +1712,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         axisLine: { lineStyle: { color: '#E5E7EB' } },
         axisLabel: {
           color: '#6B7280',
-          fontSize: 10,
+          fontSize: responsiveConfig.fontSize.label,
           rotate: 45,
           interval: 'auto',
           formatter: function(value: number) {
@@ -1013,25 +1733,50 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         type: 'value',
         gridIndex: 0,
         name: 'Humidité (%)',
-        nameTextStyle: { color: '#3B82F6' },
+        nameTextStyle: { 
+          color: '#3B82F6',
+          fontSize: responsiveConfig.fontSize.title
+        },
         axisLine: { lineStyle: { color: '#3B82F6' } },
-        axisLabel: { color: '#3B82F6', formatter: '{value}%' },
+        axisLabel: { 
+          color: '#3B82F6', 
+          fontSize: responsiveConfig.fontSize.label,
+          formatter: '{value}%' 
+        },
         splitLine: { lineStyle: { color: '#DBEAFE' } }
       },
       {
         type: 'value',
         gridIndex: 1,
         name: 'Porte',
-        nameTextStyle: { color: '#6B7280', fontSize: 10 },
+        nameTextStyle: { 
+          color: '#6B7280', 
+          fontSize: responsiveConfig.fontSize.label 
+        },
         min: 0,
         max: 1,
         interval: 1,
         axisLine: { lineStyle: { color: '#E5E7EB' } },
+        splitLine: { show: false }
+      },
+      {
+        type: 'value',
+        gridIndex: 0,
+        name: 'Porte',
+        nameTextStyle: { 
+          color: '#8B5CF6',
+          fontSize: responsiveConfig.fontSize.label
+        },
+        position: 'right',
+        min: 0,
+        max: 1,
+        interval: 0.5,
+        axisLine: { lineStyle: { color: '#8B5CF6' } },
         axisLabel: {
-          color: '#6B7280',
-          fontSize: 9,
+          color: '#8B5CF6',
+          fontSize: responsiveConfig.fontSize.label,
           formatter: function(value: number) {
-            return value === 1 ? '🔒' : '🔓';
+            return value === 1 ? 'Fermé' : value === 0 ? 'Ouvert' : '';
           }
         },
         splitLine: { show: false }
@@ -1043,7 +1788,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         type: 'line',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: data.map(d => [d.timestamp, d.humidity, d.magnet]),
+        data: processedData.map(d => [d.timestamp, d.humidity, d.magnet]),
         smooth: true,
         lineStyle: { width: 3, color: '#3B82F6' },
         itemStyle: { color: '#3B82F6' },
@@ -1058,21 +1803,97 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
           }
         },
         symbol: 'circle',
-        symbolSize: 4,
+        symbolSize: responsiveConfig.symbolSize,
+        markArea: {
+          silent: true,
+          itemStyle: {
+            color: 'rgba(220, 38, 38, 0.12)', // Red for door open
+            borderWidth: 1,
+            borderColor: 'rgba(220, 38, 38, 0.2)'
+          },
+          label: {
+            show: false
+          },
+          data: createDoorMarkAreas(processedData).map(area => [
+            { 
+              xAxis: area.xAxis,
+              name: 'Porte Ouverte'
+            },
+            { xAxis: area.xAxisEnd }
+          ])
+        },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          data: createDoorMarkLines(processedData)
+        }
+      },
+      {
+        name: 'État Porte',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 2,
+        data: processedData.map(d => [d.timestamp, d.magnet]),
+        step: 'end',
+        lineStyle: { 
+          width: 2, 
+          color: '#8B5CF6',
+          type: 'solid'
+        },
+        itemStyle: { color: '#8B5CF6' },
+        symbol: 'none',
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(92, 246, 92, 0.2)' },
+              { offset: 1, color: 'rgba(138, 92, 246, 0)' }
+            ]
+          }
+        }
       },
       {
         name: 'État Porte',
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: data.map(d => [d.timestamp, d.magnet]),
+        data: processedData.map(d => [d.timestamp, d.magnet]),
         itemStyle: {
           color: function(params: any) {
-            return params.data[1] === 1 ? '#10B981' : '#EF4444';
-          }
+            // 1 = Closed (Green), 0 = Open (Red)
+            return params.data[1] === 1 
+              ? {
+                  type: 'linear',
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: '#10B981' },  // Green-500
+                    { offset: 1, color: '#059669' }   // Green-600
+                  ]
+                }
+              : {
+                  type: 'linear',
+                  x: 0, y: 0, x2: 0, y2: 1,
+                  colorStops: [
+                    { offset: 0, color: '#EF4444' },  // Red-500
+                    { offset: 1, color: '#DC2626' }   // Red-600
+                  ]
+                };
+          },
+          borderRadius: [2, 2, 0, 0],
+          shadowColor: 'rgba(0, 0, 0, 0.1)',
+          shadowBlur: 2,
+          shadowOffsetY: 1
         },
         barWidth: '100%',
-        barGap: '-100%'
+        barGap: '-100%',
+        emphasis: {
+          itemStyle: {
+            shadowColor: 'rgba(0, 0, 0, 0.3)',
+            shadowBlur: 5,
+            shadowOffsetY: 2
+          }
+        }
       }
     ]
   };
@@ -1084,6 +1905,18 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       fetchSensorData(false);
     }
   }, [isOpen, sensorId, dateRange, fetchSensorData, isLiveMode]);
+
+  // Handle window resize for responsive charts
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleResize = () => {
+      setChartKey(prev => prev + 1);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpen]);
 
   // DON'T auto-enable comparison mode - let user enable it manually
   // This prevents extra API requests on modal open
@@ -1098,9 +1931,11 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
 
   console.log('✅ [SensorChart] Modal open, rendering chart');
   
+  const chartHeight = responsiveConfig.height;
+  
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-1 sm:p-4 pt-16 sm:pt-4">
-      <div className="bg-white rounded-lg sm:rounded-2xl shadow-2xl max-w-7xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden mx-1 sm:mx-4 flex flex-col mt-4 sm:mt-0">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center sm:items-start justify-center z-50 p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-gradient-to-br from-white to-gray-50/80 rounded-none sm:rounded-2xl shadow-2xl max-w-7xl w-full h-full sm:h-auto sm:min-h-0 sm:max-h-[92vh] overflow-hidden mx-0 sm:mx-auto my-0 sm:my-8 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100/60 bg-white/80 backdrop-blur-xl">
           <div className="flex items-center space-x-3 min-w-0 flex-1">
@@ -1202,14 +2037,14 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         </div>
 
         {/* Content */}
-        <div className="flex-1 p-2 sm:p-6 overflow-y-auto min-h-0">
+        <div className="flex-1 p-2 sm:p-4 lg:p-6 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-thin">
           {/* Date Range Selector */}
-          <div className="mb-4 sm:mb-6 p-3 sm:p-5 bg-white/60 backdrop-blur-xl rounded-3xl border border-white/20 shadow-xl shadow-black/5">
-            <div className="flex flex-col items-center space-y-3 sm:space-y-4">
-                  <div className="flex justify-center flex-wrap gap-1 sm:gap-1.5">
+          <div className="mb-2 sm:mb-4 lg:mb-6 p-2 sm:p-3 lg:p-5 bg-white/60 backdrop-blur-xl rounded-2xl sm:rounded-3xl border border-white/20 shadow-lg shadow-black/5">
+            <div className="flex flex-col items-center space-y-2 sm:space-y-3">
+                  <div className="flex justify-center flex-wrap gap-1 sm:gap-1.5 w-full">
                 <button
                   onClick={setLast30Minutes}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ${
+                  className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 sm:py-2 text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl transition-all duration-300 ${
                     isRangeSelected('30min')
                       ? 'bg-blue-500 text-white shadow-lg'
                       : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90'
@@ -1219,7 +2054,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                 </button>
                 <button
                   onClick={() => setQuickRange(1, '24h')}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ${
+                  className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 sm:py-2 text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl transition-all duration-300 ${
                     isRangeSelected('24h')
                       ? 'bg-blue-500 text-white shadow-lg'
                       : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90'
@@ -1229,7 +2064,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                 </button>
                 <button
                   onClick={() => setQuickRange(7, '7d')}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ${
+                  className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 sm:py-2 text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl transition-all duration-300 ${
                     isRangeSelected('7d')
                       ? 'bg-blue-500 text-white shadow-lg'
                       : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90'
@@ -1239,7 +2074,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                 </button>
                 <button
                   onClick={() => setQuickRange(30, '30d')}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs font-medium rounded-xl transition-all duration-300 ${
+                  className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 sm:py-2 text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl transition-all duration-300 ${
                     isRangeSelected('30d')
                       ? 'bg-blue-500 text-white shadow-lg'
                       : 'bg-white/80 text-slate-700 border border-slate-200/60 hover:bg-slate-50/90'
@@ -1250,6 +2085,131 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                   </div>
             </div>
           </div>
+
+          {/* KPI Cards - Compact Version */}
+          {kpis && !comparisonMode && (
+            <div className="mb-3 sm:mb-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
+                {/* Average Temperature KPI */}
+                <div className="bg-gradient-to-br from-red-50 to-red-100/50 rounded-lg sm:rounded-xl p-2 sm:p-2.5 border border-red-200/60 shadow-sm">
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] font-semibold text-red-600/70 uppercase tracking-tight truncate">Temp. Moy</p>
+                      <div className="flex items-baseline gap-0.5 mt-0.5">
+                        <p className="text-lg sm:text-xl font-bold text-red-700">{kpis.avgTemp.toFixed(1)}</p>
+                        <span className="text-[10px] text-red-600">°C</span>
+                      </div>
+                      <p className="text-[8px] text-red-600/60 mt-0.5">{kpis.minTemp.toFixed(1)}° – {kpis.maxTemp.toFixed(1)}°</p>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-red-200/40">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[8px] text-red-600/70">Zone 0-4°C</span>
+                      <span className="text-[8px] font-bold text-red-700">{kpis.tempRangePercent.toFixed(0)}%</span>
+                    </div>
+                    <div className="w-full bg-red-200/30 rounded-full h-1 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${
+                          kpis.tempRangePercent >= 90 ? 'bg-green-500' : 
+                          kpis.tempRangePercent >= 70 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(kpis.tempRangePercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Temperature Stability KPI */}
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100/50 rounded-lg sm:rounded-xl p-2 sm:p-2.5 border border-orange-200/60 shadow-sm">
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] font-semibold text-orange-600/70 uppercase tracking-tight truncate">Stabilité T°</p>
+                      <div className="flex items-baseline gap-0.5 mt-0.5">
+                        <p className="text-lg sm:text-xl font-bold text-orange-700">±{kpis.tempStability.toFixed(2)}</p>
+                        <span className="text-[10px] text-orange-600">°C</span>
+                      </div>
+                      <p className="text-[8px] text-orange-600/60 mt-0.5">Écart-type (σ)</p>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-orange-200/40">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <div className={`w-1 h-1 rounded-full ${
+                          kpis.tempStability < 0.5 ? 'bg-green-500' : 
+                          kpis.tempStability < 1.0 ? 'bg-yellow-500' : 'bg-red-500'
+                        } animate-pulse`}></div>
+                        <span className={`text-[8px] font-medium ${
+                          kpis.tempStability < 0.5 ? 'text-green-600' : 
+                          kpis.tempStability < 1.0 ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {kpis.tempStability < 0.5 ? 'Excellent' : kpis.tempStability < 1.0 ? 'Bon' : 'Instable'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Average Humidity KPI */}
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-lg sm:rounded-xl p-2 sm:p-2.5 border border-blue-200/60 shadow-sm">
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] font-semibold text-blue-600/70 uppercase tracking-tight truncate">Humidité Moy</p>
+                      <div className="flex items-baseline gap-0.5 mt-0.5">
+                        <p className="text-lg sm:text-xl font-bold text-blue-700">{kpis.avgHumidity.toFixed(1)}</p>
+                        <span className="text-[10px] text-blue-600">%</span>
+                      </div>
+                      <p className="text-[8px] text-blue-600/60 mt-0.5">{kpis.minHum.toFixed(0)}% – {kpis.maxHum.toFixed(0)}%</p>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-blue-200/40">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[8px] text-blue-600/70">90-95%</span>
+                      <span className="text-[8px] font-bold text-blue-700">{kpis.humRangePercent.toFixed(0)}%</span>
+                    </div>
+                    <div className="w-full bg-blue-200/30 rounded-full h-1 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${
+                          kpis.humRangePercent >= 90 ? 'bg-green-500' : 
+                          kpis.humRangePercent >= 70 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(kpis.humRangePercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Humidity Stability KPI */}
+                <div className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 rounded-lg sm:rounded-xl p-2 sm:p-2.5 border border-cyan-200/60 shadow-sm">
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] font-semibold text-cyan-600/70 uppercase tracking-tight truncate">Stabilité H%</p>
+                      <div className="flex items-baseline gap-0.5 mt-0.5">
+                        <p className="text-lg sm:text-xl font-bold text-cyan-700">±{kpis.humStability.toFixed(2)}</p>
+                        <span className="text-[10px] text-cyan-600">%</span>
+                      </div>
+                      <p className="text-[8px] text-cyan-600/60 mt-0.5">Écart-type (σ)</p>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-cyan-200/40">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <div className={`w-1 h-1 rounded-full ${
+                          kpis.humStability < 2.0 ? 'bg-green-500' : 
+                          kpis.humStability < 4.0 ? 'bg-yellow-500' : 'bg-red-500'
+                        } animate-pulse`}></div>
+                        <span className={`text-[8px] font-medium ${
+                          kpis.humStability < 2.0 ? 'text-green-600' : 
+                          kpis.humStability < 4.0 ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {kpis.humStability < 2.0 ? 'Excellent' : kpis.humStability < 4.0 ? 'Bon' : 'Instable'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Comparison Status */}
           {comparisonMode && (
@@ -1272,27 +2232,63 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                                 )}
 
           {/* Charts */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 sm:gap-6">
-                {/* Temperature Chart */}
-            <div className="bg-white rounded-lg sm:rounded-xl border border-gray-200 p-1 sm:p-4 shadow-sm">
-                  <ReactECharts 
-                    option={temperatureChartOption} 
-                    style={{ height: '250px', width: '100%' }}
-                    opts={{ renderer: 'canvas' }}
-                    notMerge={true}
-                  />
-                </div>
+          <div className={`grid grid-cols-1 lg:grid-cols-2 gap-${responsiveConfig.padding.gap}`}>
+            {/* Temperature Chart */}
+            <div className={`bg-white/90 backdrop-blur-md rounded-xl sm:rounded-2xl border border-gray-200/60 p-${responsiveConfig.padding.chart} shadow-lg hover:shadow-xl transition-all duration-300`}>
+              <div className="mb-1.5 sm:mb-2 lg:mb-3 flex items-center justify-between">
+             {/*    <h3 className="text-sm sm:text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                  Température
+                </h3> */}
+                {processedData.length > 0 && (
+                  <span className="text-xs sm:text-sm text-gray-500">
+                    {processedData.length} points
+                    {aggregationInterval > 0 && (
+                      <span className="ml-1 text-[10px] text-gray-400">
+                        ({aggregationInterval}min)
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <ReactECharts 
+                key={`temp-${sensorId}-${dateRange.type}-${comparisonMode}`}
+                option={temperatureChartOption} 
+                style={{ height: chartHeight, width: '100%' }}
+                opts={{ renderer: 'canvas', locale: 'FR' }}
+                notMerge={true}
+                lazyUpdate={true}
+              />
+            </div>
 
-                {/* Humidity Chart */}
-            <div className="bg-white rounded-lg sm:rounded-xl border border-gray-200 p-1 sm:p-4 shadow-sm">
-                  <ReactECharts 
-                    option={humidityChartOption} 
-                    style={{ height: '250px', width: '100%' }}
-                    opts={{ renderer: 'canvas' }}
-                    notMerge={true}
-                  />
-                    </div>
-                  </div>
+            {/* Humidity Chart */}
+            <div className={`bg-white/90 backdrop-blur-md rounded-xl sm:rounded-2xl border border-gray-200/60 p-${responsiveConfig.padding.chart} shadow-lg hover:shadow-xl transition-all duration-300`}>
+              <div className="mb-1.5 sm:mb-2 lg:mb-3 flex items-center justify-between">
+{/*                 <h3 className="text-sm sm:text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  Humidité
+                </h3> */}
+                {processedData.length > 0 && (
+                  <span className="text-xs sm:text-sm text-gray-500">
+                    {processedData.length} points
+                    {aggregationInterval > 0 && (
+                      <span className="ml-1 text-[10px] text-gray-400">
+                        ({aggregationInterval}min)
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <ReactECharts 
+                key={`hum-${sensorId}-${dateRange.type}-${comparisonMode}`}
+                option={humidityChartOption} 
+                style={{ height: chartHeight, width: '100%' }}
+                opts={{ renderer: 'canvas', locale: 'FR' }}
+                notMerge={true}
+                lazyUpdate={true}
+              />
+            </div>
+          </div>
 
           {/* Loading State */}
           {loading && (
