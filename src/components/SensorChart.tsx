@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { mqttLiveService, SensorData as MQTTSensorData } from '../lib/mqtt-live';
 import jsPDF from 'jspdf';
 import * as SunCalc from 'suncalc';
+import * as XLSX from 'xlsx';
+import html2canvas from 'html2canvas';
 
 // Utility function to calculate time ago
 const getTimeAgo = (timestamp: Date): string => {
@@ -57,6 +58,7 @@ interface SensorChartProps {
     name: string;
     channelNumber: number;
     boitieDeviceId?: string;
+    athGroupNumber?: number;
   }>;
 }
 
@@ -70,41 +72,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
   const [selectedChambers, setSelectedChambers] = useState<string[]>([]);
   const [comparisonData, setComparisonData] = useState<{ [chamberId: string]: SensorData[] }>({});
   const [comparisonLoading, setComparisonLoading] = useState(false);
-  
-  
-  // Function to add chamber data to comparison (reuses existing data if available)
-  const addChamberToComparison = useCallback((chamber: { id: string; name: string; channelNumber: number; boitieDeviceId?: string }) => {
-    // Check if this is the current sensor - if so, reuse the existing data
-    const isCurrentSensor = chamber.name === sensorName || chamber.id === sensorId;
-    
-    if (isCurrentSensor && data.length > 0) {
-      console.log(`📦 [SensorChart] Reusing existing data for current chamber: ${chamber.name}`);
-      setComparisonData(prev => ({
-        ...prev,
-        [chamber.id]: data
-      }));
-    } else if (!comparisonData[chamber.id]) {
-      // Only fetch if we don't already have data for this chamber
-      console.log(`🔄 [SensorChart] Need to fetch data for chamber: ${chamber.name}`);
-      // For now, just log - full implementation would fetch here
-    } else {
-      console.log(`📦 [SensorChart] Already have data for chamber: ${chamber.name}`);
-    }
-  }, [data, sensorName, sensorId, comparisonData]);
-  
-  // Update comparison data when main data changes (for current sensor)
-  useEffect(() => {
-    if (comparisonMode && data.length > 0) {
-      const currentChamber = availableChambers.find(c => c.name === sensorName);
-      if (currentChamber && selectedChambers.includes(currentChamber.id)) {
-        console.log(`📦 [SensorChart] Updating comparison data for current chamber with new data`);
-        setComparisonData(prev => ({
-          ...prev,
-          [currentChamber.id]: data
-        }));
-      }
-    }
-  }, [data, comparisonMode, sensorName, availableChambers, selectedChambers]);
+  const [collapsedFrigos, setCollapsedFrigos] = useState<Set<number>>(new Set());
   
   // Cache for storing sensor data
   const [cache, setCache] = useState<Map<string, { data: SensorData[], timestamp: number }>>(new Map());
@@ -119,17 +87,593 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
     };
   });
 
-  const [isLiveMode, setIsLiveMode] = useState(false);
-  const [mqttConnected, setMqttConnected] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [viewMode, setViewMode] = useState<'basic' | 'kpi'>('basic');
-  const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  const [kpiCalculating, setKpiCalculating] = useState(false);
-  const [cachedKPIs, setCachedKPIs] = useState<any>(null);
   const [chartKey, setChartKey] = useState(0); // For forcing chart re-render on resize
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showOutdoorData, setShowOutdoorData] = useState(false);
+  const [outdoorData, setOutdoorData] = useState<SensorData[]>([]);
+  const [outdoorLoading, setOutdoorLoading] = useState(false);
+  
+  // Refs for chart containers (for PDF export)
+  const temperatureChartRef = useRef<HTMLDivElement>(null);
+  const humidityChartRef = useRef<HTMLDivElement>(null);
 
   // Cache duration constant
   const CACHE_DURATION = 30000; // 30 seconds cache
+  
+  // Function to fetch outdoor weather data (historical)
+  const fetchOutdoorWeatherData = useCallback(async () => {
+    setOutdoorLoading(true);
+    try {
+      // Midelt, Morocco coordinates
+      const lat = 32.6852;
+      const lng = -4.7371;
+      
+      // Calculate time range based on dateRange
+      let start: Date, end: Date;
+      
+      if (dateRange.type === '30min') {
+        end = new Date();
+        start = new Date(end.getTime() - 30 * 60 * 1000);
+      } else if (dateRange.type === '1h') {
+        end = new Date();
+        start = new Date(end.getTime() - 60 * 60 * 1000);
+      } else if (dateRange.type === '6h') {
+        end = new Date();
+        start = new Date(end.getTime() - 6 * 60 * 60 * 1000);
+      } else if (dateRange.type === '12h') {
+        end = new Date();
+        start = new Date(end.getTime() - 12 * 60 * 60 * 1000);
+      } else if (dateRange.type === '24h') {
+        end = new Date();
+        start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+      } else if (dateRange.type === '7d') {
+        end = new Date();
+        start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else if (dateRange.type === '30d') {
+        end = new Date();
+        start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+      } else {
+        start = new Date(dateRange.start);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(dateRange.end);
+        end.setHours(23, 59, 59, 999);
+      }
+      
+      // Format dates for Open-Meteo API (YYYY-MM-DD)
+      const startDate = start.toISOString().split('T')[0];
+      const endDate = end.toISOString().split('T')[0];
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      
+      console.log(`🌤️ [SensorChart] Fetching outdoor weather data`);
+      console.log(`📅 Start: ${startDate}, End: ${endDate}, Today: ${today}`);
+      console.log(`⏰ Time Range Type: ${dateRange.type}`);
+      
+      // Calculate days back from today
+      const daysBack = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      const daysForward = Math.floor((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      console.log(`📊 Days back: ${daysBack}, Days forward: ${daysForward}`);
+      
+      let apiUrl: string;
+      
+      // Open-Meteo Archive API only has data up to 2 days ago
+      // Forecast API has past 92 days + 16 days forecast
+      const needsArchive = daysBack > 92;
+      
+      if (needsArchive) {
+        // Use archive API for data older than 92 days
+        apiUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lng}&start_date=${startDate}&end_date=${endDate}&hourly=temperature_2m,relative_humidity_2m&timezone=auto`;
+        console.log(`📚 [SensorChart] Using ARCHIVE API (data > 92 days old)`);
+      } else {
+        // Use forecast API which includes past 92 days + 16 days forecast
+        const pastDays = Math.max(daysBack + 1, 7); // Ensure we get enough past data
+        const forecastDays = Math.max(daysForward + 1, 7); // Include forecast if showing future dates
+        
+        apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,relative_humidity_2m&past_days=${pastDays}&forecast_days=${forecastDays}&timezone=auto`;
+        console.log(`📊 [SensorChart] Using FORECAST API with past_days=${pastDays}, forecast_days=${forecastDays}`);
+      }
+      
+      console.log(`🌐 [SensorChart] Weather API URL:`, apiUrl);
+      
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API Error: ${response.status}`, errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const weatherData = await response.json();
+      console.log(`✅ [SensorChart] Weather API Response:`, weatherData);
+      
+      if (!weatherData.hourly || !weatherData.hourly.time) {
+        console.warn('⚠️ [SensorChart] No outdoor weather data available in response');
+        alert('Pas de données météo disponibles pour cette période');
+        return;
+      }
+      
+      console.log(`📊 [SensorChart] Received ${weatherData.hourly.time.length} weather data points`);
+      
+      // Convert to SensorData format
+      const outdoorSensorData: SensorData[] = weatherData.hourly.time.map((time: string, index: number) => ({
+        timestamp: new Date(time).getTime(),
+        temperature: weatherData.hourly.temperature_2m[index] || 0,
+        humidity: weatherData.hourly.relative_humidity_2m[index] || 0,
+        battery: 0,
+        magnet: 1 // Default closed for outdoor data
+      }));
+      
+      console.log(`📊 [SensorChart] Converted ${outdoorSensorData.length} raw weather data points`);
+      
+      // For short time ranges, expand the window to show more context
+      // For longer ranges, use exact time range
+      let filterStart = start.getTime();
+      let filterEnd = end.getTime();
+      let expandedWindow = false;
+      
+      if (dateRange.type === '30min' || dateRange.type === '1h') {
+        // For very short ranges, include ±6 hours of data
+        filterStart = start.getTime() - (6 * 60 * 60 * 1000);
+        filterEnd = end.getTime() + (6 * 60 * 60 * 1000);
+        expandedWindow = true;
+        console.log(`📊 [SensorChart] Expanding filter window for short range (±6 hours)`);
+      } else if (dateRange.type === '6h' || dateRange.type === '12h') {
+        // For medium ranges, include ±3 hours for context
+        filterStart = start.getTime() - (3 * 60 * 60 * 1000);
+        filterEnd = end.getTime() + (3 * 60 * 60 * 1000);
+        expandedWindow = true;
+        console.log(`📊 [SensorChart] Expanding filter window for medium range (±3 hours)`);
+      } else {
+        // For long ranges (24h, 7d, 30d), use exact range
+        console.log(`📊 [SensorChart] Using exact time range for long period`);
+      }
+      
+      // Filter data based on time range
+      const filteredData = outdoorSensorData.filter(d => 
+        d.timestamp >= filterStart && d.timestamp <= filterEnd
+      );
+      
+      console.log(`✅ [SensorChart] Filtered to ${filteredData.length} outdoor weather data points for chart`);
+      console.log(`📊 [SensorChart] Original range: ${new Date(start).toLocaleString()} to ${new Date(end).toLocaleString()}`);
+      if (expandedWindow) {
+        console.log(`📊 [SensorChart] Expanded range: ${new Date(filterStart).toLocaleString()} to ${new Date(filterEnd).toLocaleString()}`);
+      }
+      
+      if (filteredData.length === 0) {
+        console.warn('⚠️ [SensorChart] No outdoor data in selected time range');
+        alert('Aucune donnée météo trouvée pour cette période');
+        return;
+      }
+      
+      setOutdoorData(filteredData);
+      setShowOutdoorData(true);
+      
+      console.log(`✅ [SensorChart] Successfully loaded outdoor weather data`);
+      console.log(`🌡️ Temperature range: ${Math.min(...filteredData.map(d => d.temperature)).toFixed(1)}°C - ${Math.max(...filteredData.map(d => d.temperature)).toFixed(1)}°C`);
+      console.log(`💧 Humidity range: ${Math.min(...filteredData.map(d => d.humidity)).toFixed(0)}% - ${Math.max(...filteredData.map(d => d.humidity)).toFixed(0)}%`);
+      
+    } catch (error) {
+      console.error('❌ [SensorChart] Error fetching outdoor weather:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert(`Erreur lors du chargement des données météo extérieures: ${errorMessage}`);
+    } finally {
+      setOutdoorLoading(false);
+    }
+  }, [dateRange]);
+  
+  // Function to fetch data for a specific chamber
+  const fetchChamberData = useCallback(async (chamber: { id: string; name: string; channelNumber: number; boitieDeviceId?: string; athGroupNumber?: number }) => {
+    console.log(`🔄 [SensorChart] Fetching data for chamber: ${chamber.name}`);
+    
+    try {
+    // Check if this is the current sensor - if so, reuse the existing data
+    const isCurrentSensor = chamber.name === sensorName || chamber.id === sensorId;
+    
+    if (isCurrentSensor && data.length > 0) {
+      console.log(`📦 [SensorChart] Reusing existing data for current chamber: ${chamber.name}`);
+        return data;
+      }
+      
+      // Check cache first
+      const cacheKey = `${chamber.id}-${dateRange.start}-${dateRange.end}-${dateRange.type}`;
+      const cached = cache.get(cacheKey);
+      const now = Date.now();
+      
+      if (cached && (now - cached.timestamp < CACHE_DURATION)) {
+        console.log(`📦 [SensorChart] Using cached data for ${chamber.name}`);
+        return cached.data;
+      }
+      
+      // Fetch from API
+      const deviceId = chamber.boitieDeviceId || boitieDeviceId;
+      if (!deviceId) {
+        console.error(`❌ [SensorChart] No device ID for chamber ${chamber.name}`);
+        return [];
+      }
+      
+      // Calculate time range
+      let start: Date, end: Date;
+      
+      if (dateRange.type === '30min') {
+        end = new Date();
+        start = new Date(end.getTime() - 30 * 60 * 1000);
+      } else if (dateRange.type === '1h') {
+        end = new Date();
+        start = new Date(end.getTime() - 60 * 60 * 1000);
+      } else if (dateRange.type === '6h') {
+        end = new Date();
+        start = new Date(end.getTime() - 6 * 60 * 60 * 1000);
+      } else if (dateRange.type === '12h') {
+        end = new Date();
+        start = new Date(end.getTime() - 12 * 60 * 60 * 1000);
+      } else if (dateRange.type === '24h') {
+        end = new Date();
+        start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+      } else if (dateRange.type === '7d') {
+        end = new Date();
+        start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else {
+        start = new Date(dateRange.start);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(dateRange.end);
+        end.setHours(23, 59, 59, 999);
+      }
+      
+      // Format dates for API
+      const formatDate = (date: Date) => {
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      };
+      
+      const startStr = encodeURIComponent(formatDate(start));
+      const endStr = encodeURIComponent(formatDate(end));
+      const roomStr = encodeURIComponent(chamber.name);
+      
+      const apiUrl = `https://api.frigosmart.com/rooms/history?device_id=${deviceId}&room=${roomStr}&start=${startStr}&end=${endStr}`;
+      
+      console.log(`🌐 [SensorChart] Fetching data for ${chamber.name} from API`);
+      
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const rawData = await response.json();
+      
+      if (!rawData.data || rawData.data.length === 0) {
+        console.warn(`⚠️ [SensorChart] No data for chamber ${chamber.name}`);
+        return [];
+      }
+      
+      // Convert API response to SensorData format
+      const processedData: SensorData[] = rawData.data.map((item: any) => ({
+        timestamp: item.epoch * 1000,
+        temperature: parseFloat(item.temperature) || 0,
+        humidity: parseFloat(item.humidity) || 0,
+        battery: 0,
+        magnet: item.magnet === true ? 1 : 0
+      }));
+      
+      // Sort by timestamp
+      processedData.sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Cache the result
+      cache.set(cacheKey, { data: processedData, timestamp: now });
+      
+      console.log(`✅ [SensorChart] Fetched ${processedData.length} points for ${chamber.name}`);
+      return processedData;
+      
+    } catch (error) {
+      console.error(`❌ [SensorChart] Error fetching data for ${chamber.name}:`, error);
+      return [];
+    }
+  }, [data, sensorName, sensorId, dateRange, cache, CACHE_DURATION, boitieDeviceId]);
+  
+  // Function to toggle chamber selection
+  const toggleChamberSelection = useCallback(async (chamber: { id: string; name: string; channelNumber: number; boitieDeviceId?: string; athGroupNumber?: number }) => {
+    const isSelected = selectedChambers.includes(chamber.id);
+    
+    if (isSelected) {
+      // Remove chamber from selection
+      console.log(`➖ [SensorChart] Removing chamber from comparison: ${chamber.name}`);
+      setSelectedChambers(prev => prev.filter(id => id !== chamber.id));
+      setComparisonData(prev => {
+        const newData = { ...prev };
+        delete newData[chamber.id];
+        return newData;
+      });
+    } else {
+      // Add chamber to selection
+      console.log(`➕ [SensorChart] Adding chamber to comparison: ${chamber.name}`);
+      setSelectedChambers(prev => [...prev, chamber.id]);
+      setComparisonLoading(true);
+      
+      try {
+        const chamberData = await fetchChamberData(chamber);
+      setComparisonData(prev => ({
+        ...prev,
+          [chamber.id]: chamberData
+        }));
+      } finally {
+        setComparisonLoading(false);
+      }
+    }
+  }, [selectedChambers, fetchChamberData]);
+  
+  // Function to toggle FRIGO group collapse/expand
+  const toggleFrigoCollapse = useCallback((frigoNumber: number) => {
+    setCollapsedFrigos(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(frigoNumber)) {
+        newSet.delete(frigoNumber);
+    } else {
+        newSet.add(frigoNumber);
+      }
+      return newSet;
+    });
+  }, []);
+  
+  // Function to export data to Excel
+  const exportToExcel = useCallback(() => {
+    try {
+      const dataToExport = comparisonMode && Object.keys(comparisonData).length > 0 
+        ? comparisonData 
+        : { [sensorName]: data };
+      
+      const workbook = XLSX.utils.book_new();
+      
+      // Add a summary sheet
+      const summaryData = [
+        ['Rapport de Données des Capteurs'],
+        ['Date d\'export:', new Date().toLocaleString('fr-FR')],
+        ['Période:', `${dateRange.start} - ${dateRange.end}`],
+        ['Type:', dateRange.type],
+        [],
+        ['Chambre', 'Points de données', 'Température Moy.', 'Température Min', 'Température Max', 'Humidité Moy.']
+      ];
+      
+      Object.entries(dataToExport).forEach(([chamberId, chamberData]) => {
+        const chamber = availableChambers.find(c => c.id === chamberId);
+        const chamberName = chamber?.name || chamberId;
+        
+        if (chamberData.length > 0) {
+          const avgTemp = chamberData.reduce((sum, d) => sum + d.temperature, 0) / chamberData.length;
+          const minTemp = Math.min(...chamberData.map(d => d.temperature));
+          const maxTemp = Math.max(...chamberData.map(d => d.temperature));
+          const avgHum = chamberData.reduce((sum, d) => sum + d.humidity, 0) / chamberData.length;
+          
+          summaryData.push([
+            chamberName,
+            chamberData.length.toString(),
+            avgTemp.toFixed(1) + '°C',
+            minTemp.toFixed(1) + '°C',
+            maxTemp.toFixed(1) + '°C',
+            avgHum.toFixed(1) + '%'
+          ]);
+        }
+      });
+      
+      const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(workbook, summaryWs, 'Résumé');
+      
+      // Add detailed data sheets for each chamber
+      Object.entries(dataToExport).forEach(([chamberId, chamberData]) => {
+        const chamber = availableChambers.find(c => c.id === chamberId);
+        const chamberName = chamber?.name || chamberId;
+        
+        const detailedData = [
+          ['Date/Heure', 'Température (°C)', 'Humidité (%)', 'Porte', 'Batterie (V)'],
+          ...chamberData.map(d => [
+            new Date(d.timestamp).toLocaleString('fr-FR'),
+            d.temperature.toFixed(1),
+            d.humidity.toFixed(1),
+            d.magnet === 1 ? 'Fermée' : 'Ouverte',
+            d.battery > 0 ? d.battery.toFixed(1) : 'N/A'
+          ])
+        ];
+        
+        const ws = XLSX.utils.aoa_to_sheet(detailedData);
+        const sheetName = chamberName.substring(0, 31); // Excel sheet name limit
+        XLSX.utils.book_append_sheet(workbook, ws, sheetName);
+      });
+      
+      // Generate filename
+      const filename = `donnees_capteurs_${new Date().toISOString().split('T')[0]}.xlsx`;
+      
+      // Save file
+      XLSX.writeFile(workbook, filename);
+      
+      console.log('✅ [SensorChart] Excel file exported successfully');
+    } catch (error) {
+      console.error('❌ [SensorChart] Error exporting to Excel:', error);
+      alert('Erreur lors de l\'export Excel');
+    }
+  }, [comparisonMode, comparisonData, data, sensorName, dateRange, availableChambers]);
+  
+  // Function to export data to PDF with chart screenshots
+  const exportToPDF = useCallback(async () => {
+    try {
+      const pdf = new jsPDF();
+      const dataToExport = comparisonMode && Object.keys(comparisonData).length > 0 
+        ? comparisonData 
+        : { [sensorName]: data };
+      
+      let yPos = 15;
+      
+      // Title - compact
+      pdf.setFontSize(14);
+      pdf.text('Rapport de Données des Capteurs', 105, yPos, { align: 'center' });
+      yPos += 8;
+      
+      // Metadata - very compact
+      pdf.setFontSize(8);
+      pdf.text(`Export: ${new Date().toLocaleDateString('fr-FR')} | Période: ${dateRange.start} - ${dateRange.end} | Type: ${dateRange.type}`, 20, yPos);
+      yPos += 8;
+      
+      // Summary for each chamber - compact format
+      pdf.setFontSize(9);
+      Object.entries(dataToExport).forEach(([chamberId, chamberData]) => {
+        const chamber = availableChambers.find(c => c.id === chamberId);
+        const chamberName = chamber?.name || chamberId;
+        
+        if (chamberData.length > 0) {
+          const avgTemp = chamberData.reduce((sum, d) => sum + d.temperature, 0) / chamberData.length;
+          const minTemp = Math.min(...chamberData.map(d => d.temperature));
+          const maxTemp = Math.max(...chamberData.map(d => d.temperature));
+          const avgHum = chamberData.reduce((sum, d) => sum + d.humidity, 0) / chamberData.length;
+          
+          // Compact single-line format
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(chamberName, 20, yPos);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8);
+          yPos += 4;
+          pdf.text(`${chamberData.length} pts | Temp: ${avgTemp.toFixed(1)}°C (${minTemp.toFixed(1)}-${maxTemp.toFixed(1)}°C) | Hum: ${avgHum.toFixed(1)}%`, 20, yPos);
+          yPos += 6;
+        }
+      });
+      
+      yPos += 5;
+      
+      // Add charts title - compact
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Graphiques', 105, yPos, { align: 'center' });
+      pdf.setFont('helvetica', 'normal');
+      yPos += 6;
+      
+      // Capture and add temperature chart - very compact
+      if (temperatureChartRef.current) {
+        try {
+          const tempCanvas = await html2canvas(temperatureChartRef.current, {
+            scale: 1,
+            backgroundColor: '#ffffff',
+            logging: false
+          });
+          const tempImgData = tempCanvas.toDataURL('image/png');
+          
+          // Add temperature chart - very compact
+          pdf.setFontSize(9);
+          pdf.text('Température', 20, yPos);
+          yPos += 4;
+          
+          const imgWidth = 170; // PDF width minus margins
+          const maxImgHeight = 70; // Reduced height for compact layout
+          let imgHeight = (tempCanvas.height * imgWidth) / tempCanvas.width;
+          
+          // If calculated height is too large, scale down to max height
+          if (imgHeight > maxImgHeight) {
+            imgHeight = maxImgHeight;
+          }
+          
+          pdf.addImage(tempImgData, 'PNG', 20, yPos, imgWidth, imgHeight);
+          yPos += imgHeight + 5;
+          
+          console.log('✅ [SensorChart] Temperature chart captured');
+        } catch (error) {
+          console.error('❌ [SensorChart] Error capturing temperature chart:', error);
+        }
+      }
+      
+      // Capture and add humidity chart - very compact
+      if (humidityChartRef.current) {
+        try {
+          const humCanvas = await html2canvas(humidityChartRef.current, {
+            scale: 1,
+            backgroundColor: '#ffffff',
+            logging: false
+          });
+          const humImgData = humCanvas.toDataURL('image/png');
+          
+          // Add humidity chart - very compact
+          pdf.setFontSize(9);
+          pdf.text('Humidité', 20, yPos);
+          yPos += 4;
+          
+          const imgWidth = 170;
+          const maxImgHeight = 70; // Reduced height for compact layout
+          let imgHeight = (humCanvas.height * imgWidth) / humCanvas.width;
+          
+          // If calculated height is too large, scale down to max height
+          if (imgHeight > maxImgHeight) {
+            imgHeight = maxImgHeight;
+          }
+          
+          pdf.addImage(humImgData, 'PNG', 20, yPos, imgWidth, imgHeight);
+          
+          console.log('✅ [SensorChart] Humidity chart captured');
+        } catch (error) {
+          console.error('❌ [SensorChart] Error capturing humidity chart:', error);
+        }
+      }
+      
+      // Generate filename
+      const filename = `donnees_capteurs_${new Date().toISOString().split('T')[0]}.pdf`;
+      
+      // Save PDF
+      pdf.save(filename);
+      
+      console.log('✅ [SensorChart] PDF with charts exported successfully');
+    } catch (error) {
+      console.error('❌ [SensorChart] Error exporting to PDF:', error);
+      alert('Erreur lors de l\'export PDF');
+    }
+  }, [comparisonMode, comparisonData, data, sensorName, dateRange, availableChambers]);
+  
+  // Function to share via WhatsApp
+  const shareViaWhatsApp = useCallback((format: 'text' | 'excel' | 'pdf') => {
+    const dataToExport = comparisonMode && Object.keys(comparisonData).length > 0 
+      ? comparisonData 
+      : { [sensorName]: data };
+    
+    if (format === 'text') {
+      // Create text summary
+      let message = `📊 *Rapport de Données des Capteurs*\n\n`;
+      message += `📅 Date: ${new Date().toLocaleString('fr-FR')}\n`;
+      message += `📆 Période: ${dateRange.start} - ${dateRange.end}\n\n`;
+      
+      Object.entries(dataToExport).forEach(([chamberId, chamberData]) => {
+        const chamber = availableChambers.find(c => c.id === chamberId);
+        const chamberName = chamber?.name || chamberId;
+        
+        if (chamberData.length > 0) {
+          const avgTemp = chamberData.reduce((sum, d) => sum + d.temperature, 0) / chamberData.length;
+          const avgHum = chamberData.reduce((sum, d) => sum + d.humidity, 0) / chamberData.length;
+          
+          message += `🏠 *${chamberName}*\n`;
+          message += `   🌡️ Température: ${avgTemp.toFixed(1)}°C\n`;
+          message += `   💧 Humidité: ${avgHum.toFixed(1)}%\n`;
+          message += `   📊 Points: ${chamberData.length}\n\n`;
+        }
+      });
+      
+      const encodedMessage = encodeURIComponent(message);
+      window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+    } else if (format === 'excel') {
+      exportToExcel();
+      // Note: WhatsApp web doesn't support file sharing directly
+      alert('Fichier Excel téléchargé. Vous pouvez maintenant le partager via WhatsApp.');
+    } else if (format === 'pdf') {
+      exportToPDF();
+      alert('Fichier PDF téléchargé. Vous pouvez maintenant le partager via WhatsApp.');
+    }
+  }, [comparisonMode, comparisonData, data, sensorName, dateRange, availableChambers, exportToExcel, exportToPDF]);
+  
+  // Update comparison data when main data changes (for current sensor)
+  useEffect(() => {
+    if (comparisonMode && data.length > 0) {
+      const currentChamber = availableChambers.find(c => c.name === sensorName);
+      if (currentChamber && selectedChambers.includes(currentChamber.id)) {
+        console.log(`📦 [SensorChart] Updating comparison data for current chamber with new data`);
+        setComparisonData(prev => ({
+          ...prev,
+          [currentChamber.id]: data
+        }));
+      }
+    }
+  }, [data, comparisonMode, sensorName, availableChambers, selectedChambers]);
 
   // Extract channel number from sensor ID
   const extractChannelNumber = (sensorId: string): number | null => {
@@ -198,46 +742,42 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
   const channelNumber = extractChannelNumber(sensorId);
   console.log(`🏠 [SensorChart] Final channel ${channelNumber} from sensorId: ${sensorId}`);
 
-  // Function to prepare comparison data from already loaded messages
-  // This reuses the data from the main fetchSensorData call - NO NEW API REQUEST!
+  // Function to initialize comparison mode with current chamber
   const fetchAllChambersData = useCallback(async () => {
     if (availableChambers.length <= 1) return;
     
     setComparisonLoading(true);
-    console.log(`🔄 [SensorChart] Preparing comparison data for all ${availableChambers.length} chambers`);
-    console.log(`📦 [SensorChart] Reusing already loaded data - NO NEW API REQUEST`);
+    console.log(`🔄 [SensorChart] Initializing comparison mode with current chamber`);
     
     try {
-      // Get the cached data from the main fetchSensorData call
-      const cacheKey = `${sensorId}-${dateRange.start}-${dateRange.end}-${dateRange.type}`;
-      const cached = cache.get(cacheKey);
-      
-      if (!cached || !cached.data || cached.data.length === 0) {
-        console.warn('⚠️ [SensorChart] No cached data available for comparison. Please wait for main data to load first.');
-        setComparisonLoading(false);
-        return;
-      }
-      
-      console.log(`📦 [SensorChart] Found cached data with ${cached.data.length} points`);
-      
       // Add current chamber data to comparison
       const currentChamber = availableChambers.find(c => c.name === sensorName || c.id === sensorId);
-      if (currentChamber) {
-        const newComparisonData: { [chamberId: string]: SensorData[] } = {
-          [currentChamber.id]: cached.data
-        };
-        
-        setComparisonData(newComparisonData);
+      if (currentChamber && data.length > 0) {
+        setComparisonData({
+          [currentChamber.id]: data
+        });
         setSelectedChambers([currentChamber.id]);
-        console.log(`✅ [SensorChart] Added current chamber to comparison: ${currentChamber.name} (${cached.data.length} points)`);
+        
+        // Keep the current FRIGO group expanded, collapse others
+        const currentFrigoGroup = currentChamber.athGroupNumber || 1;
+        const allFrigoGroups = new Set(availableChambers.map(c => c.athGroupNumber || 1));
+        const collapsed = new Set<number>();
+        allFrigoGroups.forEach(group => {
+          if (group !== currentFrigoGroup) {
+            collapsed.add(group);
+          }
+        });
+        setCollapsedFrigos(collapsed);
+        
+        console.log(`✅ [SensorChart] Initialized comparison with current chamber: ${currentChamber.name} (${data.length} points)`);
+        console.log(`✅ [SensorChart] Expanded FRIGO ${currentFrigoGroup}, collapsed others`);
       }
-      
     } catch (error) {
-      console.error(`❌ [SensorChart] Error preparing comparison data:`, error);
+      console.error(`❌ [SensorChart] Error initializing comparison mode:`, error);
     } finally {
       setComparisonLoading(false);
     }
-  }, [availableChambers, sensorId, sensorName, dateRange, cache]);
+  }, [availableChambers, sensorId, sensorName, data]);
 
   // Simple function to process chamber data
   const processChamberData = useCallback((messages: any[], channelNumber: number): SensorData[] => {
@@ -1025,7 +1565,102 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       }
     });
     
+    // Add outdoor weather data if enabled
+    if (showOutdoorData && outdoorData.length > 0) {
+      const now = Date.now();
+      
+      // Split data into historical (past) and forecast (future)
+      const historicalData = outdoorData.filter(d => d.timestamp <= now);
+      const forecastData = outdoorData.filter(d => d.timestamp > now);
+      
+      console.log(`🌤️ [SensorChart] Adding outdoor data to ${dataKey} chart`);
+      console.log(`🌤️ [SensorChart] Total outdoor points: ${outdoorData.length} (Historical: ${historicalData.length}, Forecast: ${forecastData.length})`);
+      console.log(`🌤️ [SensorChart] First point:`, {
+        timestamp: new Date(outdoorData[0].timestamp).toLocaleString(),
+        [dataKey]: outdoorData[0][dataKey]
+      });
+      console.log(`🌤️ [SensorChart] Last point:`, {
+        timestamp: new Date(outdoorData[outdoorData.length - 1].timestamp).toLocaleString(),
+        [dataKey]: outdoorData[outdoorData.length - 1][dataKey]
+      });
+      
+      // Use different visualization based on data points count
+      if (outdoorData.length <= 5) {
+        // For sparse data (≤5 points), use scatter plot with large markers
+        console.log(`🌤️ [SensorChart] Using SCATTER visualization (sparse data: ${outdoorData.length} points)`);
+        series.push({
+          name: '🌤️ Extérieur',
+          type: 'scatter',
+          data: outdoorData.map(d => [d.timestamp, d[dataKey]]),
+          itemStyle: { 
+            color: '#f97316',
+            borderWidth: 3,
+            borderColor: '#fff',
+            shadowColor: 'rgba(249, 115, 22, 0.5)',
+            shadowBlur: 8
+          },
+          symbol: 'diamond',
+          symbolSize: responsiveConfig.symbolSize + 8,
+          z: 10,
+          label: {
+            show: true,
+            position: 'top',
+            formatter: function(params: any) {
+              return `${params.value[1].toFixed(1)}${dataKey === 'temperature' ? '°C' : '%'}`;
+            },
+            fontSize: 11,
+            fontWeight: 'bold',
+            color: '#f97316',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            borderColor: '#f97316',
+            borderWidth: 1,
+            borderRadius: 4,
+            padding: [4, 8]
+          }
+        });
+        legendData.push('🌤️ Extérieur');
+      } else {
+        // For adequate data (>5 points), use line chart with split historical/forecast
+        console.log(`🌤️ [SensorChart] Using LINE visualization (adequate data: ${outdoorData.length} points)`);
+        
+        // Add historical data (solid line)
+        if (historicalData.length > 0) {
+          series.push({
+            name: '🌤️ Extérieur',
+            type: 'line',
+            data: historicalData.map(d => [d.timestamp, d[dataKey]]),
+            smooth: true,
+            lineStyle: { width: 3, color: '#f97316', type: 'solid' }, // Solid for historical
+            itemStyle: { color: '#f97316', borderWidth: 2, borderColor: '#fff' },
+            symbol: 'diamond',
+            symbolSize: responsiveConfig.symbolSize + 2,
+            z: 10
+          });
+          legendData.push('🌤️ Extérieur');
+        }
+        
+        // Add forecast data (dashed line)
+        if (forecastData.length > 0) {
+          series.push({
+            name: '🔮 Prévisions',
+            type: 'line',
+            data: forecastData.map(d => [d.timestamp, d[dataKey]]),
+            smooth: true,
+            lineStyle: { width: 2.5, color: '#f97316', type: 'dashed' }, // Dashed for forecast
+            itemStyle: { color: '#f97316', borderWidth: 2, borderColor: '#fff' },
+            symbol: 'circle',
+            symbolSize: responsiveConfig.symbolSize,
+            z: 10
+          });
+          legendData.push('🔮 Prévisions');
+        }
+      }
+      
+      console.log(`✅ [SensorChart] Successfully added outdoor weather data to series`);
+    }
+    
     console.log(`📊 [SensorChart] Total series: ${series.length}, Legend: ${legendData.join(', ')}`);
+    console.log(`📊 [SensorChart] Series names:`, series.map(s => s.name));
     
  
   
@@ -1295,7 +1930,9 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
     })));
   }
   
-  const temperatureChartOption = comparisonMode ? createComparisonChartOption('temperature') : {
+  console.log(`📊 [SensorChart] Building temperatureChartOption - comparisonMode: ${comparisonMode}, showOutdoorData: ${showOutdoorData}, outdoorData.length: ${outdoorData.length}`);
+  
+  const temperatureChartOption = (comparisonMode || showOutdoorData) ? createComparisonChartOption('temperature') : {
     backgroundColor: 'transparent',
     animation: true,
     animationDuration: 800,
@@ -1673,7 +2310,29 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
             shadowOffsetY: 2
           }
         }
-      }
+      },
+      // Outdoor weather data (if enabled)
+      ...(showOutdoorData && outdoorData.length > 0 ? [{
+        name: '🌤️ Extérieur',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: outdoorData.map(d => [d.timestamp, d.temperature]),
+        smooth: true,
+        lineStyle: { 
+          width: 2.5, 
+          color: '#f97316',
+          type: 'dotted'
+        },
+        itemStyle: { 
+          color: '#f97316',
+          borderWidth: 2,
+          borderColor: '#fff'
+        },
+        symbol: 'diamond',
+        symbolSize: responsiveConfig.symbolSize + 1,
+        z: 3
+      }] : [])
     ]
   };
   
@@ -1681,7 +2340,9 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
   console.log(`🚪 [SensorChart] Door status series data points: ${processedData.length}`);
 
   // Humidity chart configuration
-  const humidityChartOption = comparisonMode ? createComparisonChartOption('humidity') : {
+  console.log(`📊 [SensorChart] Building humidityChartOption - comparisonMode: ${comparisonMode}, showOutdoorData: ${showOutdoorData}, outdoorData.length: ${outdoorData.length}`);
+  
+  const humidityChartOption = (comparisonMode || showOutdoorData) ? createComparisonChartOption('humidity') : {
     backgroundColor: 'transparent',
     animation: true,
     animationDuration: 800,
@@ -2065,17 +2726,47 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
             shadowOffsetY: 2
           }
         }
-      }
+      },
+      // Outdoor weather data (if enabled)
+      ...(showOutdoorData && outdoorData.length > 0 ? [{
+        name: '🌤️ Extérieur',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: outdoorData.map(d => [d.timestamp, d.humidity]),
+        smooth: true,
+        lineStyle: { 
+          width: 2.5, 
+          color: '#f97316',
+          type: 'dotted'
+        },
+        itemStyle: { 
+          color: '#f97316',
+          borderWidth: 2,
+          borderColor: '#fff'
+        },
+        symbol: 'diamond',
+        symbolSize: responsiveConfig.symbolSize + 1,
+        z: 3
+      }] : [])
     ]
   };
 
   // Effects
   useEffect(() => {
-    if (isOpen && !isLiveMode) {
+    if (isOpen) {
       console.log('🚀 [SensorChart] Modal opened, fetching data for sensor:', sensorId);
       fetchSensorData(false);
     }
-  }, [isOpen, sensorId, dateRange, fetchSensorData, isLiveMode]);
+  }, [isOpen, sensorId, dateRange, fetchSensorData]);
+  
+  // Refetch outdoor data when date range changes (if outdoor data is enabled)
+  useEffect(() => {
+    if (isOpen && showOutdoorData) {
+      console.log('🔄 [SensorChart] Date range changed, refetching outdoor weather data');
+      fetchOutdoorWeatherData();
+    }
+  }, [dateRange.start, dateRange.end, dateRange.type, isOpen, showOutdoorData, fetchOutdoorWeatherData]);
 
   // Handle window resize for responsive charts
   useEffect(() => {
@@ -2108,7 +2799,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center sm:items-start justify-center z-50 p-0 sm:p-4 overflow-y-auto">
       <div className="bg-gradient-to-br from-white to-gray-50/80 rounded-none sm:rounded-2xl shadow-2xl max-w-7xl w-full h-full sm:h-auto sm:min-h-0 sm:max-h-[92vh] overflow-hidden mx-0 sm:mx-auto my-0 sm:my-8 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100/60 bg-white/80 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100/60 bg-white/80 backdrop-blur-xl overflow-visible relative z-10">
           <div className="flex items-center space-x-3 min-w-0 flex-1">
             <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-gray-900 to-gray-700 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm">
               <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2121,31 +2812,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
             </div>
           </div>
           <div className="flex items-center space-x-1.5">
-            {/* Live/Historical Toggle */}
-            <button
-              onClick={() => {
-                setIsLiveMode(!isLiveMode);
-                if (isLiveMode) {
-                  console.log('🔄 [SensorChart] Switching to historical mode');
-                } else {
-                  console.log('🔄 [SensorChart] Switching to live mode');
-                }
-              }}
-              className={`px-3 py-1.5 rounded-full flex items-center space-x-1.5 transition-all duration-200 flex-shrink-0 ${
-                isLiveMode 
-                  ? 'bg-green-500 text-white shadow-sm hover:bg-green-600' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
-              }`}
-              title={isLiveMode ? "Mode temps réel actif" : "Activer le mode temps réel"}
-            >
-              <div className={`w-1.5 h-1.5 rounded-full ${isLiveMode ? 'bg-white animate-pulse' : 'bg-gray-400'}`} />
-              <span className="text-xs font-medium">
-                {isLiveMode ? 'Live' : 'Live'}
-              </span>
-            </button>
-
-            {/* Refresh Button (only in historical mode) */}
-            {!isLiveMode && (
+            {/* Refresh Button */}
               <button
                 onClick={() => fetchSensorData(true)}
                 disabled={loading}
@@ -2166,7 +2833,36 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                   </svg>
                 )}
               </button>
-            )}
+
+            {/* Outdoor Weather Toggle - Compact Icon */}
+            <button
+              onClick={() => {
+                if (!showOutdoorData && outdoorData.length === 0) {
+                  // Fetch outdoor data
+                  fetchOutdoorWeatherData();
+                } else {
+                  // Toggle display
+                  setShowOutdoorData(!showOutdoorData);
+                }
+              }}
+              disabled={outdoorLoading}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
+                showOutdoorData
+                  ? 'bg-orange-500 text-white shadow-sm hover:bg-orange-600' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 active:scale-95'
+              } ${outdoorLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={showOutdoorData ? "Masquer météo extérieure" : "Afficher météo extérieure"}
+            >
+              {outdoorLoading ? (
+                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                </svg>
+              )}
+            </button>
 
             {/* Comparison Mode Toggle */}
             {availableChambers.length > 1 && (
@@ -2174,9 +2870,12 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
               onClick={() => {
                   setComparisonMode(!comparisonMode);
                   if (!comparisonMode) {
+                    // Enable comparison mode
                     fetchAllChambersData();
                 } else {
+                    // Disable comparison mode - clear all selections
                     setComparisonData({});
+                    setSelectedChambers([]);
                 }
               }}
               className={`px-3 py-1.5 rounded-full flex items-center space-x-1.5 transition-all duration-200 flex-shrink-0 ${
@@ -2194,6 +2893,96 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
               </span>
               </button>
             )}
+
+            {/* Share Button with Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowShareMenu(!showShareMenu)}
+                className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 bg-green-500 text-white shadow-sm hover:bg-green-600 active:scale-95 flex-shrink-0 relative z-20"
+                title="Partager les données"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              </button>
+              
+              {/* Share Dropdown Menu */}
+              {showShareMenu && (
+                <>
+                  {/* Backdrop */}
+                  <div 
+                    className="fixed inset-0 z-[9999]" 
+                    onClick={() => setShowShareMenu(false)}
+                  />
+                  
+                  {/* Menu */}
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 z-[10000] overflow-hidden">
+                    <div className="p-2">
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <p className="text-xs font-semibold text-gray-700">Exporter & Partager</p>
+                      </div>
+                      
+                      {/* WhatsApp Text */}
+                      <button
+                        onClick={() => {
+                          shareViaWhatsApp('text');
+                          setShowShareMenu(false);
+                        }}
+                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-green-50 rounded-lg transition-colors group"
+                      >
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                          <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                          </svg>
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-medium text-gray-900">WhatsApp</p>
+                          <p className="text-xs text-gray-500">Résumé texte</p>
+                        </div>
+                      </button>
+                      
+                      {/* Excel Export */}
+                      <button
+                        onClick={() => {
+                          exportToExcel();
+                          setShowShareMenu(false);
+                        }}
+                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-green-50 rounded-lg transition-colors group"
+                      >
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                          <svg className="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-medium text-gray-900">Excel (.xlsx)</p>
+                          <p className="text-xs text-gray-500">Données détaillées</p>
+                        </div>
+                      </button>
+                      
+                      {/* PDF Export */}
+                      <button
+                        onClick={() => {
+                          exportToPDF();
+                          setShowShareMenu(false);
+                        }}
+                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-red-50 rounded-lg transition-colors group"
+                      >
+                        <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center group-hover:bg-red-200 transition-colors">
+                          <svg className="w-5 h-5 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-medium text-gray-900">PDF</p>
+                          <p className="text-xs text-gray-500">Rapport imprimable</p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Close Button */}
             <button
@@ -2256,6 +3045,50 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                   </div>
             </div>
           </div>
+
+          {/* Outdoor Weather Indicator - Compact */}
+          {showOutdoorData && outdoorData.length > 0 && (() => {
+            const now = Date.now();
+            const historicalCount = outdoorData.filter(d => d.timestamp <= now).length;
+            const forecastCount = outdoorData.filter(d => d.timestamp > now).length;
+            
+            return (
+            <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center space-x-2 flex-wrap">
+                  <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  </svg>
+                  <span className="text-xs font-semibold text-orange-900">Météo Extérieure</span>
+                  <span className="px-2 py-0.5 bg-orange-200 text-orange-800 rounded-full text-[10px] font-medium">
+                    {historicalCount} hist.
+                  </span>
+                  {forecastCount > 0 && (
+                    <span className="px-2 py-0.5 bg-purple-200 text-purple-800 rounded-full text-[10px] font-medium">
+                      🔮 {forecastCount} prév.
+                    </span>
+                  )}
+                </div>
+                {outdoorData.length > 0 && (
+                  <div className="flex items-center space-x-3 text-xs">
+                    <div className="flex items-center space-x-1">
+                      <span className="text-orange-600 font-medium">🌡️</span>
+                      <span className="text-orange-900 font-semibold">
+                        {(outdoorData.reduce((sum, d) => sum + d.temperature, 0) / outdoorData.length).toFixed(1)}°C
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <span className="text-orange-600 font-medium">💧</span>
+                      <span className="text-orange-900 font-semibold">
+                        {(outdoorData.reduce((sum, d) => sum + d.humidity, 0) / outdoorData.length).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            );
+          })()}
 
           {/* KPI Cards - Compact Version */}
           {kpis && !comparisonMode && (
@@ -2382,24 +3215,327 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
             </div>
           )}
 
-          {/* Comparison Status */}
+          {/* Comparison Mode - Chamber Selection */}
           {comparisonMode && (
-            <div className="mb-4 sm:mb-6 p-3 sm:p-5 bg-blue-50 rounded-3xl border border-blue-200">
-                      <div className="flex items-center justify-between">
+            <div className="mb-3 sm:mb-6">
+              {/* Mobile-Optimized Header */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-2xl sm:rounded-3xl border border-blue-200 shadow-sm overflow-hidden">
+                {/* Header Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-blue-100/50 border-b border-blue-200/50">
+                  <div className="flex items-center justify-between sm:justify-start mb-2 sm:mb-0">
                             <div className="flex items-center space-x-2">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
-                  <span className="text-sm font-medium text-blue-800">Mode Comparaison Activé</span>
+                      <span className="text-xs sm:text-sm font-semibold text-blue-900">Comparaison</span>
+                      <span className="px-2 py-0.5 bg-blue-200 text-blue-800 rounded-full text-xs font-medium">
+                        {selectedChambers.length}
+                      </span>
                             </div>
                 {comparisonLoading && (
-                  <div className="flex items-center space-x-2 text-sm text-blue-600">
+                      <div className="flex items-center space-x-1.5 ml-2 sm:hidden">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                        <span className="text-xs text-blue-600">...</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Quick Actions - Mobile Friendly */}
+                  <div className="flex items-center space-x-2">
+                    {comparisonLoading && (
+                      <div className="hidden sm:flex items-center space-x-2 text-sm text-blue-600">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                     <span>Chargement...</span>
                                   </div>
                                 )}
+                    <button
+                      onClick={async () => {
+                        // Select all chambers
+                        setComparisonLoading(true);
+                        try {
+                          for (const chamber of availableChambers) {
+                            if (!selectedChambers.includes(chamber.id)) {
+                              const chamberData = await fetchChamberData(chamber);
+                              setComparisonData(prev => ({
+                                ...prev,
+                                [chamber.id]: chamberData
+                              }));
+                              setSelectedChambers(prev => [...prev, chamber.id]);
+                            }
+                          }
+                        } finally {
+                          setComparisonLoading(false);
+                        }
+                      }}
+                      disabled={comparisonLoading || selectedChambers.length === availableChambers.length}
+                      className="px-2 sm:px-3 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 bg-white/60 hover:bg-white rounded-lg border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      Tout
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedChambers([]);
+                        setComparisonData({});
+                      }}
+                      disabled={comparisonLoading || selectedChambers.length === 0}
+                      className="px-2 sm:px-3 py-1 text-xs font-medium text-gray-700 hover:text-gray-900 bg-white/60 hover:bg-white rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      Aucun
+                    </button>
                               </div>
                                   </div>
+                
+                {/* Chamber Selection - Mobile Optimized */}
+                <div className="p-3 sm:p-4">
+                  <p className="text-xs text-blue-700 font-medium mb-2 sm:mb-3">
+                    Touchez pour sélectionner (tous les FRIGOs):
+                  </p>
+                  
+                  {/* Scrollable on mobile, grid on desktop */}
+                  <div className="sm:hidden space-y-2">
+                    {/* Group by FRIGO on mobile */}
+                    {Object.entries(
+                      availableChambers.reduce((acc, chamber) => {
+                        const group = chamber.athGroupNumber || 1;
+                        if (!acc[group]) acc[group] = [];
+                        acc[group].push(chamber);
+                        return acc;
+                      }, {} as Record<number, typeof availableChambers>)
+                    ).sort(([a], [b]) => parseInt(a) - parseInt(b)).map(([groupNum, groupChambers]) => {
+                      const frigoNum = parseInt(groupNum);
+                      const isCollapsed = collapsedFrigos.has(frigoNum);
+                      const selectedCount = groupChambers.filter(c => selectedChambers.includes(c.id)).length;
+                      
+                      return (
+                      <div key={groupNum} className="bg-white/40 rounded-xl border border-gray-200">
+                        {/* Collapsible Header */}
+                        <button
+                          onClick={() => toggleFrigoCollapse(frigoNum)}
+                          className="w-full flex items-center justify-between p-2.5 active:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-bold text-gray-800 bg-gradient-to-r from-gray-100 to-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
+                              FRIGO {groupNum}
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-medium">
+                              {groupChambers.length} ch.
+                            </span>
+                            {selectedCount > 0 && (
+                              <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-semibold">
+                                {selectedCount}
+                              </span>
+                            )}
+                          </div>
+                          <svg 
+                            className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`}
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        
+                        {/* Collapsible Content */}
+                        {!isCollapsed && (
+                          <div className="px-2 pb-2">
+                            <div className="flex-1 h-px bg-gray-200 mb-2"></div>
+                        <div className="flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-transparent">
+                          {groupChambers.map((chamber) => {
+                            const globalIndex = availableChambers.findIndex(c => c.id === chamber.id);
+                            const isSelected = selectedChambers.includes(chamber.id);
+                            const isCurrentChamber = chamber.name === sensorName || chamber.id === sensorId;
+                            const chamberColors = [
+                              '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+                              '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16'
+                            ];
+                            const colorIndex = globalIndex % chamberColors.length;
+                            const chamberColor = chamberColors[colorIndex];
+                            
+                            return (
+                              <button
+                                key={chamber.id}
+                                onClick={() => toggleChamberSelection(chamber)}
+                                disabled={comparisonLoading}
+                                className={`flex-shrink-0 relative flex flex-col items-center justify-center min-w-[90px] h-[90px] rounded-2xl border-3 transition-all duration-200 active:scale-95 ${
+                                  isSelected
+                                    ? 'bg-white shadow-lg scale-105'
+                                    : 'bg-white/60 border-gray-200 active:bg-white'
+                                } ${comparisonLoading ? 'opacity-50' : ''}`}
+                                style={{
+                                  borderColor: isSelected ? chamberColor : undefined,
+                                  borderWidth: isSelected ? '3px' : '2px',
+                                }}
+                              >
+                                {/* Checkbox Circle - Larger for mobile */}
+                                <div 
+                                  className={`w-8 h-8 rounded-full border-3 flex items-center justify-center mb-2 transition-all ${
+                                    isSelected 
+                                      ? 'border-transparent scale-110' 
+                                      : 'border-gray-300 bg-white'
+                                  }`}
+                                  style={{
+                                    backgroundColor: isSelected ? chamberColor : undefined,
+                                    borderWidth: '3px',
+                                  }}
+                                >
+                                  {isSelected && (
+                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </div>
+                                
+                                {/* Chamber Name */}
+                                <span className={`text-xs font-semibold text-center px-1 leading-tight ${
+                                  isSelected ? 'text-gray-900' : 'text-gray-600'
+                                }`}>
+                                  {chamber.name.replace(/Chambre\s*/i, 'Ch')}
+                                </span>
+                                
+                                {isCurrentChamber && (
+                                  <span className="text-[9px] text-blue-600 font-medium mt-0.5">actuel</span>
+                                )}
+                                
+                                {/* Color Dot */}
+                                {isSelected && (
+                                  <div 
+                                    className="absolute top-2 right-2 w-3 h-3 rounded-full shadow-sm"
+                                    style={{ backgroundColor: chamberColor }}
+                                  />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                          </div>
+                        )}
+                      </div>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Desktop Grid - Grouped by FRIGO */}
+                  <div className="hidden sm:block space-y-3">
+                    {Object.entries(
+                      availableChambers.reduce((acc, chamber) => {
+                        const group = chamber.athGroupNumber || 1;
+                        if (!acc[group]) acc[group] = [];
+                        acc[group].push(chamber);
+                        return acc;
+                      }, {} as Record<number, typeof availableChambers>)
+                    ).sort(([a], [b]) => parseInt(a) - parseInt(b)).map(([groupNum, groupChambers]) => {
+                      const frigoNum = parseInt(groupNum);
+                      const isCollapsed = collapsedFrigos.has(frigoNum);
+                      const selectedCount = groupChambers.filter(c => selectedChambers.includes(c.id)).length;
+                      
+                      return (
+                      <div key={groupNum} className="bg-white/40 rounded-xl border border-gray-200 overflow-hidden">
+                        {/* Collapsible Header */}
+                        <button
+                          onClick={() => toggleFrigoCollapse(frigoNum)}
+                          className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <span className="text-sm font-bold text-gray-800 bg-gradient-to-r from-gray-100 to-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                              FRIGO {groupNum}
+                            </span>
+                            <span className="text-xs text-gray-500 font-medium">
+                              {groupChambers.length} chambre{groupChambers.length > 1 ? 's' : ''}
+                            </span>
+                            {selectedCount > 0 && (
+                              <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                                {selectedCount} sélectionnée{selectedCount > 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+                          <svg 
+                            className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`}
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        
+                        {/* Collapsible Content */}
+                        {!isCollapsed && (
+                          <div className="px-3 pb-3">
+                            <div className="flex-1 h-px bg-gradient-to-r from-gray-300 to-transparent mb-3"></div>
+                        <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                          {groupChambers.map((chamber) => {
+                            const globalIndex = availableChambers.findIndex(c => c.id === chamber.id);
+                            const isSelected = selectedChambers.includes(chamber.id);
+                            const isCurrentChamber = chamber.name === sensorName || chamber.id === sensorId;
+                            const chamberColors = [
+                              '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+                              '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16'
+                            ];
+                            const colorIndex = globalIndex % chamberColors.length;
+                            const chamberColor = chamberColors[colorIndex];
+                            
+                            return (
+                              <button
+                                key={chamber.id}
+                                onClick={() => toggleChamberSelection(chamber)}
+                                disabled={comparisonLoading}
+                                className={`relative flex items-center space-x-2 px-3 py-2.5 rounded-xl border-2 transition-all duration-200 hover:scale-105 ${
+                                  isSelected
+                                    ? 'bg-white shadow-md'
+                                    : 'bg-white/60 border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                                } ${comparisonLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                style={{
+                                  borderColor: isSelected ? chamberColor : undefined,
+                                }}
+                              >
+                                {/* Checkbox */}
+                                <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                  isSelected 
+                                    ? 'border-transparent' 
+                                    : 'border-gray-300 bg-white'
+                                }`}
+                                style={{
+                                  backgroundColor: isSelected ? chamberColor : undefined,
+                                }}
+                                >
+                                  {isSelected && (
+                                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </div>
+                                
+                                {/* Chamber Name */}
+                                <span className={`text-xs font-medium truncate flex-1 text-left ${
+                                  isSelected ? 'text-gray-900' : 'text-gray-600'
+                                }`}>
+                                  {chamber.name}
+                                  {isCurrentChamber && (
+                                    <span className="ml-1 text-[10px] text-blue-600">(actuel)</span>
+                                  )}
+                                </span>
+                                
+                                {/* Color Indicator */}
+                                {isSelected && (
+                                  <div 
+                                    className="absolute top-1 right-1 w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: chamberColor }}
+                                  />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                          </div>
+                        )}
+                      </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
                                 )}
 
           {/* Day/Night Legend - Compact */}
@@ -2430,7 +3566,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
           {/* Charts */}
           <div className={`grid grid-cols-1 lg:grid-cols-2 gap-${responsiveConfig.padding.gap}`}>
             {/* Temperature Chart */}
-            <div className={`bg-white/90 backdrop-blur-md rounded-xl sm:rounded-2xl border border-gray-200/60 p-${responsiveConfig.padding.chart} shadow-lg hover:shadow-xl transition-all duration-300`}>
+            <div ref={temperatureChartRef} className={`bg-white/90 backdrop-blur-md rounded-xl sm:rounded-2xl border border-gray-200/60 p-${responsiveConfig.padding.chart} shadow-lg hover:shadow-xl transition-all duration-300`}>
               <div className="mb-1.5 sm:mb-2 lg:mb-3 flex items-center justify-between">
              {/*    <h3 className="text-sm sm:text-base font-semibold text-gray-900 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-red-500"></span>
@@ -2448,7 +3584,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                 )}
               </div>
               <ReactECharts 
-                key={`temp-${sensorId}-${dateRange.type}-${comparisonMode}`}
+                key={`temp-${sensorId}-${dateRange.type}-${comparisonMode}-${showOutdoorData}`}
                 option={temperatureChartOption} 
                 style={{ height: chartHeight, width: '100%' }}
                 opts={{ renderer: 'canvas', locale: 'FR' }}
@@ -2458,7 +3594,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
             </div>
 
             {/* Humidity Chart */}
-            <div className={`bg-white/90 backdrop-blur-md rounded-xl sm:rounded-2xl border border-gray-200/60 p-${responsiveConfig.padding.chart} shadow-lg hover:shadow-xl transition-all duration-300`}>
+            <div ref={humidityChartRef} className={`bg-white/90 backdrop-blur-md rounded-xl sm:rounded-2xl border border-gray-200/60 p-${responsiveConfig.padding.chart} shadow-lg hover:shadow-xl transition-all duration-300`}>
               <div className="mb-1.5 sm:mb-2 lg:mb-3 flex items-center justify-between">
 {/*                 <h3 className="text-sm sm:text-base font-semibold text-gray-900 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-500"></span>
@@ -2476,7 +3612,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                 )}
               </div>
               <ReactECharts 
-                key={`hum-${sensorId}-${dateRange.type}-${comparisonMode}`}
+                key={`hum-${sensorId}-${dateRange.type}-${comparisonMode}-${showOutdoorData}`}
                 option={humidityChartOption} 
                 style={{ height: chartHeight, width: '100%' }}
                 opts={{ renderer: 'canvas', locale: 'FR' }}

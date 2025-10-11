@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -477,11 +477,183 @@ const ScanningRadar: React.FC = () => {
   );
 };
 
+// Outdoor Weather Station Component - 3D Object
+interface OutdoorWeatherStationProps {
+  temperature: number;
+  humidity: number;
+  position: [number, number, number];
+}
+
+const OutdoorWeatherStation: React.FC<OutdoorWeatherStationProps> = ({ temperature, humidity, position }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const [hovered, setHovered] = useState(false);
+
+  // Subtle breathing animation
+  useFrame((state) => {
+    if (meshRef.current) {
+      const breathe = Math.sin(state.clock.elapsedTime * 2) * 0.05;
+      meshRef.current.scale.set(1 + breathe, 1 + breathe, 1 + breathe);
+    }
+  });
+
+  return (
+    <group position={position}>
+      {/* Ground platform - small circular base */}
+      <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[1.2, 1.2, 0.2, 32]} />
+        <meshStandardMaterial 
+          color="#94a3b8" 
+          metalness={0.3}
+          roughness={0.7}
+        />
+      </mesh>
+      
+      {/* Modern compact base - sleek pole */}
+      <mesh position={[0, 0.5, 0]}>
+        <cylinderGeometry args={[0.08, 0.12, 2, 12]} />
+        <meshStandardMaterial 
+          color="#e5e7eb" 
+          metalness={0.9}
+          roughness={0.1}
+        />
+      </mesh>
+
+      {/* Modern compact device - cube shape */}
+      <mesh 
+        ref={meshRef}
+        position={[0, 1.8, 0]}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+      >
+        <boxGeometry args={[0.8, 0.8, 0.8]} />
+        <meshStandardMaterial 
+          color={hovered ? '#ffffff' : '#f8fafc'}
+          emissive={hovered ? '#fb923c' : '#f97316'}
+          emissiveIntensity={hovered ? 0.3 : 0.15}
+          metalness={0.6}
+          roughness={0.2}
+        />
+      </mesh>
+      
+      {/* Orange accent strip */}
+      <mesh position={[0, 1.8, 0.41]}>
+        <boxGeometry args={[0.82, 0.2, 0.02]} />
+        <meshStandardMaterial 
+          color="#f97316"
+          emissive="#f97316"
+          emissiveIntensity={0.8}
+        />
+      </mesh>
+
+      {/* Small solar panel on top */}
+      <mesh position={[0, 2.3, 0]} rotation={[0.2, 0, 0]}>
+        <boxGeometry args={[0.6, 0.02, 0.4]} />
+        <meshStandardMaterial 
+          color="#1e293b"
+          metalness={0.9}
+          roughness={0.1}
+        />
+      </mesh>
+      
+      {/* Green status LED */}
+      <mesh position={[0.3, 2.2, 0.41]}>
+        <sphereGeometry args={[0.06, 12, 12]} />
+        <meshStandardMaterial 
+          color="#22c55e"
+          emissive="#22c55e"
+          emissiveIntensity={3}
+        />
+      </mesh>
+      
+      {/* Ambient orange glow light around the station */}
+      <pointLight position={[0, 2, 0]} intensity={1.5} color="#f97316" distance={5} />
+
+      {/* Compact Floating Info Panel - Ultra Modern */}
+      <Html position={[0, 2.8, 0]} center>
+        <div className="relative">
+          {/* Glow effect */}
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-400 to-amber-400 rounded-xl blur-sm opacity-40 animate-pulse"></div>
+          
+          {/* Main compact card */}
+          <div className="relative bg-gradient-to-br from-white/95 to-orange-50/95 backdrop-blur-xl rounded-xl p-2 shadow-xl border border-orange-300 min-w-[100px]">
+            {/* Ultra compact header */}
+            <div className="flex items-center gap-1 mb-1.5 pb-1 border-b border-orange-200/50">
+              <div className="w-4 h-4 bg-gradient-to-br from-orange-500 to-amber-500 rounded flex items-center justify-center shadow">
+                <span className="text-[10px]">☀️</span>
+              </div>
+              <div className="text-[9px] font-bold text-orange-900">Ext</div>
+              <div className="flex-1"></div>
+              <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+            </div>
+            
+            {/* Ultra compact data */}
+            <div className="flex gap-1.5">
+              <div className="flex-1 bg-gradient-to-br from-red-50 to-orange-50 rounded p-1 border border-red-200/50">
+                <div className="text-center">
+                  <div className="text-sm font-bold text-red-700 leading-none">
+                    {temperature.toFixed(1)}°
+                  </div>
+                  <div className="text-[7px] text-red-600 font-semibold mt-0.5">TEMP</div>
+                </div>
+              </div>
+              
+              <div className="flex-1 bg-gradient-to-br from-blue-50 to-cyan-50 rounded p-1 border border-blue-200/50">
+                <div className="text-center">
+                  <div className="text-sm font-bold text-blue-700 leading-none">
+                    {humidity.toFixed(0)}%
+                  </div>
+                  <div className="text-[7px] text-blue-600 font-semibold mt-0.5">HUM</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Html>
+    </group>
+  );
+};
+
 // Main warehouse scene
 const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, onRoomClick }) => {
   const { t } = useTranslation();
   const [internalSelectedRoom, setInternalSelectedRoom] = useState<Room | null>(selectedRoom || null);
   const [showThermalView, setShowThermalView] = useState(false);
+  const [outdoorWeather, setOutdoorWeather] = useState<{ temperature: number; humidity: number; } | null>(null);
+  
+  // Fetch outdoor weather data
+  useEffect(() => {
+    const fetchOutdoorWeather = async () => {
+      try {
+        // Midelt, Morocco coordinates
+        const lat = 32.6852;
+        const lng = -4.7371;
+        
+        // Get current weather (today only)
+        const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m&timezone=auto`;
+        
+        const response = await fetch(apiUrl);
+        if (!response.ok) throw new Error('Weather API error');
+        
+        const data = await response.json();
+        
+        if (data.current) {
+          setOutdoorWeather({
+            temperature: data.current.temperature_2m,
+            humidity: data.current.relative_humidity_2m
+          });
+          console.log('✅ [Warehouse3D] Outdoor weather loaded:', data.current);
+        }
+      } catch (error) {
+        console.error('❌ [Warehouse3D] Error fetching outdoor weather:', error);
+      }
+    };
+    
+    fetchOutdoorWeather();
+    
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchOutdoorWeather, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Calculate positions - Spacious warehouse layout
   const roomPositions = useMemo(() => {
@@ -838,6 +1010,15 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
           );
         })}
 
+        {/* Outdoor Weather Station - Positioned far outside warehouse */}
+        {outdoorWeather && (
+          <OutdoorWeatherStation
+            temperature={outdoorWeather.temperature}
+            humidity={outdoorWeather.humidity}
+            position={[35, 0, -15]} // Far to the right and slightly back
+          />
+        )}
+
         {/* Warehouse title - Modern */}
         <Html position={[0, 12, -38]} center>
           <div className="text-3xl font-bold text-cyan-600 pointer-events-none" style={{
@@ -896,52 +1077,56 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
         </div>
       </div>
 
-      {/* Advanced Control Panel */}
-      <div className="absolute top-3 left-3 md:top-6 md:left-6 bg-white/95 backdrop-blur-md rounded-xl p-3 md:p-4 shadow-2xl border border-cyan-200">
-        <div className="text-xs md:text-sm font-bold text-cyan-600 mb-1.5 md:mb-2 flex items-center gap-1">
-          <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
-          {t('sensors.liveMonitoring')}
+      {/* Compact Control Panel - Simple & French */}
+      <div className="absolute top-3 left-3 md:top-4 md:left-4 bg-white/98 backdrop-blur-xl rounded-xl p-2.5 shadow-xl border border-gray-200">
+        {/* Header compact */}
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+          <span className="text-[10px] font-bold text-gray-700">LIVE</span>
         </div>
         
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-lg p-2 border border-cyan-200">
-            <div className="text-[10px] text-slate-600">{t('sensors.total')}</div>
-            <div className="text-lg font-bold text-cyan-600">{rooms.length}</div>
+        {/* Stats ultra-compact */}
+        <div className="flex gap-1.5 mb-2">
+          <div className="flex-1 bg-cyan-50 rounded-lg p-1.5 border border-cyan-200/50">
+            <div className="text-[8px] text-gray-500 font-medium">Total</div>
+            <div className="text-base font-bold text-cyan-600">{rooms.length}</div>
           </div>
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-2 border border-blue-200">
-            <div className="text-[10px] text-slate-600">Moy. T°</div>
-            <div className="text-lg font-bold text-blue-600">
+          <div className="flex-1 bg-blue-50 rounded-lg p-1.5 border border-blue-200/50">
+            <div className="text-[8px] text-gray-500 font-medium">T° Moy</div>
+            <div className="text-base font-bold text-blue-600">
               {(rooms.reduce((sum, r) => sum + (r.sensors?.[0]?.additionalData?.temperature || 0), 0) / rooms.length).toFixed(1)}°
             </div>
           </div>
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-2 border border-emerald-200">
-            <div className="text-[10px] text-slate-600">{t('sensors.ok')}</div>
-            <div className="text-lg font-bold text-emerald-600">
+        </div>
+        
+        <div className="flex gap-1.5 mb-2">
+          <div className="flex-1 bg-green-50 rounded-lg p-1.5 border border-green-200/50">
+            <div className="text-[8px] text-gray-500 font-medium">OK</div>
+            <div className="text-base font-bold text-green-600">
               {rooms.filter((r) => r.sensors?.[0]?.additionalData?.magnet !== 0 && (r.sensors?.[0]?.additionalData?.temperature || 0) < 10).length}
             </div>
           </div>
-          <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-lg p-2 border border-rose-200">
-            <div className="text-[10px] text-slate-600">{t('sensors.alerts')}</div>
-            <div className="text-lg font-bold text-rose-600">
+          <div className="flex-1 bg-red-50 rounded-lg p-1.5 border border-red-200/50">
+            <div className="text-[8px] text-gray-500 font-medium">Alerte</div>
+            <div className="text-base font-bold text-red-600">
               {rooms.filter((r) => r.sensors?.[0]?.additionalData?.magnet === 0).length}
             </div>
           </div>
         </div>
 
-        {/* Thermal View Toggle */}
+        {/* Thermal toggle compact */}
         <button
           onClick={() => setShowThermalView(!showThermalView)}
-          className={`w-full py-1.5 px-3 rounded-lg text-xs font-medium transition-all ${
+          className={`w-full py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all ${
             showThermalView 
-              ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg' 
-              : 'bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-700 hover:from-cyan-200 hover:to-blue-200'
+              ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md' 
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          {showThermalView ? `🌡️ ${t('sensors.thermalView')} ON` : `🔍 ${t('sensors.normalView')}`}
+          {showThermalView ? '🌡️ Thermique' : '🔍 Normal'}
         </button>
       </div>
-
+      
       {/* Thermal View Indicator & Scale */}
       {showThermalView && (
         <div className="absolute top-3 right-3 md:top-6 md:right-6 bg-gradient-to-br from-gray-900/98 to-black/98 backdrop-blur-md rounded-xl p-3 shadow-2xl border-2 border-orange-500">

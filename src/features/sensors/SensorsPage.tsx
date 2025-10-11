@@ -441,85 +441,101 @@ const SensorsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Modern Professional Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* Modern Compact Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between gap-3">
+            {/* Left: Title */}
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                 </svg>
               </div>
               <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">{t('sensors.title')}</h1>
-                <p className="text-gray-600 text-base sm:text-lg">{t('sensors.realTimeMonitoring')}</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">{t('sensors.title')}</h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="hidden lg:flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-xs font-medium text-gray-600">
+                      {!activeTab 
+                        ? t('common.loading')
+                        : activeTab === 'all' 
+                          ? `${rooms.length} ${t('sensors.activeRooms')}`
+                          : `${displayRooms.length} ${t('sensors.rooms')}`
+                      }
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-sm font-medium text-gray-700">
-                  {!activeTab 
-                    ? t('common.loading')
-                    : activeTab === 'all' 
-                      ? `${rooms.length} ${t('sensors.activeRooms')}`
-                      : `${displayRooms.length} ${t('sensors.rooms')} - ${tabs.find(t => t.id === activeTab)?.label || t('sensors.group')}`
-                  }
-                </span>
-              </div>
+
+            {/* Right: Controls - Compact group */}
+            <div className="flex items-center gap-2">
               {/* View Mode Toggle */}
-              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+              <div className="flex items-center gap-1 bg-gradient-to-br from-white via-gray-50 to-white rounded-xl p-0.5 shadow-lg border border-gray-200">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  className={`relative flex flex-col items-center justify-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-300 ${
                     viewMode === 'grid'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/50 scale-105'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-white/60 active:scale-95'
                   }`}
-                  title={t('sensors.viewGrid', 'Vue Grille') as string}
+                  title="Grille de cartes"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  {viewMode === 'grid' && (
+                    <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                  )}
+                  <svg className={`w-5 h-5 sm:w-4 sm:h-4 mb-0.5 ${viewMode === 'grid' ? 'scale-110' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                   </svg>
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide">Grille</span>
                 </button>
+                
                 <button
                   onClick={() => setViewMode('map')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  className={`relative flex flex-col items-center justify-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-all duration-300 ${
                     viewMode === 'map'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/50 scale-105'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-white/60 active:scale-95'
                   }`}
-                  title={t('sensors.view3D', 'Vue 3D') as string}
+                  title="Vue 3D interactive"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  {viewMode === 'map' && (
+                    <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                  )}
+                  <svg className={`w-5 h-5 sm:w-4 sm:h-4 mb-0.5 ${viewMode === 'map' ? 'scale-110' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                   </svg>
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide">3D</span>
                 </button>
               </div>
+
+              {/* Refresh Button - Compact */}
               <button
                 onClick={() => {
                   console.log('🔄 [SensorsPage] Refresh button clicked - forcing fresh data fetch');
-                  // Toggle forceRefresh to trigger fresh API calls (no cache)
-                  setForceRefresh(prev => {
-                    const newValue = !prev;
-                    console.log(`🔄 [SensorsPage] forceRefresh changed from ${prev} to ${newValue}`);
-                    return newValue;
-                  });
+                  setForceRefresh(prev => !prev);
                 }}
                 disabled={roomsLoading}
-                className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 hover:border-blue-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                className={`flex flex-col items-center justify-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl transition-all duration-200 ${
+                  roomsLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 text-blue-700 shadow-md hover:shadow-lg border border-blue-200 active:scale-95'
+                }`}
                 title={t('common.refresh') as string}
               >
                 {roomsLoading ? (
-                  <svg className="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 sm:w-4 sm:h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 ) : (
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
+                  <>
+                    <svg className="w-5 h-5 sm:w-4 sm:h-4 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span className="text-[9px] sm:hidden font-bold uppercase">MAJ</span>
+                  </>
                 )}
-                {t('common.refresh')}
               </button>
             </div>
           </div>
@@ -708,11 +724,12 @@ const SensorsPage: React.FC = () => {
             boitieDeviceId={displayRooms.find(room => room.sensors.some(s => s.id === selectedSensor.id))?.boitieSensorId}
             isOpen={isChartModalOpen}
             onClose={() => setIsChartModalOpen(false)}
-            availableChambers={displayRooms.map(room => ({
+            availableChambers={(rooms || []).map(room => ({
               id: room.sensorId, // Use the actual sensor ID instead of the unified sensor ID
               name: room.name,
               channelNumber: extractChannelNumber(room.sensorId) || 1,
-              boitieDeviceId: room.boitieSensorId
+              boitieDeviceId: room.boitieSensorId,
+              athGroupNumber: room.athGroupNumber || 1 // Add FRIGO group number
             }))}
           />
         )}
