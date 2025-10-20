@@ -66,6 +66,49 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
   const [data, setData] = useState<SensorData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Calibration values for each chamber (same as SensorsPage)
+  const calibrationValues = {
+    1: { tempOffset: -2.3, humOffset: 15 },
+    2: { tempOffset: null, humOffset: null }, // À ignorer / à recâbler
+    3: { tempOffset: -3.0, humOffset: 15 },
+    4: { tempOffset: -1.7, humOffset: 12 },
+    5: { tempOffset: -5.3, humOffset: 9 },
+    6: { tempOffset: -1.625, humOffset: null }, // Ne pas corriger capteur HS pour humidité
+    7: { tempOffset: -1.2, humOffset: 3 },
+    8: { tempOffset: -2.7, humOffset: null },
+    9: { tempOffset: null, humOffset: null },
+    10: { tempOffset: -2.5, humOffset: 1 },
+    11: { tempOffset: -2.6, humOffset: 8.5 },
+    12: { tempOffset: -4.0, humOffset: 10 }
+  };
+
+  // Function to apply calibration to sensor values
+  const applyCalibration = (roomName: string, temperature: number, humidity: number) => {
+    // Extract chamber number from room name
+    const chamberMatch = roomName?.match(/(\d+)/);
+    const chamberNumber = chamberMatch ? parseInt(chamberMatch[1]) : null;
+    
+    if (!chamberNumber || !calibrationValues[chamberNumber as keyof typeof calibrationValues]) {
+      return { temperature, humidity };
+    }
+
+    const calibration = calibrationValues[chamberNumber as keyof typeof calibrationValues];
+    let calibratedTemp = temperature;
+    let calibratedHum = humidity;
+
+    // Apply temperature calibration
+    if (calibration.tempOffset !== null) {
+      calibratedTemp = temperature + calibration.tempOffset;
+    }
+
+    // Apply humidity calibration
+    if (calibration.humOffset !== null) {
+      calibratedHum = humidity + calibration.humOffset;
+    }
+
+    return { temperature: calibratedTemp, humidity: calibratedHum };
+  };
   
   // Comparison mode state
   const [comparisonMode, setComparisonMode] = useState(false);
@@ -346,14 +389,22 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         return [];
       }
       
-      // Convert API response to SensorData format
-      const processedData: SensorData[] = rawData.data.map((item: any) => ({
-        timestamp: item.epoch * 1000,
-        temperature: parseFloat(item.temperature) || 0,
-        humidity: parseFloat(item.humidity) || 0,
-        battery: 0,
-        magnet: item.magnet === true ? 1 : 0
-      }));
+      // Convert API response to SensorData format with calibration applied
+      const processedData: SensorData[] = rawData.data.map((item: any) => {
+        const rawTemp = parseFloat(item.temperature) || 0;
+        const rawHum = parseFloat(item.humidity) || 0;
+        
+        // Apply calibration for this chamber
+        const calibrated = applyCalibration(chamber.name, rawTemp, rawHum);
+        
+        return {
+          timestamp: item.epoch * 1000,
+          temperature: calibrated.temperature,
+          humidity: calibrated.humidity,
+          battery: 0,
+          magnet: item.magnet === true ? 1 : 0
+        };
+      });
       
       // Sort by timestamp
       processedData.sort((a, b) => a.timestamp - b.timestamp);
@@ -1015,14 +1066,22 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       
       console.log(`📊 [SensorChart] First data sample:`, rawData.data[0]);
       
-      // Convert API response to SensorData format
-      const processedData: SensorData[] = rawData.data.map((item: any) => ({
-        timestamp: item.epoch * 1000, // Convert to milliseconds
-        temperature: parseFloat(item.temperature) || 0,
-        humidity: parseFloat(item.humidity) || 0,
-        battery: 0, // Not provided by new API
-        magnet: item.magnet === true ? 1 : 0 // true = closed (1), false = open (0)
-      }));
+      // Convert API response to SensorData format with calibration applied
+      const processedData: SensorData[] = rawData.data.map((item: any) => {
+        const rawTemp = parseFloat(item.temperature) || 0;
+        const rawHum = parseFloat(item.humidity) || 0;
+        
+        // Apply calibration if roomName is available
+        const calibrated = roomName ? applyCalibration(roomName, rawTemp, rawHum) : { temperature: rawTemp, humidity: rawHum };
+        
+        return {
+          timestamp: item.epoch * 1000, // Convert to milliseconds
+          temperature: calibrated.temperature,
+          humidity: calibrated.humidity,
+          battery: 0, // Not provided by new API
+          magnet: item.magnet === true ? 1 : 0 // true = closed (1), false = open (0)
+        };
+      });
       
       // Sort by timestamp
       processedData.sort((a, b) => a.timestamp - b.timestamp);

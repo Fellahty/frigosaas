@@ -94,6 +94,49 @@ const SensorsPage: React.FC = () => {
     return match ? parseInt(match[1]) : null;
   };
 
+  // Calibration values for each chamber
+  const calibrationValues = {
+    1: { tempOffset: -2.3, humOffset: 15 },
+    2: { tempOffset: null, humOffset: null }, // À ignorer / à recâbler
+    3: { tempOffset: -3.0, humOffset: 15 },
+    4: { tempOffset: -1.7, humOffset: 12 },
+    5: { tempOffset: -5.3, humOffset: 9 },
+    6: { tempOffset: -1.625, humOffset: null }, // Ne pas corriger capteur HS pour humidité
+    7: { tempOffset: -1.2, humOffset: 3 },
+    8: { tempOffset: -2.7, humOffset: null },
+    9: { tempOffset: null, humOffset: null },
+    10: { tempOffset: -2.5, humOffset: 1 },
+    11: { tempOffset: -2.6, humOffset: 8.5 },
+    12: { tempOffset: -4.0, humOffset: 10 }
+  };
+
+  // Function to apply calibration to sensor values
+  const applyCalibration = (roomName: string, temperature: number, humidity: number) => {
+    // Extract chamber number from room name
+    const chamberMatch = roomName.match(/(\d+)/);
+    const chamberNumber = chamberMatch ? parseInt(chamberMatch[1]) : null;
+    
+    if (!chamberNumber || !calibrationValues[chamberNumber as keyof typeof calibrationValues]) {
+      return { temperature, humidity };
+    }
+
+    const calibration = calibrationValues[chamberNumber as keyof typeof calibrationValues];
+    let calibratedTemp = temperature;
+    let calibratedHum = humidity;
+
+    // Apply temperature calibration
+    if (calibration.tempOffset !== null) {
+      calibratedTemp = temperature + calibration.tempOffset;
+    }
+
+    // Apply humidity calibration
+    if (calibration.humOffset !== null) {
+      calibratedHum = humidity + calibration.humOffset;
+    }
+
+    return { temperature: calibratedTemp, humidity: calibratedHum };
+  };
+
   // Function to fetch all telemetry data from the new API (NO CACHE)
   const fetchAllTelemetryData = useCallback(async () => {
     console.log(`🔍 [SensorsPage] fetchAllTelemetryData called - NO CACHE`);
@@ -206,7 +249,7 @@ const SensorsPage: React.FC = () => {
         const sensorData = bulkData ? extractSensorDataFromBulk(roomDoc.room, bulkData) : null;
         
         // Use real sensor data from API, with fallback for testing
-        const finalSensorData = sensorData || {
+        const rawSensorData = sensorData || {
           temperature: 0,
           humidity: 0,
           battery: 0,
@@ -214,6 +257,15 @@ const SensorsPage: React.FC = () => {
           beacons: null,
           timestamp: new Date(),
           localTime: new Date().toLocaleString('fr-FR')
+        };
+
+        // Apply calibration to the sensor data
+        const calibratedValues = applyCalibration(roomDoc.room, rawSensorData.temperature, rawSensorData.humidity);
+        
+        const finalSensorData = {
+          ...rawSensorData,
+          temperature: calibratedValues.temperature,
+          humidity: calibratedValues.humidity
         };
         
         console.log('Final sensor data for room:', roomDoc.room, finalSensorData);
@@ -541,6 +593,7 @@ const SensorsPage: React.FC = () => {
           </div>
         </div>
 
+
         {/* Mobile-Optimized Tabs Navigation */}
         {activeTab && tabs.length > 1 && (
           <div className="mb-4 sm:mb-6">
@@ -598,20 +651,27 @@ const SensorsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {displayRooms.map((room) => {
               const isDoorOpen = room.sensors?.[0]?.additionalData?.magnet === 0;
+              const isChambre2 = room.name === 'Chambre 2' || room.name === 'CH2' || room.name === '2';
+              const isSensorBroken = isChambre2; // Only Chambre 2 sensor is broken
+              
               return (
             <div
               key={room.id}
               className={`group rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 relative overflow-hidden ${
-                isDoorOpen 
-                  ? 'bg-red-50/30 border-red-300/60 hover:shadow-red-100/50 hover:border-red-400' 
-                  : 'bg-white border-gray-200/60 hover:shadow-blue-100/50 hover:border-blue-400'
+                isSensorBroken
+                  ? 'bg-gradient-to-br from-red-50/50 to-orange-50/30 border-red-300/60 hover:shadow-red-100/50 hover:border-red-400'
+                  : isDoorOpen 
+                    ? 'bg-red-50/30 border-red-300/60 hover:shadow-red-100/50 hover:border-red-400' 
+                    : 'bg-white border-gray-200/60 hover:shadow-blue-100/50 hover:border-blue-400'
               }`}
             >
               {/* Compact Room Header */}
               <div className={`px-3 py-2.5 border-b ${
-                isDoorOpen 
-                  ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200/50' 
-                  : 'bg-gradient-to-r from-slate-50 to-gray-50 border-gray-200/50'
+                isSensorBroken
+                  ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200/50'
+                  : isDoorOpen 
+                    ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200/50' 
+                    : 'bg-gradient-to-r from-slate-50 to-gray-50 border-gray-200/50'
               }`}>
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-base font-bold text-gray-900 truncate flex-1">{room.name}</h3>
@@ -620,14 +680,62 @@ const SensorsPage: React.FC = () => {
                       F{room.athGroupNumber || 1}
                     </span>
                     <span className="text-xs text-gray-500">{room.capacity}L</span>
-                    <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isDoorOpen ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                    {isSensorBroken ? (
+                      <div className="flex items-center gap-1">
+                        <svg className="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-xs font-medium text-red-600">EN PANNE</span>
+                      </div>
+                    ) : (
+                      <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isDoorOpen ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Sensor Data */}
               <div className="p-3">
-                {room.sensors && room.sensors.length > 0 ? room.sensors.map((sensor) => (
+                {isSensorBroken ? (
+                  /* Compact Broken Sensor Display */
+                  <div className="space-y-2">
+                    <div className="cursor-not-allowed opacity-60">
+                      {/* Data Grid - Same layout but with broken status */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {/* Door Status */}
+                        <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg p-2.5 border border-gray-300/50">
+                          <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase">{t('sensors.door')}</div>
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                            <span className="text-base font-bold text-gray-500">--</span>
+                          </div>
+                        </div>
+                        
+                        {/* Temperature */}
+                        <div className="bg-gradient-to-br from-red-100 to-red-200 rounded-lg p-2.5 border border-red-300/50">
+                          <div className="text-[10px] text-red-600 font-semibold mb-1 uppercase">{t('sensors.temp')}</div>
+                          <div className="text-base font-bold text-red-500 text-center">--</div>
+                        </div>
+                        
+                        {/* Humidity */}
+                        <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg p-2.5 border border-blue-300/50">
+                          <div className="text-[10px] text-blue-600 font-semibold mb-1 uppercase">{t('sensors.hum')}</div>
+                          <div className="text-base font-bold text-blue-500 text-center">--</div>
+                        </div>
+                      </div>
+                      
+                      {/* Status Badge */}
+                      <div className="mt-2 flex items-center justify-center">
+                        <div className="flex items-center gap-1.5 bg-red-100 border border-red-200 rounded-full px-3 py-1">
+                          <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-xs font-bold text-red-700">EN PANNE</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : room.sensors && room.sensors.length > 0 ? room.sensors.map((sensor) => (
                   <div key={sensor.id}>
                       {sensor.additionalData && (
                       <div className="space-y-2">
