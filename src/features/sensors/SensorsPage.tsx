@@ -43,6 +43,13 @@ const getTimeAgo = (timestamp: Date): string => {
   return `il y a ${diffInMonths} mois`;
 };
 
+// Utility function to check if data is older than 4 hours
+const isDataOld = (timestamp: Date): boolean => {
+  const now = new Date();
+  const diffInHours = (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60);
+  return diffInHours > 4;
+};
+
 // Types
 interface Room {
   id: string;
@@ -94,48 +101,6 @@ const SensorsPage: React.FC = () => {
     return match ? parseInt(match[1]) : null;
   };
 
-  // Calibration values for each chamber
-  const calibrationValues = {
-    1: { tempOffset: -2.3, humOffset: 15 },
-    2: { tempOffset: null, humOffset: null }, // À ignorer / à recâbler
-    3: { tempOffset: -3.0, humOffset: 15 },
-    4: { tempOffset: -1.7, humOffset: 12 },
-    5: { tempOffset: -5.3, humOffset: 9 },
-    6: { tempOffset: -1.625, humOffset: null }, // Ne pas corriger capteur HS pour humidité
-    7: { tempOffset: -1.2, humOffset: 3 },
-    8: { tempOffset: -2.7, humOffset: null },
-    9: { tempOffset: null, humOffset: null },
-    10: { tempOffset: -2.5, humOffset: 1 },
-    11: { tempOffset: -2.6, humOffset: 8.5 },
-    12: { tempOffset: -4.0, humOffset: 10 }
-  };
-
-  // Function to apply calibration to sensor values
-  const applyCalibration = (roomName: string, temperature: number, humidity: number) => {
-    // Extract chamber number from room name
-    const chamberMatch = roomName.match(/(\d+)/);
-    const chamberNumber = chamberMatch ? parseInt(chamberMatch[1]) : null;
-    
-    if (!chamberNumber || !calibrationValues[chamberNumber as keyof typeof calibrationValues]) {
-      return { temperature, humidity };
-    }
-
-    const calibration = calibrationValues[chamberNumber as keyof typeof calibrationValues];
-    let calibratedTemp = temperature;
-    let calibratedHum = humidity;
-
-    // Apply temperature calibration
-    if (calibration.tempOffset !== null) {
-      calibratedTemp = temperature + calibration.tempOffset;
-    }
-
-    // Apply humidity calibration
-    if (calibration.humOffset !== null) {
-      calibratedHum = humidity + calibration.humOffset;
-    }
-
-    return { temperature: calibratedTemp, humidity: calibratedHum };
-  };
 
   // Function to fetch all telemetry data from the new API (NO CACHE)
   const fetchAllTelemetryData = useCallback(async () => {
@@ -259,14 +224,8 @@ const SensorsPage: React.FC = () => {
           localTime: new Date().toLocaleString('fr-FR')
         };
 
-        // Apply calibration to the sensor data
-        const calibratedValues = applyCalibration(roomDoc.room, rawSensorData.temperature, rawSensorData.humidity);
-        
-        const finalSensorData = {
-          ...rawSensorData,
-          temperature: calibratedValues.temperature,
-          humidity: calibratedValues.humidity
-        };
+        // Use raw sensor data without calibration
+        const finalSensorData = rawSensorData;
         
         console.log('Final sensor data for room:', roomDoc.room, finalSensorData);
         
@@ -651,8 +610,9 @@ const SensorsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {displayRooms.map((room) => {
               const isDoorOpen = room.sensors?.[0]?.additionalData?.magnet === 0;
-              const isChambre2 = room.name === 'Chambre 2' || room.name === 'CH2' || room.name === '2';
-              const isSensorBroken = isChambre2; // Only Chambre 2 sensor is broken
+              const isSensorBroken = false; // Tous les capteurs fonctionnent maintenant
+              const isDisconnected = room.sensors?.[0]?.additionalData?.timestamp ? 
+                isDataOld(room.sensors[0].additionalData.timestamp) : true;
               
               return (
             <div
@@ -660,18 +620,22 @@ const SensorsPage: React.FC = () => {
               className={`group rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 relative overflow-hidden ${
                 isSensorBroken
                   ? 'bg-gradient-to-br from-red-50/50 to-orange-50/30 border-red-300/60 hover:shadow-red-100/50 hover:border-red-400'
-                  : isDoorOpen 
-                    ? 'bg-red-50/30 border-red-300/60 hover:shadow-red-100/50 hover:border-red-400' 
-                    : 'bg-white border-gray-200/60 hover:shadow-blue-100/50 hover:border-blue-400'
+                  : isDisconnected
+                    ? 'bg-gradient-to-br from-orange-50/50 to-yellow-50/30 border-orange-300/60 hover:shadow-orange-100/50 hover:border-orange-400'
+                    : isDoorOpen 
+                      ? 'bg-red-50/30 border-red-300/60 hover:shadow-red-100/50 hover:border-red-400' 
+                      : 'bg-white border-gray-200/60 hover:shadow-blue-100/50 hover:border-blue-400'
               }`}
             >
               {/* Compact Room Header */}
               <div className={`px-3 py-2.5 border-b ${
                 isSensorBroken
                   ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200/50'
-                  : isDoorOpen 
-                    ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200/50' 
-                    : 'bg-gradient-to-r from-slate-50 to-gray-50 border-gray-200/50'
+                  : isDisconnected
+                    ? 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-200/50'
+                    : isDoorOpen 
+                      ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200/50' 
+                      : 'bg-gradient-to-r from-slate-50 to-gray-50 border-gray-200/50'
               }`}>
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-base font-bold text-gray-900 truncate flex-1">{room.name}</h3>
@@ -686,6 +650,13 @@ const SensorsPage: React.FC = () => {
                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
                         <span className="text-xs font-medium text-red-600">EN PANNE</span>
+                      </div>
+                    ) : isDisconnected ? (
+                      <div className="flex items-center gap-1">
+                        <svg className="w-3 h-3 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-xs font-medium text-orange-600">DÉCONNECTÉ</span>
                       </div>
                     ) : (
                       <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isDoorOpen ? 'bg-red-500' : 'bg-green-500'}`}></div>
@@ -741,7 +712,9 @@ const SensorsPage: React.FC = () => {
                       <div className="space-y-2">
                       <div 
                         onClick={() => handleSensorClick(sensor)}
-                        className="cursor-pointer hover:bg-gray-50/50 rounded-lg p-1.5 transition-all duration-200"
+                        className={`cursor-pointer hover:bg-gray-50/50 rounded-lg p-1.5 transition-all duration-200 ${
+                          isDisconnected ? 'opacity-60' : ''
+                        }`}
                       >
                         {/* Data Grid */}
                         <div className="grid grid-cols-3 gap-2">
@@ -774,6 +747,18 @@ const SensorsPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
+                        
+                        {/* Disconnected Status Badge */}
+                        {isDisconnected && (
+                          <div className="mt-2 flex items-center justify-center">
+                            <div className="flex items-center gap-1.5 bg-orange-100 border border-orange-200 rounded-full px-3 py-1">
+                              <svg className="w-3 h-3 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                              </svg>
+                              <span className="text-xs font-bold text-orange-700">DÉCONNECTÉ</span>
+                            </div>
+                          </div>
+                        )}
                         
                         {/* Battery Info - Only show if voltage > 0 */}
                         {sensor.additionalData.battery > 0 && (
