@@ -95,6 +95,9 @@ const SensorsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   
+  // Track last valid (non-zero) values for each sensor
+  const [lastValidValues, setLastValidValues] = useState<Record<string, { temp: number | null; hum: number | null }>>({});
+  
   // Function to extract channel number from sensor ID (e.g., "S-CH1" -> 1, "S-CH2" -> 2)
   const extractChannelNumber = (sensorId: string): number | null => {
     const match = sensorId.match(/(\d+)/);
@@ -210,8 +213,23 @@ const SensorsPage: React.FC = () => {
       
       // Process each room using the bulk data
       for (const roomDoc of filteredRooms) {
-        // Extract sensor data from the API response using exact room name
-        const sensorData = bulkData ? extractSensorDataFromBulk(roomDoc.room, bulkData) : null;
+        // SPECIAL CASE: Chambre 4 uses Chambre 5 data with adjustments (temporary fix)
+        let sensorData = null;
+        if (roomDoc.room === 'Chambre 4') {
+          const chambre5Data = bulkData ? extractSensorDataFromBulk('Chambre 5', bulkData) : null;
+          if (chambre5Data) {
+            // Use Chambre 5 data with offsets: +0.6°C temperature, +2% humidity
+            sensorData = {
+              ...chambre5Data,
+              temperature: chambre5Data.temperature + 0.6,
+              humidity: chambre5Data.humidity + 2
+            };
+            console.log(`📋 [SensorsPage] Chambre 4 using Chambre 5 data with adjustments`);
+          }
+        } else {
+          // Extract sensor data from the API response using exact room name
+          sensorData = bulkData ? extractSensorDataFromBulk(roomDoc.room, bulkData) : null;
+        }
         
         // Use real sensor data from API, with fallback for testing
         const rawSensorData = sensorData || {
@@ -224,7 +242,7 @@ const SensorsPage: React.FC = () => {
           localTime: new Date().toLocaleString('fr-FR')
         };
 
-        // Use raw sensor data without calibration
+        // Use raw sensor data as-is (we'll process it after the query)
         const finalSensorData = rawSensorData;
         
         console.log('Final sensor data for room:', roomDoc.room, finalSensorData);
@@ -294,14 +312,79 @@ const SensorsPage: React.FC = () => {
     enabled: !!tenantId,
   });
 
+  // Update last valid values when rooms data changes
+  React.useEffect(() => {
+    if (!rooms || rooms.length === 0) return;
+    
+    const newLastValidValues: Record<string, { temp: number | null; hum: number | null }> = {};
+    
+    rooms.forEach(room => {
+      const sensor = room.sensors[0];
+      if (sensor && sensor.additionalData) {
+        const sensorKey = sensor.id;
+        const currentLastValid = lastValidValues[sensorKey] || { temp: null, hum: null };
+        
+        // Update last valid values with non-zero readings
+        newLastValidValues[sensorKey] = { 
+          temp: sensor.additionalData.temperature !== 0 ? sensor.additionalData.temperature : currentLastValid.temp,
+          hum: sensor.additionalData.humidity !== 0 ? sensor.additionalData.humidity : currentLastValid.hum
+        };
+      }
+    });
+    
+    // Only update if there are actual changes to avoid infinite loops
+    if (JSON.stringify(newLastValidValues) !== JSON.stringify(lastValidValues)) {
+      setLastValidValues(newLastValidValues);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rooms]);
+
+  // Process rooms data to replace 0 values with last valid values
+  const processedRooms = useMemo(() => {
+    if (!rooms || rooms.length === 0) return [];
+    
+    return rooms.map(room => {
+      const sensor = room.sensors[0];
+      if (sensor && sensor.additionalData) {
+        const sensorKey = sensor.id;
+        const lastValid = lastValidValues[sensorKey] || { temp: null, hum: null };
+        
+        // Replace 0 values with last valid values
+        let tempValue = sensor.additionalData.temperature;
+        let humValue = sensor.additionalData.humidity;
+        
+        if (tempValue === 0 && lastValid.temp !== null) {
+          tempValue = lastValid.temp;
+        }
+        if (humValue === 0 && lastValid.hum !== null) {
+          humValue = lastValid.hum;
+        }
+        
+        // Return new room object with processed sensor data
+        return {
+          ...room,
+          sensors: [{
+            ...sensor,
+            additionalData: {
+              ...sensor.additionalData,
+              temperature: tempValue,
+              humidity: humValue
+            }
+          }, ...room.sensors.slice(1)]
+        };
+      }
+      return room;
+    });
+  }, [rooms, lastValidValues]);
+
   // Group rooms by ATH group number and create tabs
   const { groupedRooms, tabs } = useMemo(() => {
-    if (!rooms || rooms.length === 0) {
+    if (!processedRooms || processedRooms.length === 0) {
       return { groupedRooms: {}, tabs: [] };
     }
 
     // Group rooms by ATH group number
-    const grouped = rooms.reduce((acc, room) => {
+    const grouped = processedRooms.reduce((acc, room) => {
       const groupNumber = room.athGroupNumber || 1;
       const groupKey = `group-${groupNumber}`;
       
@@ -315,7 +398,7 @@ const SensorsPage: React.FC = () => {
 
     // Create tabs array
     const tabs = [
-      { id: 'all', label: t('sensors.tabs.all', 'Toutes'), count: rooms.length },
+      { id: 'all', label: t('sensors.tabs.all', 'Toutes'), count: processedRooms.length },
       ...Object.keys(grouped)
         .sort((a, b) => {
           const numA = parseInt(a.replace('group-', ''));
@@ -333,7 +416,7 @@ const SensorsPage: React.FC = () => {
     ];
 
     return { groupedRooms: grouped, tabs };
-  }, [rooms, t]);
+  }, [processedRooms, t]);
 
   // Set default tab to first ATH group when rooms are loaded
   React.useEffect(() => {
@@ -809,23 +892,32 @@ const SensorsPage: React.FC = () => {
         )}
 
         {/* Sensor Chart Modal */}
-        {selectedSensor && (
-          <SensorChart
-            sensorId={selectedSensor.id}
-            sensorName={selectedSensor.name}
-            roomName={displayRooms.find(room => room.sensors.some(s => s.id === selectedSensor.id))?.name}
-            boitieDeviceId={displayRooms.find(room => room.sensors.some(s => s.id === selectedSensor.id))?.boitieSensorId}
-            isOpen={isChartModalOpen}
-            onClose={() => setIsChartModalOpen(false)}
-            availableChambers={(rooms || []).map(room => ({
-              id: room.sensorId, // Use the actual sensor ID instead of the unified sensor ID
-              name: room.name,
-              channelNumber: extractChannelNumber(room.sensorId) || 1,
-              boitieDeviceId: room.boitieSensorId,
-              athGroupNumber: room.athGroupNumber || 1 // Add FRIGO group number
-            }))}
-          />
-        )}
+        {selectedSensor && (() => {
+          const selectedRoom = displayRooms.find(room => room.sensors.some(s => s.id === selectedSensor.id));
+          const roomName = selectedRoom?.name;
+          
+          // SPECIAL CASE: Chambre 4 uses Chambre 5 data for fetching
+          const fetchRoomName = roomName === 'Chambre 4' ? 'Chambre 5' : roomName;
+          
+          return (
+            <SensorChart
+              sensorId={selectedSensor.id}
+              sensorName={selectedSensor.name}
+              roomName={fetchRoomName}
+              displayRoomName={roomName} // Keep original room name for display
+              boitieDeviceId={selectedRoom?.boitieSensorId}
+              isOpen={isChartModalOpen}
+              onClose={() => setIsChartModalOpen(false)}
+              availableChambers={(rooms || []).map(room => ({
+                id: room.sensorId, // Use the actual sensor ID instead of the unified sensor ID
+                name: room.name,
+                channelNumber: extractChannelNumber(room.sensorId) || 1,
+                boitieDeviceId: room.boitieSensorId,
+                athGroupNumber: room.athGroupNumber || 1 // Add FRIGO group number
+              }))}
+            />
+          );
+        })()}
       </div>
     </div>
   );
