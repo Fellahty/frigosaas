@@ -471,12 +471,11 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         const chamberName = chamber?.name || chamberId;
         
         const detailedData = [
-          ['Date/Heure', 'Température (°C)', 'Humidité (%)', 'Porte', 'Batterie (V)'],
+          ['Date/Heure', 'Température (°C)', 'Humidité (%)', 'Batterie (V)'],
           ...chamberData.map(d => [
             new Date(d.timestamp).toLocaleString('fr-FR'),
             d.temperature.toFixed(1),
             d.humidity.toFixed(1),
-            d.magnet === 1 ? 'Fermée' : 'Ouverte',
             d.battery > 0 ? d.battery.toFixed(1) : 'N/A'
           ])
         ];
@@ -1548,39 +1547,18 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
     
     // Add main sensor data
     if (processedData.length > 0) {
-      const doorMarkAreas = createDoorMarkAreas(processedData);
-      
       series.push({
         name: sensorName,
         type: 'line',
-        data: processedData.map(d => [d.timestamp, d[dataKey], d.magnet]),
+        data: processedData.map(d => [d.timestamp, d[dataKey]]),
         smooth: true,
         lineStyle: { width: 3, color: chamberColors[0] },
         itemStyle: { color: chamberColors[0] },
         symbol: 'circle',
-        symbolSize: responsiveConfig.symbolSize,
-        markArea: {
-          silent: true,
-          itemStyle: {
-            color: 'rgba(239, 68, 68, 0.08)', // Red for door open
-            borderWidth: 0
-          },
-          label: {
-            show: false
-          },
-          data: doorMarkAreas.map(area => [
-            { xAxis: area.xAxis },
-            { xAxis: area.xAxisEnd }
-          ])
-        },
-        markLine: {
-          silent: true,
-          symbol: 'none',
-          data: createDoorMarkLines(processedData)
-        }
+        symbolSize: responsiveConfig.symbolSize
       });
       legendData.push(sensorName);
-      console.log(`✅ [SensorChart] Added main sensor: ${sensorName} with ${doorMarkAreas.length} door open periods`);
+      console.log(`✅ [SensorChart] Added main sensor: ${sensorName}`);
     }
     
     // Add comparison chamber data
@@ -1593,7 +1571,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         series.push({
           name: chamberName,
           type: 'line',
-          data: chamberData.map(d => [d.timestamp, d[dataKey], d.magnet]),
+          data: chamberData.map(d => [d.timestamp, d[dataKey]]),
           smooth: true,
           lineStyle: { width: 2, color: chamberColors[colorIndex], type: 'dashed' },
           itemStyle: { color: chamberColors[colorIndex] },
@@ -1860,17 +1838,6 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
           `;
         });
         
-        // Add door status
-        if (params[0] && params[0].data[2] !== undefined) {
-          const doorStatus = params[0].data[2] === 1 ? '🔒 Fermée' : '  Ouverte';
-          const doorColor = params[0].data[2] === 1 ? '#10B981' : '#EF4444';
-          tooltipHtml += `
-            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #E5E7EB;">
-              <span style="color: ${doorColor}; font-size: 12px; font-weight: 500;">${doorStatus}</span>
-            </div>
-          `;
-        }
-        
         tooltipHtml += '</div>';
         return tooltipHtml;
       }
@@ -2101,8 +2068,6 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
           month: 'short'
         });
         const value = point.data[1].toFixed(1);
-        const doorStatus = point.data[2] === 1 ? '🔒 Fermée' : '  Ouverte';
-        const doorColor = point.data[2] === 1 ? '#10B981' : '#EF4444';
         
         return `
           <div>
@@ -2113,9 +2078,6 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                 <span style="color: #6B7280; font-size: 12px;">Température</span>
               </div>
               <strong style="margin-left: 12px; color: #111827;">${value}°C</strong>
-            </div>
-            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #E5E7EB;">
-              <span style="color: ${doorColor}; font-size: 12px; font-weight: 500;">${doorStatus}</span>
             </div>
           </div>
         `;
@@ -2237,7 +2199,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         type: 'line',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: processedData.map(d => [d.timestamp, d.temperature, d.magnet]),
+        data: processedData.map(d => [d.timestamp, d.temperature]),
         smooth: true,
         lineStyle: { width: 3, color: '#EF4444' },
         itemStyle: { color: '#EF4444' },
@@ -2253,103 +2215,12 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         },
         symbol: 'circle',
         symbolSize: responsiveConfig.symbolSize,
-        markArea: {
-          silent: true,
-          itemStyle: {
-            color: 'rgba(220, 38, 38, 0.12)', // Stronger red for door open
-            borderWidth: 1,
-            borderColor: 'rgba(220, 38, 38, 0.2)'
-          },
-          label: {
-            show: false
-          },
-          data: createDoorMarkAreas(processedData).map(area => [
-            { 
-              xAxis: area.xAxis,
-              name: 'Porte Ouverte'
-            },
-            { xAxis: area.xAxisEnd }
-          ])
-        },
         markLine: {
           silent: true,
           symbol: 'none',
-          data: [
-            ...createDoorMarkLines(processedData),
-            ...createDayNightMarkLines(processedData)
-          ]
+          data: createDayNightMarkLines(processedData)
         },
         z: 2
-      },
-      {
-        name: 'État Porte',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 2,
-        data: processedData.map(d => [d.timestamp, d.magnet]),
-        step: 'end',
-        lineStyle: { 
-          width: 2, 
-          color: '#8B5CF6',
-          type: 'solid'
-        },
-        itemStyle: { color: '#8B5CF6' },
-        symbol: 'none',
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(231, 246, 92, 0.2)' },
-              { offset: 1, color: 'rgba(138, 92, 246, 0)' }
-            ]
-          }
-        }
-      },
-      {
-        name: 'État Porte',
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        data: processedData.map(d => {
-          const doorData = [d.timestamp, d.magnet];
-          return doorData;
-        }),
-        itemStyle: {
-          color: function(params: any) {
-            // 1 = Closed (Green), 0 = Open (Red)
-            return params.data[1] === 1 
-              ? {
-                  type: 'linear',
-                  x: 0, y: 0, x2: 0, y2: 1,
-                  colorStops: [
-                    { offset: 0, color: '#10B981' },  // Green-500
-                    { offset: 1, color: '#059669' }   // Green-600
-                  ]
-                }
-              : {
-                  type: 'linear',
-                  x: 0, y: 0, x2: 0, y2: 1,
-                  colorStops: [
-                    { offset: 0, color: '#EF4444' },  // Red-500
-                    { offset: 1, color: '#DC2626' }   // Red-600
-                  ]
-                };
-          },
-          borderRadius: [2, 2, 0, 0],
-          shadowColor: 'rgba(0, 0, 0, 0.1)',
-          shadowBlur: 2,
-          shadowOffsetY: 1
-        },
-        barWidth: '100%',
-        barGap: '-100%',
-        emphasis: {
-          itemStyle: {
-            shadowColor: 'rgba(0, 0, 0, 0.3)',
-            shadowBlur: 5,
-            shadowOffsetY: 2
-          }
-        }
       },
       // Outdoor weather data (if enabled)
       ...(showOutdoorData && outdoorData.length > 0 ? [{
@@ -2511,8 +2382,6 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
           month: 'short'
         });
         const value = point.data[1].toFixed(0);
-        const doorStatus = point.data[2] === 1 ? '🔒 Fermée' : '  Ouverte';
-        const doorColor = point.data[2] === 1 ? '#10B981' : '#EF4444';
         
         return `
           <div>
@@ -2523,9 +2392,6 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
                 <span style="color: #6B7280; font-size: 12px;">Humidité</span>
               </div>
               <strong style="margin-left: 12px; color: #111827;">${value}%</strong>
-            </div>
-            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #E5E7EB;">
-              <span style="color: ${doorColor}; font-size: 12px; font-weight: 500;">${doorStatus}</span>
             </div>
           </div>
         `;
@@ -2656,7 +2522,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         type: 'line',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: processedData.map(d => [d.timestamp, d.humidity, d.magnet]),
+        data: processedData.map(d => [d.timestamp, d.humidity]),
         smooth: true,
         lineStyle: { width: 3, color: '#3B82F6' },
         itemStyle: { color: '#3B82F6' },
@@ -2672,100 +2538,12 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         },
         symbol: 'circle',
         symbolSize: responsiveConfig.symbolSize,
-        markArea: {
-          silent: true,
-          itemStyle: {
-            color: 'rgba(220, 38, 38, 0.12)', // Red for door open
-            borderWidth: 1,
-            borderColor: 'rgba(220, 38, 38, 0.2)'
-          },
-          label: {
-            show: false
-          },
-          data: createDoorMarkAreas(processedData).map(area => [
-            { 
-              xAxis: area.xAxis,
-              name: 'Porte Ouverte'
-            },
-            { xAxis: area.xAxisEnd }
-          ])
-        },
         markLine: {
           silent: true,
           symbol: 'none',
-          data: [
-            ...createDoorMarkLines(processedData),
-            ...createDayNightMarkLines(processedData)
-          ]
+          data: createDayNightMarkLines(processedData)
         },
         z: 2
-      },
-      {
-        name: 'État Porte',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 2,
-        data: processedData.map(d => [d.timestamp, d.magnet]),
-        step: 'end',
-        lineStyle: { 
-          width: 2, 
-          color: '#8B5CF6',
-          type: 'solid'
-        },
-        itemStyle: { color: '#8B5CF6' },
-        symbol: 'none',
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(92, 246, 92, 0.2)' },
-              { offset: 1, color: 'rgba(138, 92, 246, 0)' }
-            ]
-          }
-        }
-      },
-      {
-        name: 'État Porte',
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        data: processedData.map(d => [d.timestamp, d.magnet]),
-        itemStyle: {
-          color: function(params: any) {
-            // 1 = Closed (Green), 0 = Open (Red)
-            return params.data[1] === 1 
-              ? {
-                  type: 'linear',
-                  x: 0, y: 0, x2: 0, y2: 1,
-                  colorStops: [
-                    { offset: 0, color: '#10B981' },  // Green-500
-                    { offset: 1, color: '#059669' }   // Green-600
-                  ]
-                }
-              : {
-                  type: 'linear',
-                  x: 0, y: 0, x2: 0, y2: 1,
-                  colorStops: [
-                    { offset: 0, color: '#EF4444' },  // Red-500
-                    { offset: 1, color: '#DC2626' }   // Red-600
-                  ]
-                };
-          },
-          borderRadius: [2, 2, 0, 0],
-          shadowColor: 'rgba(0, 0, 0, 0.1)',
-          shadowBlur: 2,
-          shadowOffsetY: 1
-        },
-        barWidth: '100%',
-        barGap: '-100%',
-        emphasis: {
-          itemStyle: {
-            shadowColor: 'rgba(0, 0, 0, 0.3)',
-            shadowBlur: 5,
-            shadowOffsetY: 2
-          }
-        }
       },
       // Outdoor weather data (if enabled)
       ...(showOutdoorData && outdoorData.length > 0 ? [{

@@ -78,12 +78,11 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
     return '#ef4444'; // Red - Hot
   };
 
-  // Get modern light color based on temperature and door status
+  // Get modern light color based on temperature
   const getColor = () => {
     const sensor = room.sensors?.[0];
     if (!sensor?.additionalData) return '#cbd5e1'; // Light gray for offline
 
-    const isDoorOpen = sensor.additionalData.magnet === 0;
     const temp = sensor.additionalData.temperature;
 
     // Thermal mode: pure temperature gradient
@@ -92,7 +91,6 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
     }
 
     // Normal mode: light modern colors
-    if (isDoorOpen) return '#fda4af'; // Light rose - Door open (alert)
     if (temp < 5) return '#7dd3fc'; // Light sky blue - Very cold
     if (temp < 10) return '#5eead4'; // Light teal - Normal cold
     if (temp < 15) return '#fcd34d'; // Light yellow - Warm
@@ -103,7 +101,6 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
   const sensor = room.sensors?.[0];
   const temp = sensor?.additionalData?.temperature;
   const humidity = sensor?.additionalData?.humidity;
-  const isDoorOpen = sensor?.additionalData?.magnet === 0;
 
   // Larger chamber dimensions - Better presence
   const baseScale = 1.6 + (room.capacity / 10000) * 0.5;
@@ -131,7 +128,7 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
         <meshStandardMaterial
           color={thermalMode ? color : "#ffffff"}
           emissive={color}
-          emissiveIntensity={thermalMode ? 1.2 : (isSelected ? 0.9 : hovered ? 0.7 : isDoorOpen ? 0.8 : 0.5)}
+          emissiveIntensity={thermalMode ? 1.2 : (isSelected ? 0.9 : hovered ? 0.7 : 0.5)}
           metalness={thermalMode ? 0.1 : 0.3}
           roughness={thermalMode ? 0.8 : 0.4}
           opacity={thermalMode ? 0.95 : 0.6}
@@ -209,85 +206,6 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
         </mesh>
       )}
 
-      {/* Modern Smart Door System */}
-      {isDoorOpen ? (
-        <>
-          {/* Open door - Modern glass with warning color */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.1 : width / 2 + 0.1, 0, depth / 3]} rotation={[0, position[0] > 0 ? -Math.PI / 3 : Math.PI / 3, 0]} castShadow>
-            <boxGeometry args={[0.12, height * 0.85, depth * 0.7]} />
-            <meshStandardMaterial 
-              color="#fecdd3" 
-              emissive="#fda4af" 
-              emissiveIntensity={0.8} 
-              metalness={0.6} 
-              roughness={0.3}
-              opacity={0.8}
-              transparent
-            />
-          </mesh>
-          {/* Warning LED strip on door edge */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.15 : width / 2 + 0.15, 0, depth / 3]}>
-            <boxGeometry args={[0.03, height * 0.85, 0.05]} />
-            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={2} />
-          </mesh>
-          {/* Alarm light - Pulsing */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.2 : width / 2 + 0.2, height / 2 - 0.3, 0]}>
-            <sphereGeometry args={[0.12, 16, 16]} />
-            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={2.5} />
-          </mesh>
-        </>
-      ) : (
-        <>
-          {/* Closed door - Modern white/glass with metal frame */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.05 : width / 2 + 0.05, 0, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.12, height * 0.85, depth * 0.7]} />
-            <meshStandardMaterial 
-              color="#f8fafc" 
-              metalness={0.7} 
-              roughness={0.2}
-              emissive="#bae6fd"
-              emissiveIntensity={0.2}
-            />
-          </mesh>
-          {/* Door frame - Metallic accent */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.06 : width / 2 + 0.06, 0, 0]}>
-            <boxGeometry args={[0.04, height * 0.9, depth * 0.75]} />
-            <meshStandardMaterial color="#cbd5e1" metalness={0.85} roughness={0.15} />
-          </mesh>
-          {/* Modern handle - Chrome finish */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.13 : width / 2 + 0.13, 0.3, depth / 4]} castShadow>
-            <cylinderGeometry args={[0.04, 0.04, 0.35, 16]} />
-            <meshStandardMaterial 
-              color="#e0e7ff" 
-              metalness={0.95} 
-              roughness={0.05}
-              emissive="#a5f3fc"
-              emissiveIntensity={0.3}
-            />
-          </mesh>
-          {/* Status LED panel - Green secure */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.13 : width / 2 + 0.13, 0.8, 0]}>
-            <boxGeometry args={[0.02, 0.15, 0.15]} />
-            <meshStandardMaterial 
-              color="#6ee7b7" 
-              emissive="#10b981" 
-              emissiveIntensity={1.2}
-              metalness={0.5}
-              roughness={0.3}
-            />
-          </mesh>
-          {/* Digital lock indicator */}
-          <mesh position={[position[0] > 0 ? -width / 2 - 0.13 : width / 2 + 0.13, 0.5, 0]}>
-            <boxGeometry args={[0.02, 0.08, 0.08]} />
-            <meshStandardMaterial 
-              color="#7dd3fc" 
-              emissive="#06b6d4" 
-              emissiveIntensity={0.9}
-            />
-          </mesh>
-        </>
-      )}
-
       {/* Futuristic Holographic Display */}
       <Html position={[0, height / 2 + 0.5, 0]} center>
         <div className="flex flex-col items-center gap-0.5 pointer-events-none">
@@ -334,12 +252,6 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
               </div>
             )}
 
-            {/* Status badge */}
-            {isDoorOpen && (
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping" style={{
-                boxShadow: '0 0 10px #f43f5e'
-              }}></div>
-            )}
           </div>
         </div>
       </Html>
@@ -421,21 +333,9 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
             </div>
 
             {/* Status and Capacity */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className={`rounded-lg p-2 text-center border ${
-                isDoorOpen 
-                  ? 'bg-rose-50 border-rose-300' 
-                  : 'bg-emerald-50 border-emerald-300'
-              }`}>
-                <div className="text-[9px] text-slate-600">Porte</div>
-                <div className={`text-xs font-bold ${isDoorOpen ? 'text-rose-700' : 'text-emerald-700'}`}>
-                  {isDoorOpen ? '🚨 Ouverte' : '🔒 Fermée'}
-                </div>
-              </div>
-              <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-lg p-2 text-center border border-violet-200">
-                <div className="text-[9px] text-slate-600">Groupe</div>
-                <div className="text-xs font-bold text-violet-700">FRIGO {room.athGroupNumber || 1}</div>
-              </div>
+            <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-lg p-2 text-center border border-violet-200">
+              <div className="text-[9px] text-slate-600">Groupe</div>
+              <div className="text-xs font-bold text-violet-700">FRIGO {room.athGroupNumber || 1}</div>
             </div>
 
             {/* Action hint */}

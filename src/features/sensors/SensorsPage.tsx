@@ -692,7 +692,6 @@ const SensorsPage: React.FC = () => {
           /* Grid View */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {displayRooms.map((room) => {
-              const isDoorOpen = room.sensors?.[0]?.additionalData?.magnet === 0;
               const isSensorBroken = false; // Tous les capteurs fonctionnent maintenant
               const isDisconnected = room.sensors?.[0]?.additionalData?.timestamp ? 
                 isDataOld(room.sensors[0].additionalData.timestamp) : true;
@@ -705,9 +704,7 @@ const SensorsPage: React.FC = () => {
                   ? 'bg-gradient-to-br from-red-50/50 to-orange-50/30 border-red-300/60 hover:shadow-red-100/50 hover:border-red-400'
                   : isDisconnected
                     ? 'bg-gradient-to-br from-orange-50/50 to-yellow-50/30 border-orange-300/60 hover:shadow-orange-100/50 hover:border-orange-400'
-                    : isDoorOpen 
-                      ? 'bg-red-50/30 border-red-300/60 hover:shadow-red-100/50 hover:border-red-400' 
-                      : 'bg-white border-gray-200/60 hover:shadow-blue-100/50 hover:border-blue-400'
+                    : 'bg-white border-gray-200/60 hover:shadow-blue-100/50 hover:border-blue-400'
               }`}
             >
               {/* Compact Room Header */}
@@ -716,9 +713,7 @@ const SensorsPage: React.FC = () => {
                   ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200/50'
                   : isDisconnected
                     ? 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-200/50'
-                    : isDoorOpen 
-                      ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-200/50' 
-                      : 'bg-gradient-to-r from-slate-50 to-gray-50 border-gray-200/50'
+                    : 'bg-gradient-to-r from-slate-50 to-gray-50 border-gray-200/50'
               }`}>
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-base font-bold text-gray-900 truncate flex-1">{room.name}</h3>
@@ -741,9 +736,7 @@ const SensorsPage: React.FC = () => {
                         </svg>
                         <span className="text-xs font-medium text-orange-600">DÉCONNECTÉ</span>
                       </div>
-                    ) : (
-                      <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isDoorOpen ? 'bg-red-500' : 'bg-green-500'}`}></div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -755,16 +748,7 @@ const SensorsPage: React.FC = () => {
                   <div className="space-y-2">
                     <div className="cursor-not-allowed opacity-60">
                       {/* Data Grid - Same layout but with broken status */}
-                      <div className="grid grid-cols-3 gap-2">
-                        {/* Door Status */}
-                        <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg p-2.5 border border-gray-300/50">
-                          <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase">{t('sensors.door')}</div>
-                          <div className="flex items-center justify-center gap-1">
-                            <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-                            <span className="text-base font-bold text-gray-500">--</span>
-                          </div>
-                        </div>
-                        
+                      <div className="grid grid-cols-2 gap-2">
                         {/* Temperature */}
                         <div className="bg-gradient-to-br from-red-100 to-red-200 rounded-lg p-2.5 border border-red-300/50">
                           <div className="text-[10px] text-red-600 font-semibold mb-1 uppercase">{t('sensors.temp')}</div>
@@ -800,18 +784,7 @@ const SensorsPage: React.FC = () => {
                         }`}
                       >
                         {/* Data Grid */}
-                        <div className="grid grid-cols-3 gap-2">
-                          {/* Door Status */}
-                          <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-2.5 border border-gray-200/50">
-                            <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase">{t('sensors.door')}</div>
-                            <div className="flex items-center justify-center gap-1">
-                              <div className={`w-2 h-2 rounded-full ${sensor.additionalData.magnet === 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                              <span className="text-base font-bold text-gray-800">
-                                {sensor.additionalData.magnet === 0 ? t('sensors.doorOpened') : t('sensors.doorClosed')}
-                              </span>
-                            </div>
-                          </div>
-                          
+                        <div className="grid grid-cols-2 gap-2">
                           {/* Temperature */}
                           <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-lg p-2.5 border border-red-200/50">
                             <div className="text-[10px] text-red-600 font-semibold mb-1 uppercase">{t('sensors.temp')}</div>
