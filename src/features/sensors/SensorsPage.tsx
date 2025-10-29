@@ -43,11 +43,11 @@ const getTimeAgo = (timestamp: Date): string => {
   return `il y a ${diffInMonths} mois`;
 };
 
-// Utility function to check if data is older than 4 hours
+// Utility function to check if data is older than 20 hours
 const isDataOld = (timestamp: Date): boolean => {
   const now = new Date();
   const diffInHours = (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60);
-  return diffInHours > 4;
+  return diffInHours > 20;
 };
 
 // Types
