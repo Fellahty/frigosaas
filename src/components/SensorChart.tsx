@@ -50,7 +50,7 @@ interface SensorChartProps {
   sensorId: string;
   sensorName: string;
   roomName?: string; // Add room name for API (used for fetching data)
-  displayRoomName?: string; // Display room name (different from fetch room for Chambre 4)
+  displayRoomName?: string; // Display room name (for UI display purposes)
   boitieDeviceId?: string;
   isOpen: boolean;
   onClose: () => void;
@@ -1021,37 +1021,12 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       }
       
       console.log(`📊 [SensorChart] First data sample:`, rawData.data[0]);
-      
-      // SPECIAL CASE: Chambre 4 uses Chambre 5 data with adjustments (temporary fix)
-      // If roomName is 'Chambre 5' but displayRoomName is 'Chambre 4', we need to apply adjustments
-      const isChambre4 = displayRoomName === 'Chambre 4' || (room === 'Chambre 4');
-      const isChambre5Data = room === 'Chambre 5' && displayRoomName === 'Chambre 4';
-      const shouldAdjust = isChambre4 || isChambre5Data;
-      
-      if (shouldAdjust) {
-        console.log(`🔧 [SensorChart] Chambre 4 detected - applying adjustments (+0.6°C, +2% humidity) to ${rawData.data.length} data points from Chambre 5`);
-      } else {
-        console.log(`📊 [SensorChart] Normal data processing for room="${room}"`);
-      }
+      console.log(`📊 [SensorChart] Normal data processing for room="${room}"`);
       
       // Convert API response to SensorData format (raw data)
-      let adjustmentLogged = false;
-      const processedData: SensorData[] = rawData.data.map((item: any, index: number) => {
-        let rawTemp = parseFloat(item.temperature) || 0;
-        let rawHum = parseFloat(item.humidity) || 0;
-        
-        // Apply Chambre 4 adjustments: +0.6°C and +2% humidity
-        if (shouldAdjust) {
-          const originalTemp = rawTemp;
-          const originalHum = rawHum;
-          rawTemp = rawTemp + 0.6;
-          rawHum = rawHum + 2;
-          // Log only the first adjustment as an example
-          if (!adjustmentLogged && index === 0) {
-            console.log(`🔧 [SensorChart] Adjusted: ${originalTemp}°C → ${rawTemp}°C, ${originalHum}% → ${rawHum}%`);
-            adjustmentLogged = true;
-          }
-        }
+      const processedData: SensorData[] = rawData.data.map((item: any) => {
+        const rawTemp = parseFloat(item.temperature) || 0;
+        const rawHum = parseFloat(item.humidity) || 0;
         
         // Use raw data without calibration
         return {

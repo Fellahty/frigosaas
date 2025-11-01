@@ -213,23 +213,8 @@ const SensorsPage: React.FC = () => {
       
       // Process each room using the bulk data
       for (const roomDoc of filteredRooms) {
-        // SPECIAL CASE: Chambre 4 uses Chambre 5 data with adjustments (temporary fix)
-        let sensorData = null;
-        if (roomDoc.room === 'Chambre 4') {
-          const chambre5Data = bulkData ? extractSensorDataFromBulk('Chambre 5', bulkData) : null;
-          if (chambre5Data) {
-            // Use Chambre 5 data with offsets: +0.6°C temperature, +2% humidity
-            sensorData = {
-              ...chambre5Data,
-              temperature: chambre5Data.temperature + 0.6,
-              humidity: chambre5Data.humidity + 2
-            };
-            console.log(`📋 [SensorsPage] Chambre 4 using Chambre 5 data with adjustments`);
-          }
-        } else {
-          // Extract sensor data from the API response using exact room name
-          sensorData = bulkData ? extractSensorDataFromBulk(roomDoc.room, bulkData) : null;
-        }
+        // Extract sensor data from the API response using exact room name
+        const sensorData = bulkData ? extractSensorDataFromBulk(roomDoc.room, bulkData) : null;
         
         // Use real sensor data from API, with fallback for testing
         const rawSensorData = sensorData || {
@@ -869,15 +854,12 @@ const SensorsPage: React.FC = () => {
           const selectedRoom = displayRooms.find(room => room.sensors.some(s => s.id === selectedSensor.id));
           const roomName = selectedRoom?.name;
           
-          // SPECIAL CASE: Chambre 4 uses Chambre 5 data for fetching
-          const fetchRoomName = roomName === 'Chambre 4' ? 'Chambre 5' : roomName;
-          
           return (
             <SensorChart
               sensorId={selectedSensor.id}
               sensorName={selectedSensor.name}
-              roomName={fetchRoomName}
-              displayRoomName={roomName} // Keep original room name for display
+              roomName={roomName}
+              displayRoomName={roomName}
               boitieDeviceId={selectedRoom?.boitieSensorId}
               isOpen={isChartModalOpen}
               onClose={() => setIsChartModalOpen(false)}
